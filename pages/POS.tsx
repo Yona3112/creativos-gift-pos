@@ -48,6 +48,14 @@ export const POS: React.FC<POSProps> = ({
     const [isSuccessModalOpen, setIsSuccessModalOpen] = useState(false);
     const [lastSale, setLastSale] = useState<Sale | null>(null);
 
+    // Quote creation state
+    const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
+    const [quoteExpiration, setQuoteExpiration] = useState(() => {
+        const d = new Date();
+        d.setDate(d.getDate() + 15); // 15 days default
+        return d.toISOString().split('T')[0];
+    });
+
     const searchInputRef = useRef<HTMLInputElement>(null);
 
     // Totales - CORRECCIÓN: El ISV está INCLUIDO en el precio, no se suma después
@@ -223,6 +231,37 @@ export const POS: React.FC<POSProps> = ({
         if (onRefreshData) onRefreshData();
     };
 
+    const handleSaveQuote = async () => {
+        if (cart.length === 0) return;
+
+        const quote: Quote = {
+            id: Date.now().toString(),
+            folio: `COT-${Date.now().toString().slice(-6)}`,
+            date: new Date().toISOString(),
+            customerId: selectedCustomer?.id,
+            items: cart,
+            subtotal,
+            taxAmount,
+            discount: parseFloat(globalDiscount) || 0,
+            total,
+            expirationDate: quoteExpiration,
+            status: 'pending',
+            userId: user?.id || 'admin',
+            branchId
+        };
+
+        await db.saveQuote(quote);
+
+        // Clear cart and close modal
+        setCart([]);
+        setSelectedCustomer(null);
+        setGlobalDiscount('');
+        setIsQuoteModalOpen(false);
+
+        alert(`Cotización ${quote.folio} guardada exitosamente.`);
+        if (onRefreshData) onRefreshData();
+    };
+
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (e.key === 'Enter') {
             e.preventDefault();
@@ -375,7 +414,14 @@ export const POS: React.FC<POSProps> = ({
                         <div className="flex justify-between text-gray-500"><span>ISV (15%)</span><span>L {taxAmount.toFixed(2)}</span></div>
                         <div className="flex justify-between text-gray-900 font-black text-xl pt-2 border-t border-dashed border-gray-300"><span>TOTAL</span><span>L {total.toFixed(2)}</span></div>
                     </div>
-                    <Button className="w-full py-4 text-lg" disabled={cart.length === 0} onClick={() => setIsPaymentModalOpen(true)}>Continuar al Pago</Button>
+                    <div className="flex gap-2">
+                        <Button variant="secondary" className="flex-1" disabled={cart.length === 0} onClick={() => setIsQuoteModalOpen(true)}>
+                            <i className="fas fa-file-alt mr-2"></i>Cotizar
+                        </Button>
+                        <Button className="flex-1 py-4" disabled={cart.length === 0} onClick={() => setIsPaymentModalOpen(true)}>
+                            <i className="fas fa-cash-register mr-2"></i>Cobrar
+                        </Button>
+                    </div>
                 </div>
             </div>
 
@@ -631,6 +677,40 @@ export const POS: React.FC<POSProps> = ({
                                 <Button variant="outline" className="flex-1" icon="share-alt" title="Compartir">Enviar</Button>
                             )}
                         </div>
+                    </div>
+                </div>
+            </Modal>
+
+            {/* MODAL CREAR COTIZACIÓN */}
+            <Modal isOpen={isQuoteModalOpen} onClose={() => setIsQuoteModalOpen(false)} title="Guardar Cotización" size="sm">
+                <div className="space-y-4">
+                    <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
+                        <p className="text-xs text-blue-600 font-bold uppercase mb-1">Resumen</p>
+                        <p className="text-lg font-black text-blue-800">{cart.length} productos - L {total.toFixed(2)}</p>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Cliente</label>
+                        <select
+                            className="w-full p-3 rounded-xl bg-gray-100 text-sm font-bold border-none outline-none"
+                            value={selectedCustomer?.id || ''}
+                            onChange={e => setSelectedCustomer(customers.find(c => c.id === e.target.value) || null)}
+                        >
+                            <option value="">Consumidor Final</option>
+                            {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                    </div>
+
+                    <Input
+                        label="Válida hasta"
+                        type="date"
+                        value={quoteExpiration}
+                        onChange={e => setQuoteExpiration(e.target.value)}
+                    />
+
+                    <div className="flex gap-2 pt-4 border-t">
+                        <Button variant="secondary" className="flex-1" onClick={() => setIsQuoteModalOpen(false)}>Cancelar</Button>
+                        <Button className="flex-1" onClick={handleSaveQuote} icon="save">Guardar Cotización</Button>
                     </div>
                 </div>
             </Modal>
