@@ -81,33 +81,46 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
   icon?: string;
+  uppercase?: boolean;
 }
 
-// INPUT DE ALTO CONTRASTE (CAJA GRIS, TEXTO NEGRO)
-export const Input: React.FC<InputProps> = ({ label, error, icon, className = '', style, ...props }) => (
-  <div className="w-full">
-    {label && <label className="block text-sm font-bold text-gray-900 mb-1 ml-1">{label}</label>}
-    <div className="relative">
-      {icon && (
-        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-600">
-          <i className={`fas fa-${icon}`}></i>
-        </div>
-      )}
-      <input
-        className={`w-full ${icon ? 'pl-10' : 'px-4'} py-3 rounded-xl outline-none transition-colors font-bold shadow-sm ${className}`}
-        style={{
-          backgroundColor: error ? '#FEF2F2' : '#E5E7EB', // Rojo suave si hay error
-          color: error ? '#991B1B' : '#000000',
-          border: error ? '2px solid #EF4444' : '1px solid #9CA3AF', // Borde rojo explícito
-          ...style
-        }}
-        onFocus={(e) => e.target.select()}
-        {...props}
-      />
+// INPUT DE ALTO CONTRASTE (CAJA GRIS, TEXTO NEGRO) - CON MAYÚSCULAS AUTOMÁTICAS
+export const Input: React.FC<InputProps> = ({ label, error, icon, className = '', style, uppercase = true, onChange, type, ...props }) => {
+  // Convertir a mayúsculas automáticamente para campos de texto
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (uppercase && type !== 'email' && type !== 'password' && type !== 'number' && type !== 'date' && type !== 'tel') {
+      e.target.value = e.target.value.toUpperCase();
+    }
+    onChange?.(e);
+  };
+
+  return (
+    <div className="w-full">
+      {label && <label className="block text-sm font-bold text-gray-900 mb-1 ml-1">{label}</label>}
+      <div className="relative">
+        {icon && (
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-600">
+            <i className={`fas fa-${icon}`}></i>
+          </div>
+        )}
+        <input
+          type={type}
+          className={`w-full ${icon ? 'pl-10' : 'px-4'} py-3 rounded-xl outline-none transition-colors font-bold shadow-sm ${uppercase && type !== 'email' && type !== 'password' && type !== 'number' && type !== 'date' ? 'uppercase' : ''} ${className}`}
+          style={{
+            backgroundColor: error ? '#FEF2F2' : '#E5E7EB',
+            color: error ? '#991B1B' : '#000000',
+            border: error ? '2px solid #EF4444' : '1px solid #9CA3AF',
+            ...style
+          }}
+          onFocus={(e) => e.target.select()}
+          onChange={handleChange}
+          {...props}
+        />
+      </div>
+      {error && <p className="text-xs text-red-600 mt-1 ml-1 font-bold"><i className="fas fa-exclamation-circle mr-1"></i>{error}</p>}
     </div>
-    {error && <p className="text-xs text-red-600 mt-1 ml-1 font-bold"><i className="fas fa-exclamation-circle mr-1"></i>{error}</p>}
-  </div>
-);
+  );
+};
 
 interface CardProps {
   title?: React.ReactNode;

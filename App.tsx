@@ -220,7 +220,7 @@ function App() {
       case 'expenses': return <Expenses user={user} onUpdate={refreshData} />;
       case 'inventoryHistory': return <InventoryHistory products={products} users={users} />;
       case 'products': return <Products products={products} categories={categories} users={users} onUpdate={refreshData} initialFilter={pageParams?.filter} initialTab={pageParams?.tab} settings={safeSettings} />;
-      case 'salesHistory': return <SalesHistory sales={sales} customers={customers} users={users} onUpdate={refreshData} user={user} branchId={currentBranch?.id} onLoadQuote={setQuoteToLoad} settings={safeSettings} />;
+      case 'salesHistory': return <SalesHistory sales={sales} customers={customers} users={users} onUpdate={refreshData} user={user} branchId={currentBranch?.id} onLoadQuote={(quote) => { setQuoteToLoad(quote); setPage('pos'); }} settings={safeSettings} />;
       case 'customers': return <Customers customers={customers} onUpdate={refreshData} />;
       case 'credits': return <Credits settings={safeSettings} />;
       case 'reports': return <Reports sales={sales} products={products} customers={customers} categories={categories} />;

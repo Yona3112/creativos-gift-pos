@@ -44,8 +44,10 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
     const openModal = (product?: Product) => {
         setEditingProduct(product || null);
         const defaultCat = categories[0];
+        // Generar código automático para productos nuevos
+        const autoCode = `PROD${Date.now().toString().slice(-5)}${Math.floor(Math.random() * 100).toString().padStart(2, '0')}`;
         setFormData(product ? { ...product } : {
-            name: '', code: '', price: 0, cost: 0, stock: 0,
+            name: '', code: autoCode, price: 0, cost: 0, stock: 0,
             minStock: defaultCat?.defaultMinStock || 5,
             categoryId: defaultCat?.id || '',
             isTaxable: true,
