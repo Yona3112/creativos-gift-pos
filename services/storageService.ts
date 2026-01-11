@@ -180,11 +180,12 @@ class StorageService {
   // --- PRODUCTS & KARDEX ---
   async getProducts(): Promise<Product[]> {
     const products = await db_engine.products.toArray();
-    return products.filter(p => p.active !== false);
+    return products.filter(p => p.active === true);
   }
 
   async saveProduct(product: Product, userId: string = 'system') {
     if (!product.id) product.id = Date.now().toString();
+    if (product.active === undefined) product.active = true;
     const existing = await db_engine.products.get(product.id);
 
     // Tracking de Stock

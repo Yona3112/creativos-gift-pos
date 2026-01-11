@@ -184,6 +184,62 @@ export const Modal: React.FC<{ isOpen: boolean; onClose: () => void; title: stri
   );
 };
 
+// --- PROFESSIONAL CONFIRM DIALOG ---
+interface ConfirmDialogProps {
+  isOpen: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+  title?: string;
+  message: string;
+  confirmText?: string;
+  cancelText?: string;
+  variant?: 'danger' | 'warning' | 'info';
+}
+
+export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
+  isOpen, onConfirm, onCancel, title = 'Confirmar', message,
+  confirmText = 'Confirmar', cancelText = 'Cancelar', variant = 'danger'
+}) => {
+  if (!isOpen) return null;
+
+  const variantStyles = {
+    danger: { icon: 'trash-alt', color: 'text-red-500', bg: 'bg-red-100', btn: 'bg-red-600 hover:bg-red-700' },
+    warning: { icon: 'exclamation-triangle', color: 'text-yellow-500', bg: 'bg-yellow-100', btn: 'bg-yellow-600 hover:bg-yellow-700' },
+    info: { icon: 'info-circle', color: 'text-blue-500', bg: 'bg-blue-100', btn: 'bg-blue-600 hover:bg-blue-700' }
+  };
+
+  const style = variantStyles[variant];
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-gray-900/70 backdrop-blur-sm" onClick={onCancel}></div>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm relative z-10 animate-pop-in overflow-hidden">
+        <div className="p-6 text-center">
+          <div className={`w-16 h-16 ${style.bg} rounded-full flex items-center justify-center mx-auto mb-4`}>
+            <i className={`fas fa-${style.icon} text-3xl ${style.color}`}></i>
+          </div>
+          <h3 className="text-xl font-extrabold text-gray-900 mb-2">{title}</h3>
+          <p className="text-gray-600 mb-6">{message}</p>
+          <div className="flex gap-3">
+            <button
+              onClick={onCancel}
+              className="flex-1 px-4 py-3 rounded-xl font-bold bg-gray-100 text-gray-700 hover:bg-gray-200 transition-all"
+            >
+              {cancelText}
+            </button>
+            <button
+              onClick={onConfirm}
+              className={`flex-1 px-4 py-3 rounded-xl font-bold text-white ${style.btn} transition-all`}
+            >
+              {confirmText}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 interface PaginationProps {
   currentPage: number;
   totalPages: number;

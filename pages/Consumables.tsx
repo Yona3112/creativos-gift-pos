@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Consumable, UserRole } from '../types';
-import { Card, Button, Input, Badge, Modal } from '../components/UIComponents';
+import { Card, Button, Input, Badge, Modal, ConfirmDialog } from '../components/UIComponents';
 import { db } from '../services/storageService';
 
 interface ConsumablesProps {
@@ -13,6 +13,7 @@ export const Consumables: React.FC<ConsumablesProps> = ({ onUpdate }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [formData, setFormData] = useState<Partial<Consumable>>({});
     const [isAdmin, setIsAdmin] = useState(false);
+    const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; id: string; name: string }>({ open: false, id: '', name: '' });
 
     useEffect(() => {
         const checkRole = async () => {
@@ -76,12 +77,8 @@ export const Consumables: React.FC<ConsumablesProps> = ({ onUpdate }) => {
                                 <td className="p-3 text-right space-x-2">
                                     <Button size="sm" variant="ghost" onClick={() => { setFormData(i); setIsModalOpen(true); }} icon="edit"></Button>
                                     {isAdmin && (
-                                        <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-700" onClick={async () => {
-                                            if (confirm('¿Eliminar insumo?')) {
-                                                await db.deleteConsumable(i.id);
-                                                loadData();
-                                                if (onUpdate) onUpdate();
-                                            }
+                                        <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-700" onClick={() => {
+                                            setDeleteConfirm({ open: true, id: i.id, name: i.name });
                                         }} icon="trash"></Button>
                                     )}
                                 </td>
@@ -121,6 +118,22 @@ export const Consumables: React.FC<ConsumablesProps> = ({ onUpdate }) => {
                     <Button type="submit" className="w-full">Guardar</Button>
                 </form>
             </Modal>
+
+            <ConfirmDialog
+                isOpen={deleteConfirm.open}
+                title="Eliminar Insumo"
+                message={`¿Estás seguro de eliminar "${deleteConfirm.name}"? Esta acción no se puede deshacer.`}
+                confirmText="Eliminar"
+                cancelText="Cancelar"
+                variant="danger"
+                onConfirm={async () => {
+                    await db.deleteConsumable(deleteConfirm.id);
+                    setDeleteConfirm({ open: false, id: '', name: '' });
+                    loadData();
+                    if (onUpdate) onUpdate();
+                }}
+                onCancel={() => setDeleteConfirm({ open: false, id: '', name: '' })}
+            />
         </div>
     );
 };
