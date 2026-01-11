@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Product, Customer, Quote, User, CompanySettings } from '../types';
-import { Card, Button, Badge, ConfirmDialog } from '../components/UIComponents';
+import { Card, Button, Badge, ConfirmDialog, Modal } from '../components/UIComponents';
 import { db } from '../services/storageService';
 
 interface QuotesProps {
@@ -16,6 +16,7 @@ interface QuotesProps {
 export const Quotes: React.FC<QuotesProps> = ({ products, customers, user, branchId, onLoadQuote, settings }) => {
     const [quotes, setQuotes] = useState<Quote[]>([]);
     const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; id: string; folio: string }>({ open: false, id: '', folio: '' });
+    const [alertMessage, setAlertMessage] = useState<{ open: boolean; title: string; message: string }>({ open: false, title: '', message: '' });
 
     const loadQuotes = async () => {
         const list = await db.getQuotes();
@@ -32,10 +33,25 @@ export const Quotes: React.FC<QuotesProps> = ({ products, customers, user, branc
     };
 
     const handleSendToPOS = (quote: Quote) => {
+        // Verificar si ya fue procesada
         if (quote.status === 'accepted') {
-            alert("Esta cotización ya fue procesada anteriormente.");
+            setAlertMessage({ open: true, title: 'Cotización Procesada', message: 'Esta cotización ya fue procesada anteriormente.' });
             return;
         }
+
+        // Verificar si está vencida
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const expDate = new Date(quote.expirationDate + 'T00:00:00');
+        if (expDate < today) {
+            setAlertMessage({
+                open: true,
+                title: 'Cotización Vencida',
+                message: `Esta cotización venció el ${new Date(quote.expirationDate).toLocaleDateString('es-HN')}. Por favor cree una nueva cotización con precios actualizados.`
+            });
+            return;
+        }
+
         if (onLoadQuote) {
             onLoadQuote(quote);
         }
@@ -217,6 +233,17 @@ export const Quotes: React.FC<QuotesProps> = ({ products, customers, user, branc
                 }}
                 onCancel={() => setDeleteConfirm({ open: false, id: '', folio: '' })}
             />
+
+            {/* Modal de Alerta Estilizado */}
+            <Modal isOpen={alertMessage.open} onClose={() => setAlertMessage({ open: false, title: '', message: '' })} title={alertMessage.title} size="sm">
+                <div className="text-center py-4">
+                    <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <i className="fas fa-exclamation-triangle text-3xl text-yellow-500"></i>
+                    </div>
+                    <p className="text-gray-600 mb-6">{alertMessage.message}</p>
+                    <Button onClick={() => setAlertMessage({ open: false, title: '', message: '' })} className="w-full">Entendido</Button>
+                </div>
+            </Modal>
         </>
     );
 };

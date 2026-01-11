@@ -50,6 +50,8 @@ export const POS: React.FC<POSProps> = ({
 
     // Quote creation state
     const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
+    const [isQuoteSuccessModalOpen, setIsQuoteSuccessModalOpen] = useState(false);
+    const [savedQuoteFolio, setSavedQuoteFolio] = useState('');
     const [quoteExpiration, setQuoteExpiration] = useState(() => {
         const d = new Date();
         d.setDate(d.getDate() + 15); // 15 days default
@@ -265,7 +267,9 @@ export const POS: React.FC<POSProps> = ({
         setGlobalDiscount('');
         setIsQuoteModalOpen(false);
 
-        alert(`Cotización ${quote.folio} guardada exitosamente.`);
+        // Mostrar modal de éxito estilizado
+        setSavedQuoteFolio(quote.folio);
+        setIsQuoteSuccessModalOpen(true);
         if (onRefreshData) onRefreshData();
     };
 
@@ -719,6 +723,19 @@ export const POS: React.FC<POSProps> = ({
                         <Button variant="secondary" className="flex-1" onClick={() => setIsQuoteModalOpen(false)}>Cancelar</Button>
                         <Button className="flex-1" onClick={handleSaveQuote} icon="save">Guardar Cotización</Button>
                     </div>
+                </div>
+            </Modal>
+
+            {/* Modal de Éxito de Cotización */}
+            <Modal isOpen={isQuoteSuccessModalOpen} onClose={() => setIsQuoteSuccessModalOpen(false)} title="Cotización Guardada" size="sm">
+                <div className="text-center py-6">
+                    <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">
+                        <i className="fas fa-check text-4xl text-green-500"></i>
+                    </div>
+                    <h3 className="text-xl font-black text-gray-800 mb-2">¡Cotización Guardada!</h3>
+                    <p className="text-gray-500 mb-2">Folio:</p>
+                    <p className="text-2xl font-mono font-black text-primary mb-6">{savedQuoteFolio}</p>
+                    <Button onClick={() => setIsQuoteSuccessModalOpen(false)} className="w-full" icon="check">Entendido</Button>
                 </div>
             </Modal>
         </div>
