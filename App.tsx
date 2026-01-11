@@ -88,41 +88,47 @@ function App() {
   };
 
   useEffect(() => {
+    let intervalId: any;
+
     const initApp = async () => {
-      await db.init();
-
-      // Carga rápida desde IndexedDB (sin esperar nube)
-      await refreshData(false);
-      // Sincronización en segundo plano (Background Sync) para traer cambios del teléfono
-      refreshData(true);
-
-      // Auto-Sync cada 60 segundos para mantener al día
-      const intervalId = setInterval(() => {
+      try {
+        await db.init();
+        // Carga rápida desde IndexedDB
+        await refreshData(false);
+        // Sync en background
         refreshData(true);
-      }, 60000);
 
-      return () => clearInterval(intervalId);
+        intervalId = setInterval(() => {
+          refreshData(true);
+        }, 60000);
 
-      const storedUser = localStorage.getItem('creativos_gift_currentUser');
-      if (storedUser) {
-        try {
-          const parsedUser = JSON.parse(storedUser);
-          const dbUser = await db.login(parsedUser.email, parsedUser.password);
-          if (dbUser) {
-            setUser(dbUser);
-            localStorage.setItem('active_user', JSON.stringify(dbUser)); // Sync for RBAC
-            // Ya cargamos la data arriba, así que solo refrescamos la sucursal
-            const bList = await db.getBranches();
-            setCurrentBranch(bList.find(b => b.id === dbUser.branchId) || bList[0]);
+        const storedUser = localStorage.getItem('creativos_gift_currentUser');
+        if (storedUser) {
+          try {
+            const parsedUser = JSON.parse(storedUser);
+            const dbUser = await db.login(parsedUser.email, parsedUser.password);
+            if (dbUser) {
+              setUser(dbUser);
+              localStorage.setItem('active_user', JSON.stringify(dbUser));
+              const bList = await db.getBranches();
+              setCurrentBranch(bList.find(b => b.id === dbUser.branchId) || bList[0]);
+            }
+          } catch (e) {
+            localStorage.removeItem('creativos_gift_currentUser');
+            localStorage.removeItem('active_user');
           }
-        } catch (e) {
-          localStorage.removeItem('creativos_gift_currentUser');
-          localStorage.removeItem('active_user');
         }
+      } catch (e) {
+        console.error("Error inicializando app:", e);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
+
     initApp();
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
