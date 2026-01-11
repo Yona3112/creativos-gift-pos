@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { db } from '../services/storageService';
 import { CompanySettings, LoyaltyLevel, Product, Sale, User, UserRole } from '../types';
-import { Button, Input, Card, Alert, Modal, Badge } from '../components/UIComponents';
+import { Button, Input, Card, Alert, Modal, Badge, ConfirmDialog } from '../components/UIComponents';
 import { createClient } from '@supabase/supabase-js';
 import { SupabaseService } from '../services/supabaseService';
 
@@ -23,6 +23,11 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
   const [users, setUsers] = useState<User[]>([]);
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [userFormData, setUserFormData] = useState<Partial<User>>({ role: UserRole.VENDEDOR, active: true });
+
+  // ConfirmDialog states
+  const [restoreConfirm, setRestoreConfirm] = useState<{ open: boolean; data: any }>({ open: false, data: null });
+  const [deleteUserConfirm, setDeleteUserConfirm] = useState<{ open: boolean; id: string }>({ open: false, id: '' });
+  const [downloadConfirm, setDownloadConfirm] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -106,10 +111,7 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
     reader.onload = async (event) => {
       try {
         const data = JSON.parse(event.target?.result as string);
-        if (confirm(`¿Restaurar datos? Se reemplazarán los actuales.`)) {
-          await db.restoreData(data);
-          window.location.reload();
-        }
+        setRestoreConfirm({ open: true, data });
       } catch (err) { alert('Archivo inválido.'); }
     };
     reader.readAsText(file);
@@ -136,10 +138,7 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
   };
 
   const handleDeleteUser = async (id: string) => {
-    if (confirm("¿Desactivar este usuario?")) {
-      await db.deleteUser(id);
-      setUsers((await db.getUsers()).filter(u => u.active !== false));
-    }
+    setDeleteUserConfirm({ open: true, id });
   };
 
   const openUserModal = (user?: User) => {
@@ -391,21 +390,7 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
                     type="button"
                     variant="outline"
                     className="flex-1"
-                    onClick={async () => {
-                      if (confirm('Esto sobreescribirá los datos locales con los de la nube. ¿Continuar?')) {
-                        setIsSyncing(true);
-                        setSyncStatus({ type: 'info', message: 'Descargando datos de la nube...' });
-                        try {
-                          await SupabaseService.pullAll();
-                          setSyncStatus({ type: 'success', message: '¡Datos descargados con éxito!' });
-                          setTimeout(() => window.location.reload(), 2000);
-                        } catch (err: any) {
-                          setSyncStatus({ type: 'danger', message: `Error al descargar: ${err.message}` });
-                        } finally {
-                          setIsSyncing(false);
-                        }
-                      }
-                    }}
+                    onClick={() => setDownloadConfirm(true)}
                     disabled={isSyncing}
                     icon={isSyncing ? 'spinner fa-spin' : 'cloud-download-alt'}
                   >
@@ -450,6 +435,60 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
         </div>
       </Modal>
 
+      {/* ConfirmDialogs */}
+      <ConfirmDialog
+        isOpen={restoreConfirm.open}
+        title="Restaurar Datos"
+        message="¿Restaurar datos? Se reemplazarán todos los datos actuales con el respaldo."
+        confirmText="Restaurar"
+        cancelText="Cancelar"
+        variant="warning"
+        onConfirm={async () => {
+          await db.restoreData(restoreConfirm.data);
+          setRestoreConfirm({ open: false, data: null });
+          window.location.reload();
+        }}
+        onCancel={() => setRestoreConfirm({ open: false, data: null })}
+      />
+
+      <ConfirmDialog
+        isOpen={deleteUserConfirm.open}
+        title="Desactivar Usuario"
+        message="¿Desactivar este usuario? Ya no podrá iniciar sesión."
+        confirmText="Desactivar"
+        cancelText="Cancelar"
+        variant="danger"
+        onConfirm={async () => {
+          await db.deleteUser(deleteUserConfirm.id);
+          setUsers((await db.getUsers()).filter(u => u.active !== false));
+          setDeleteUserConfirm({ open: false, id: '' });
+        }}
+        onCancel={() => setDeleteUserConfirm({ open: false, id: '' })}
+      />
+
+      <ConfirmDialog
+        isOpen={downloadConfirm}
+        title="Descargar de la Nube"
+        message="Esto sobreescribirá los datos locales con los de la nube. ¿Continuar?"
+        confirmText="Descargar"
+        cancelText="Cancelar"
+        variant="warning"
+        onConfirm={async () => {
+          setDownloadConfirm(false);
+          setIsSyncing(true);
+          setSyncStatus({ type: 'info', message: 'Descargando datos de la nube...' });
+          try {
+            await SupabaseService.pullAll();
+            setSyncStatus({ type: 'success', message: '¡Datos descargados con éxito!' });
+            setTimeout(() => window.location.reload(), 2000);
+          } catch (err: any) {
+            setSyncStatus({ type: 'danger', message: `Error al descargar: ${err.message}` });
+          } finally {
+            setIsSyncing(false);
+          }
+        }}
+        onCancel={() => setDownloadConfirm(false)}
+      />
     </div>
   );
 };

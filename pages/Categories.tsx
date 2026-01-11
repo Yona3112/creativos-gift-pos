@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Category, ICONS, CompanySettings } from '../types';
-import { Card, Button, Input, Modal } from '../components/UIComponents';
+import { Card, Button, Input, Modal, ConfirmDialog } from '../components/UIComponents';
 import { db } from '../services/storageService';
 
 interface CategoriesProps {
@@ -19,6 +19,10 @@ export const Categories: React.FC<CategoriesProps> = ({ categories, onUpdate, se
     const [formData, setFormData] = useState<Partial<Category>>({});
     const [selectedCategoryForShare, setSelectedCategoryForShare] = useState<Category | null>(null);
 
+    // ConfirmDialog states
+    const [stockConfirm, setStockConfirm] = useState(false);
+    const [deleteCatConfirm, setDeleteCatConfirm] = useState<{ open: boolean; id: string; name: string }>({ open: false, id: '', name: '' });
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         await db.saveCategory(formData as Category);
@@ -28,10 +32,7 @@ export const Categories: React.FC<CategoriesProps> = ({ categories, onUpdate, se
 
     const applyStockToProducts = async () => {
         if (!formData.id || !formData.defaultMinStock) return;
-        if (confirm(`¿Estás seguro de actualizar el stock mínimo a ${formData.defaultMinStock} para TODOS los productos de esta categoría?`)) {
-            await db.updateCategoryStockThreshold(formData.id, formData.defaultMinStock);
-            alert('Productos actualizados correctamente.');
-        }
+        setStockConfirm(true);
     };
 
     const handleShareClick = (category: Category) => {
@@ -357,12 +358,7 @@ export const Categories: React.FC<CategoriesProps> = ({ categories, onUpdate, se
                                 <Button variant="ghost" size="sm" onClick={() => { setFormData(c); setIsModalOpen(true); }}>
                                     <i className="fas fa-edit text-gray-400 hover:text-primary"></i>
                                 </Button>
-                                <Button variant="ghost" size="sm" onClick={async () => {
-                                    if (confirm(`¿Eliminar categoría ${c.name}? Esto no eliminará los productos, pero se quedarán sin categoría.`)) {
-                                        await db.deleteCategory(c.id);
-                                        onUpdate();
-                                    }
-                                }}>
+                                <Button variant="ghost" size="sm" onClick={() => setDeleteCatConfirm({ open: true, id: c.id, name: c.name })}>
                                     <i className="fas fa-trash text-gray-400 hover:text-red-500"></i>
                                 </Button>
                             </div>
@@ -485,6 +481,39 @@ export const Categories: React.FC<CategoriesProps> = ({ categories, onUpdate, se
                     </div>
                 </form>
             </Modal>
+
+            {/* ConfirmDialogs */}
+            <ConfirmDialog
+                isOpen={stockConfirm}
+                title="Actualizar Stock Mínimo"
+                message={`¿Actualizar el stock mínimo a ${formData.defaultMinStock} para TODOS los productos de esta categoría?`}
+                confirmText="Aplicar"
+                cancelText="Cancelar"
+                variant="warning"
+                onConfirm={async () => {
+                    if (formData.id && formData.defaultMinStock) {
+                        await db.updateCategoryStockThreshold(formData.id, formData.defaultMinStock);
+                        setStockConfirm(false);
+                        alert('Productos actualizados correctamente.');
+                    }
+                }}
+                onCancel={() => setStockConfirm(false)}
+            />
+
+            <ConfirmDialog
+                isOpen={deleteCatConfirm.open}
+                title="Eliminar Categoría"
+                message={`¿Eliminar categoría "${deleteCatConfirm.name}"? Esto no eliminará los productos, pero se quedarán sin categoría.`}
+                confirmText="Eliminar"
+                cancelText="Cancelar"
+                variant="danger"
+                onConfirm={async () => {
+                    await db.deleteCategory(deleteCatConfirm.id);
+                    setDeleteCatConfirm({ open: false, id: '', name: '' });
+                    onUpdate();
+                }}
+                onCancel={() => setDeleteCatConfirm({ open: false, id: '', name: '' })}
+            />
         </div>
     );
 };
