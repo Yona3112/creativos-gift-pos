@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Sale, Customer, User, CreditNote, UserRole, CompanySettings } from '../types';
-import { Card, Button, Input, Badge, Modal, Pagination, useDebounce } from '../components/UIComponents';
+import { Card, Button, Input, Badge, Modal, Pagination, useDebounce, ConfirmDialog } from '../components/UIComponents';
 import { db } from '../services/storageService';
 
 // Import sub-modules
@@ -40,6 +40,9 @@ export const SalesHistory: React.FC<SalesHistoryProps> = ({ sales, customers, us
     const [adminPassword, setAdminPassword] = useState('');
     const [confirmWord, setConfirmWord] = useState('');
     const [passwordError, setPasswordError] = useState('');
+
+    // Refund confirm state
+    const [refundConfirm, setRefundConfirm] = useState<{ open: boolean; id: string }>({ open: false, id: '' });
 
     React.useEffect(() => {
         const loadCN = async () => {
@@ -114,12 +117,7 @@ export const SalesHistory: React.FC<SalesHistoryProps> = ({ sales, customers, us
     };
 
     const handleRefundCreditNote = async (id: string) => {
-        if (confirm("¿Está seguro de reembolsar esta Nota de Crédito en Efectivo? Esta acción invalidará la nota.")) {
-            await db.refundCreditNote(id);
-            const cn = await db.getCreditNotes();
-            setCreditNotes(cn);
-            alert("Reembolso registrado.");
-        }
+        setRefundConfirm({ open: true, id });
     };
 
     const reprintTicket = async (sale: Sale) => {
@@ -422,6 +420,23 @@ export const SalesHistory: React.FC<SalesHistoryProps> = ({ sales, customers, us
                     </div>
                 </div>
             </Modal>
+
+            <ConfirmDialog
+                isOpen={refundConfirm.open}
+                title="Reembolsar Nota de Crédito"
+                message="¿Está seguro de reembolsar esta Nota de Crédito en Efectivo? Esta acción invalidará la nota."
+                confirmText="Reembolsar"
+                cancelText="Cancelar"
+                variant="warning"
+                onConfirm={async () => {
+                    await db.refundCreditNote(refundConfirm.id);
+                    const cn = await db.getCreditNotes();
+                    setCreditNotes(cn);
+                    setRefundConfirm({ open: false, id: '' });
+                    alert("Reembolso registrado.");
+                }}
+                onCancel={() => setRefundConfirm({ open: false, id: '' })}
+            />
         </div>
     );
 };

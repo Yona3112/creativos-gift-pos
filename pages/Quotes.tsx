@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Product, Customer, Quote, User, CompanySettings } from '../types';
-import { Card, Button, Badge } from '../components/UIComponents';
+import { Card, Button, Badge, ConfirmDialog } from '../components/UIComponents';
 import { db } from '../services/storageService';
 
 interface QuotesProps {
@@ -15,7 +15,8 @@ interface QuotesProps {
 
 export const Quotes: React.FC<QuotesProps> = ({ products, customers, user, branchId, onLoadQuote, settings }) => {
     const [quotes, setQuotes] = useState<Quote[]>([]);
-    
+    const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; id: string; folio: string }>({ open: false, id: '', folio: '' });
+
     const loadQuotes = async () => {
         const list = await db.getQuotes();
         list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -26,11 +27,8 @@ export const Quotes: React.FC<QuotesProps> = ({ products, customers, user, branc
         loadQuotes();
     }, []);
 
-    const handleDeleteQuote = async (id: string) => {
-        if(confirm("¿Eliminar esta cotización?")) {
-            await db.deleteQuote(id);
-            loadQuotes();
-        }
+    const handleDeleteQuote = async (id: string, folio: string) => {
+        setDeleteConfirm({ open: true, id, folio });
     };
 
     const handleSendToPOS = (quote: Quote) => {
@@ -50,7 +48,7 @@ export const Quotes: React.FC<QuotesProps> = ({ products, customers, user, branc
         const expDate = quoteToPrint.expirationDate;
 
         const win = window.open('', '', 'width=850,height=800');
-        if(win) {
+        if (win) {
             const date = new Date().toLocaleDateString('es-HN', { year: 'numeric', month: 'long', day: 'numeric' });
             const [y, m, d] = expDate.split('-').map(Number);
             const validUntilDate = new Date(y, m - 1, d);
@@ -168,40 +166,57 @@ export const Quotes: React.FC<QuotesProps> = ({ products, customers, user, branc
     };
 
     return (
-        <Card title="Historial de Cotizaciones" className="flex-1 overflow-hidden" noPadding>
-            <div className="overflow-auto h-full max-h-[600px]">
-                <table className="w-full text-sm text-left">
-                    <thead className="bg-gray-50 border-b sticky top-0">
-                        <tr>
-                            <th className="p-4">Folio</th>
-                            <th className="p-4">Fecha</th>
-                            <th className="p-4">Cliente</th>
-                            <th className="p-4">Estado</th>
-                            <th className="p-4 text-right">Total</th>
-                            <th className="p-4 text-right">Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y">
-                        {quotes.map(q => (
-                            <tr key={q.id} className="hover:bg-gray-50">
-                                <td className="p-4 font-mono font-bold">{q.folio}</td>
-                                <td className="p-4">{new Date(q.date).toLocaleDateString()}</td>
-                                <td className="p-4">{customers.find(c => c.id === q.customerId)?.name || 'General'}</td>
-                                <td className="p-4"><Badge variant={q.status === 'accepted' ? 'success' : q.status === 'expired' ? 'danger' : 'warning'}>{q.status}</Badge></td>
-                                <td className="p-4 text-right font-bold">L {q.total.toFixed(2)}</td>
-                                <td className="p-4 text-right flex justify-end gap-2">
-                                    {q.status === 'pending' && (
-                                        <Button size="sm" variant="success" onClick={() => handleSendToPOS(q)} title="Cargar en Caja (Cobrar)"><i className="fas fa-cash-register"></i> Cargar en POS</Button>
-                                    )}
-                                    <Button size="sm" variant="secondary" onClick={() => handlePrint(q)} title="Imprimir"><i className="fas fa-print"></i></Button>
-                                    <Button size="sm" variant="danger" onClick={() => handleDeleteQuote(q.id)} title="Eliminar"><i className="fas fa-trash"></i></Button>
-                                </td>
+        <>
+            <Card title="Historial de Cotizaciones" className="flex-1 overflow-hidden" noPadding>
+                <div className="overflow-auto h-full max-h-[600px]">
+                    <table className="w-full text-sm text-left">
+                        <thead className="bg-gray-50 border-b sticky top-0">
+                            <tr>
+                                <th className="p-4">Folio</th>
+                                <th className="p-4">Fecha</th>
+                                <th className="p-4">Cliente</th>
+                                <th className="p-4">Estado</th>
+                                <th className="p-4 text-right">Total</th>
+                                <th className="p-4 text-right">Acciones</th>
                             </tr>
-                        ))}
-                        {quotes.length === 0 && <tr><td colSpan={6} className="text-center p-8 text-gray-400">No hay cotizaciones guardadas.</td></tr>}
-                    </tbody>
-                </table>
-            </div>
-        </Card>
+                        </thead>
+                        <tbody className="divide-y">
+                            {quotes.map(q => (
+                                <tr key={q.id} className="hover:bg-gray-50">
+                                    <td className="p-4 font-mono font-bold">{q.folio}</td>
+                                    <td className="p-4">{new Date(q.date).toLocaleDateString()}</td>
+                                    <td className="p-4">{customers.find(c => c.id === q.customerId)?.name || 'General'}</td>
+                                    <td className="p-4"><Badge variant={q.status === 'accepted' ? 'success' : q.status === 'expired' ? 'danger' : 'warning'}>{q.status}</Badge></td>
+                                    <td className="p-4 text-right font-bold">L {q.total.toFixed(2)}</td>
+                                    <td className="p-4 text-right flex justify-end gap-2">
+                                        {q.status === 'pending' && (
+                                            <Button size="sm" variant="success" onClick={() => handleSendToPOS(q)} title="Cargar en Caja (Cobrar)"><i className="fas fa-cash-register"></i> Cargar en POS</Button>
+                                        )}
+                                        <Button size="sm" variant="secondary" onClick={() => handlePrint(q)} title="Imprimir"><i className="fas fa-print"></i></Button>
+                                        <Button size="sm" variant="danger" onClick={() => handleDeleteQuote(q.id, q.folio)} title="Eliminar"><i className="fas fa-trash"></i></Button>
+                                    </td>
+                                </tr>
+                            ))}
+                            {quotes.length === 0 && <tr><td colSpan={6} className="text-center p-8 text-gray-400">No hay cotizaciones guardadas.</td></tr>}
+                        </tbody>
+                    </table>
+                </div>
+            </Card>
+
+            <ConfirmDialog
+                isOpen={deleteConfirm.open}
+                title="Eliminar Cotización"
+                message={`¿Estás seguro de eliminar la cotización ${deleteConfirm.folio}?`}
+                confirmText="Eliminar"
+                cancelText="Cancelar"
+                variant="danger"
+                onConfirm={async () => {
+                    await db.deleteQuote(deleteConfirm.id);
+                    setDeleteConfirm({ open: false, id: '', folio: '' });
+                    loadQuotes();
+                }}
+                onCancel={() => setDeleteConfirm({ open: false, id: '', folio: '' })}
+            />
+        </>
     );
 };
