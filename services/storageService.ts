@@ -539,6 +539,8 @@ class StorageService {
       c.paidAmount += payment.amount;
       if (c.paidAmount >= c.totalAmount - 0.1) c.status = 'paid';
       await db_engine.credits.put(c);
+      const settings = await this.getSettings();
+      if (settings.autoSync) this.triggerAutoSync();
     }
   }
 
@@ -655,7 +657,11 @@ class StorageService {
     return { used: 0, total: 1024 * 1024 * 5, percent: 0 }; // Fallback a 5MB si no hay API
   }
 
-  async deleteQuote(id: string) { await db_engine.quotes.delete(id); }
+  async deleteQuote(id: string) {
+    await db_engine.quotes.delete(id);
+    const settings = await this.getSettings();
+    if (settings.autoSync) this.triggerAutoSync();
+  }
 
   async updateCategoryStockThreshold(categoryId: string, threshold: number) {
     await db_engine.products.where('categoryId').equals(categoryId).modify({ minStock: threshold });
@@ -731,6 +737,8 @@ class StorageService {
         note: `Liquidación anticipada. Ahorro: L ${details.savings.toFixed(2)}`
       });
       await db_engine.credits.put(c);
+      const settings = await this.getSettings();
+      if (settings.autoSync) this.triggerAutoSync();
     }
   }
 
@@ -766,6 +774,8 @@ class StorageService {
       sale.fulfillmentStatus = status;
       if (shippingDetails) sale.shippingDetails = { ...sale.shippingDetails, ...shippingDetails } as ShippingDetails;
       await db_engine.sales.put(sale);
+      const settings = await this.getSettings();
+      if (settings.autoSync) this.triggerAutoSync();
     }
   }
 
@@ -774,6 +784,8 @@ class StorageService {
     if (b) {
       b.active = false;
       await db_engine.branches.put(b);
+      const settings = await this.getSettings();
+      if (settings.autoSync) this.triggerAutoSync();
     }
   }
 
