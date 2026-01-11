@@ -93,6 +93,15 @@ function App() {
 
       // Carga rápida desde IndexedDB (sin esperar nube)
       await refreshData(false);
+      // Sincronización en segundo plano (Background Sync) para traer cambios del teléfono
+      refreshData(true);
+
+      // Auto-Sync cada 60 segundos para mantener al día
+      const intervalId = setInterval(() => {
+        refreshData(true);
+      }, 60000);
+
+      return () => clearInterval(intervalId);
 
       const storedUser = localStorage.getItem('creativos_gift_currentUser');
       if (storedUser) {
@@ -124,7 +133,10 @@ function App() {
       setUser(dbUser);
       localStorage.setItem('creativos_gift_currentUser', JSON.stringify({ email: loginEmail, password: loginPassword }));
       localStorage.setItem('active_user', JSON.stringify(dbUser)); // Sync for RBAC
+
+      // Estrategia: Carga Inmediata + Sync Fondo
       await refreshData(false);
+      refreshData(true); // Traer datos de la nube sin bloquear UI
       const b = await db.getBranches();
       setCurrentBranch(b.find(br => br.id === dbUser.branchId) || b[0]);
       setPage('dashboard');
