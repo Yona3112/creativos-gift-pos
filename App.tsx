@@ -91,9 +91,8 @@ function App() {
     const initApp = async () => {
       await db.init();
 
-      // Intentar sincronización inicial antes de procesar login
-      // Esto trae usuarios actualizados y configuraciones globales
-      await refreshData(true);
+      // Carga rápida desde IndexedDB (sin esperar nube)
+      await refreshData(false);
 
       const storedUser = localStorage.getItem('creativos_gift_currentUser');
       if (storedUser) {
@@ -102,11 +101,15 @@ function App() {
           const dbUser = await db.login(parsedUser.email, parsedUser.password);
           if (dbUser) {
             setUser(dbUser);
+            localStorage.setItem('active_user', JSON.stringify(dbUser)); // Sync for RBAC
             // Ya cargamos la data arriba, así que solo refrescamos la sucursal
             const bList = await db.getBranches();
             setCurrentBranch(bList.find(b => b.id === dbUser.branchId) || bList[0]);
           }
-        } catch (e) { localStorage.removeItem('creativos_gift_currentUser'); }
+        } catch (e) {
+          localStorage.removeItem('creativos_gift_currentUser');
+          localStorage.removeItem('active_user');
+        }
       }
       setLoading(false);
     };
@@ -120,7 +123,8 @@ function App() {
     if (dbUser) {
       setUser(dbUser);
       localStorage.setItem('creativos_gift_currentUser', JSON.stringify({ email: loginEmail, password: loginPassword }));
-      await refreshData(true);
+      localStorage.setItem('active_user', JSON.stringify(dbUser)); // Sync for RBAC
+      await refreshData(false);
       const b = await db.getBranches();
       setCurrentBranch(b.find(br => br.id === dbUser.branchId) || b[0]);
       setPage('dashboard');
@@ -132,6 +136,7 @@ function App() {
   const handleLogout = () => {
     setUser(null);
     localStorage.removeItem('creativos_gift_currentUser');
+    localStorage.removeItem('active_user');
     setPage('dashboard');
   };
 
