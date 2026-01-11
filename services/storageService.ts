@@ -636,6 +636,15 @@ class StorageService {
   }
   async saveUser(u: User) {
     if (!u.id) u.id = Date.now().toString();
+
+    // Si es una actualización y no se proporciona contraseña, mantener la existente
+    if (u.id) {
+      const existing = await db_engine.users.get(u.id);
+      if (existing && (!u.password || u.password.trim() === '')) {
+        u.password = existing.password;
+      }
+    }
+
     await db_engine.users.put(u);
     const settings = await this.getSettings();
     if (settings.autoSync) this.triggerAutoSync();
