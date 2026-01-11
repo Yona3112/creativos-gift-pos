@@ -4,6 +4,7 @@ import { db } from '../services/storageService';
 import { CompanySettings, LoyaltyLevel, Product, Sale, User, UserRole } from '../types';
 import { Button, Input, Card, Alert, Modal, Badge } from '../components/UIComponents';
 import { createClient } from '@supabase/supabase-js';
+import { SupabaseService } from '../services/supabaseService';
 
 interface SettingsProps {
   onUpdate?: () => void;
@@ -318,14 +319,72 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
           </div>
         </Card>
 
-        {/* Cloud Config Section */}
         <Card title="Nube y Sincronización (Supabase)">
           <div className="space-y-4">
-            <Alert variant="info"><i className="fas fa-cloud mr-2"></i>Configure su proyecto de Supabase para habilitar futuras funciones de sincronización en la nube.</Alert>
+            <Alert variant="info">
+              <i className="fas fa-cloud mr-2"></i>
+              Sincronice sus datos locales con Supabase para tener un respaldo en la nube y acceder desde múltiples dispositivos.
+            </Alert>
             <div className="grid grid-cols-1 gap-4">
               <Input label="Supabase URL" name="supabaseUrl" value={settings.supabaseUrl || ''} onChange={handleChange} placeholder="https://xyz.supabase.co" />
               <Input label="Supabase Anon Key" name="supabaseKey" value={settings.supabaseKey || ''} onChange={handleChange} type="password" placeholder="eyJhb..." />
             </div>
+
+            {settings.supabaseUrl && settings.supabaseKey && (
+              <div className="flex flex-col gap-3 pt-4 border-t">
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="primary"
+                    className="flex-1"
+                    onClick={async () => {
+                      setIsSyncing(true);
+                      setSyncStatus({ type: 'info', message: 'Subiendo datos a la nube...' });
+                      try {
+                        await SupabaseService.syncAll();
+                        setSyncStatus({ type: 'success', message: '¡Datos subidos con éxito!' });
+                      } catch (err: any) {
+                        setSyncStatus({ type: 'danger', message: `Error al subir: ${err.message}` });
+                      } finally {
+                        setIsSyncing(false);
+                      }
+                    }}
+                    disabled={isSyncing}
+                    icon={isSyncing ? 'spinner fa-spin' : 'cloud-upload-alt'}
+                  >
+                    Subir a la Nube (Backup)
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex-1"
+                    onClick={async () => {
+                      if (confirm('Esto sobreescribirá los datos locales con los de la nube. ¿Continuar?')) {
+                        setIsSyncing(true);
+                        setSyncStatus({ type: 'info', message: 'Descargando datos de la nube...' });
+                        try {
+                          await SupabaseService.pullAll();
+                          setSyncStatus({ type: 'success', message: '¡Datos descargados con éxito!' });
+                          setTimeout(() => window.location.reload(), 2000);
+                        } catch (err: any) {
+                          setSyncStatus({ type: 'danger', message: `Error al descargar: ${err.message}` });
+                        } finally {
+                          setIsSyncing(false);
+                        }
+                      }
+                    }}
+                    disabled={isSyncing}
+                    icon={isSyncing ? 'spinner fa-spin' : 'cloud-download-alt'}
+                  >
+                    Descargar de la Nube
+                  </Button>
+                </div>
+                {syncStatus && (
+                  <Alert variant={syncStatus.type}>{syncStatus.message}</Alert>
+                )}
+              </div>
+            )}
           </div>
         </Card>
 
