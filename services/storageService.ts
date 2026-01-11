@@ -179,7 +179,8 @@ class StorageService {
 
   // --- PRODUCTS & KARDEX ---
   async getProducts(): Promise<Product[]> {
-    return await db_engine.products.toArray();
+    const products = await db_engine.products.toArray();
+    return products.filter(p => p.active !== false);
   }
 
   async saveProduct(product: Product, userId: string = 'system') {
@@ -316,7 +317,10 @@ class StorageService {
   }
 
   // --- CUSTOMERS ---
-  async getCustomers(): Promise<Customer[]> { return await db_engine.customers.toArray(); }
+  async getCustomers(): Promise<Customer[]> {
+    const customers = await db_engine.customers.toArray();
+    return customers.filter(c => c.active !== false);
+  }
   async saveCustomer(c: Customer) {
     await db_engine.customers.put(c);
     const settings = await this.getSettings();
@@ -569,6 +573,10 @@ class StorageService {
   }
 
   // --- LEGACY COMPATIBILITY WRAPPERS (To avoid breaking App.tsx) ---
+  async getSuppliers() {
+    const items = await db_engine.suppliers.toArray();
+    return items.filter(i => i.active !== false);
+  }
   async saveSupplier(s: Supplier) {
     if (!s.id) s.id = Date.now().toString();
     if (s.active === undefined) s.active = true;
@@ -631,7 +639,10 @@ class StorageService {
       if (settings.autoSync) this.triggerAutoSync();
     }
   }
-  async getBranches() { return await db_engine.branches.toArray(); }
+  async getBranches() {
+    const branches = await db_engine.branches.toArray();
+    return branches.filter(b => b.active !== false);
+  }
   async saveBranch(b: Branch) {
     if (!b.id) b.id = Date.now().toString();
     await db_engine.branches.put(b);
