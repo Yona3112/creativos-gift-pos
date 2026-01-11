@@ -602,7 +602,7 @@ export const POS: React.FC<POSProps> = ({
                                 if (winCliente) {
                                     const clienteHtml = htmlOriginal.replace('</style>', `
                                         .copy-type { text-align: center; font-weight: bold; font-size: 10px; margin-bottom: 5px; padding: 3px; background: #f0f0f0; }
-                                        </style>`).replace('<body>', '<body><div class="copy-type">*** ORIGINAL - CLIENTE ***</div>');
+                                        </style>`).replace('<body>', '<body><div class="copy-type">ORIGINAL: CLIENTE</div>');
                                     winCliente.document.write(clienteHtml);
                                     winCliente.document.close();
                                     winCliente.focus();
@@ -615,7 +615,7 @@ export const POS: React.FC<POSProps> = ({
                                     if (winSAR) {
                                         const sarHtml = htmlOriginal.replace('</style>', `
                                             .copy-type { text-align: center; font-weight: bold; font-size: 10px; margin-bottom: 5px; padding: 3px; background: #e0e0e0; border: 1px dashed #666; }
-                                            </style>`).replace('<body>', '<body><div class="copy-type">*** COPIA - SAR / ARCHIVO ***</div>');
+                                            </style>`).replace('<body>', '<body><div class="copy-type">COPIA: EMISOR</div>');
                                         winSAR.document.write(sarHtml);
                                         winSAR.document.close();
                                         winSAR.focus();
