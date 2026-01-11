@@ -8,6 +8,20 @@ export class SupabaseService {
     static async getClient() {
         if (this.client) return this.client;
 
+        // Priority 1: Environment variables (for production on Vercel/Netlify)
+        const envUrl = import.meta.env.VITE_SUPABASE_URL;
+        const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+        if (envUrl && envKey) {
+            try {
+                this.client = createClient(envUrl, envKey);
+                return this.client;
+            } catch (e) {
+                console.error("Error al crear cliente Supabase desde env:", e);
+            }
+        }
+
+        // Priority 2: Settings from local database (for local development)
         const settings = await db.getSettings();
         if (settings.supabaseUrl && settings.supabaseKey) {
             try {
