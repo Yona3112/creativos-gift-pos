@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Expense, User } from '../types';
-import { Card, Button, Input, Modal, Badge } from '../components/UIComponents';
+import { Card, Button, Input, Modal, Badge, ConfirmDialog } from '../components/UIComponents';
 import { db } from '../services/storageService';
 
 interface ExpensesProps {
@@ -19,6 +19,7 @@ export const Expenses: React.FC<ExpensesProps> = ({ user, onUpdate }) => {
         description: '',
         date: new Date().toISOString().split('T')[0]
     });
+    const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; id: string }>({ open: false, id: '' });
 
     useEffect(() => { load(); }, []);
 
@@ -40,11 +41,7 @@ export const Expenses: React.FC<ExpensesProps> = ({ user, onUpdate }) => {
     };
 
     const handleDelete = async (id: string) => {
-        if(confirm("¿Eliminar este registro de gasto?")) {
-            await db.deleteExpense(id);
-            await load();
-            onUpdate();
-        }
+        setDeleteConfirm({ open: true, id });
     };
 
     return (
@@ -94,26 +91,42 @@ export const Expenses: React.FC<ExpensesProps> = ({ user, onUpdate }) => {
 
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Registrar Egreso">
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    <Input label="Fecha" type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} required />
-                    <Input label="Descripción del Gasto" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} required placeholder="Ej: Pago de Luz local 2" />
+                    <Input label="Fecha" type="date" value={formData.date} onChange={e => setFormData({ ...formData, date: e.target.value })} required />
+                    <Input label="Descripción del Gasto" value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} required placeholder="Ej: Pago de Luz local 2" />
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-bold text-gray-700 mb-1">Categoría</label>
-                            <select className="w-full p-3 border rounded-xl bg-white" value={formData.categoryId} onChange={e => setFormData({...formData, categoryId: e.target.value as any})}>
+                            <select className="w-full p-3 border rounded-xl bg-white" value={formData.categoryId} onChange={e => setFormData({ ...formData, categoryId: e.target.value as any })}>
                                 {['Alquiler', 'Servicios', 'Sueldos', 'Publicidad', 'Insumos', 'Transporte', 'Otros'].map(c => <option key={c} value={c}>{c}</option>)}
                             </select>
                         </div>
-                        <Input label="Monto (L)" type="number" step="0.01" value={formData.amount} onChange={e => setFormData({...formData, amount: parseFloat(e.target.value)})} required />
+                        <Input label="Monto (L)" type="number" step="0.01" value={formData.amount} onChange={e => setFormData({ ...formData, amount: parseFloat(e.target.value) })} required />
                     </div>
                     <div>
                         <label className="block text-sm font-bold text-gray-700 mb-1">Método de Pago</label>
-                        <select className="w-full p-3 border rounded-xl bg-white" value={formData.paymentMethod} onChange={e => setFormData({...formData, paymentMethod: e.target.value as any})}>
+                        <select className="w-full p-3 border rounded-xl bg-white" value={formData.paymentMethod} onChange={e => setFormData({ ...formData, paymentMethod: e.target.value as any })}>
                             {['Efectivo', 'Tarjeta', 'Transferencia'].map(m => <option key={m} value={m}>{m}</option>)}
                         </select>
                     </div>
                     <Button type="submit" className="w-full">Guardar Gasto</Button>
                 </form>
             </Modal>
+
+            <ConfirmDialog
+                isOpen={deleteConfirm.open}
+                title="Eliminar Gasto"
+                message="¿Estás seguro de eliminar este registro de gasto? Esta acción no se puede deshacer."
+                confirmText="Eliminar"
+                cancelText="Cancelar"
+                variant="danger"
+                onConfirm={async () => {
+                    await db.deleteExpense(deleteConfirm.id);
+                    setDeleteConfirm({ open: false, id: '' });
+                    await load();
+                    onUpdate();
+                }}
+                onCancel={() => setDeleteConfirm({ open: false, id: '' })}
+            />
         </div>
     );
 };

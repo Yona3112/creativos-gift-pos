@@ -1,13 +1,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { Branch } from '../types';
-import { Card, Button, Input, Modal, Badge } from '../components/UIComponents';
+import { Card, Button, Input, Modal, Badge, ConfirmDialog } from '../components/UIComponents';
 import { db } from '../services/storageService';
 
 export const Branches: React.FC = () => {
     const [branches, setBranches] = useState<Branch[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [formData, setFormData] = useState<Partial<Branch>>({});
+    const [deleteConfirm, setDeleteConfirm] = useState(false);
 
     useEffect(() => {
         const load = async () => setBranches(await db.getBranches());
@@ -22,10 +23,8 @@ export const Branches: React.FC = () => {
     };
 
     const handleDelete = async () => {
-        if (formData.id && confirm('¿Estás seguro de eliminar esta sucursal? Esta acción no se puede deshacer.')) {
-            await db.deleteBranch(formData.id);
-            setBranches(await db.getBranches());
-            setIsModalOpen(false);
+        if (formData.id) {
+            setDeleteConfirm(true);
         }
     };
 
@@ -91,6 +90,24 @@ export const Branches: React.FC = () => {
                     </div>
                 </form>
             </Modal>
+
+            <ConfirmDialog
+                isOpen={deleteConfirm}
+                title="Eliminar Sucursal"
+                message={`¿Estás seguro de eliminar la sucursal "${formData.name}"? Esta acción no se puede deshacer.`}
+                confirmText="Eliminar"
+                cancelText="Cancelar"
+                variant="danger"
+                onConfirm={async () => {
+                    if (formData.id) {
+                        await db.deleteBranch(formData.id);
+                        setBranches(await db.getBranches());
+                    }
+                    setDeleteConfirm(false);
+                    setIsModalOpen(false);
+                }}
+                onCancel={() => setDeleteConfirm(false)}
+            />
         </div>
     );
 };

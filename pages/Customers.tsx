@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Customer, LoyaltyLevel } from '../types';
-import { Button, Input, Card, Modal, Badge, Pagination, useDebounce, Alert } from '../components/UIComponents';
+import { Button, Input, Card, Modal, Badge, Pagination, useDebounce, Alert, ConfirmDialog } from '../components/UIComponents';
 import { db } from '../services/storageService';
 
 interface CustomersProps {
@@ -15,6 +15,7 @@ export const Customers: React.FC<CustomersProps> = ({ customers, onUpdate }) => 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState<Partial<Customer>>({ type: 'Natural' });
   const [error, setError] = useState<string | null>(null);
+  const [archiveConfirm, setArchiveConfirm] = useState<{ open: boolean; id: string; name: string }>({ open: false, id: '', name: '' });
 
   // Search & Pagination
   const [searchTerm, setSearchTerm] = useState('');
@@ -82,11 +83,8 @@ export const Customers: React.FC<CustomersProps> = ({ customers, onUpdate }) => 
   const handleArchive = (customer?: Customer) => {
     const target = customer?.id ? customer : formData;
     if (target.id) {
-      if (confirm(`¿Estás seguro de archivar al cliente "${target.name}"?`)) {
-        db.deleteCustomer(target.id);
-        setIsModalOpen(false);
-        onUpdate();
-      }
+      setArchiveConfirm({ open: true, id: target.id, name: target.name || '' });
+      setIsModalOpen(false);
     }
   };
 
@@ -302,6 +300,21 @@ export const Customers: React.FC<CustomersProps> = ({ customers, onUpdate }) => 
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={archiveConfirm.open}
+        title="Archivar Cliente"
+        message={`¿Estás seguro de archivar al cliente "${archiveConfirm.name}"? El cliente no aparecerá en las listas pero sus datos se conservarán.`}
+        confirmText="Archivar"
+        cancelText="Cancelar"
+        variant="warning"
+        onConfirm={async () => {
+          await db.deleteCustomer(archiveConfirm.id);
+          setArchiveConfirm({ open: false, id: '', name: '' });
+          onUpdate();
+        }}
+        onCancel={() => setArchiveConfirm({ open: false, id: '', name: '' })}
+      />
     </div>
   );
 };
