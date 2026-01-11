@@ -52,7 +52,7 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 
 export const Button: React.FC<ButtonProps> = ({ variant = 'primary', size = 'md', icon, children, className = '', ...props }) => {
   const base = "rounded-xl font-bold transition-all duration-200 flex items-center justify-center gap-2 focus:outline-none active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100";
-  
+
   const sizes = {
     sm: "px-3 py-1.5 text-xs",
     md: "px-5 py-3 text-sm",
@@ -95,12 +95,13 @@ export const Input: React.FC<InputProps> = ({ label, error, icon, className = ''
       )}
       <input
         className={`w-full ${icon ? 'pl-10' : 'px-4'} py-3 rounded-xl outline-none transition-colors font-bold shadow-sm ${className}`}
-        style={{ 
-            backgroundColor: error ? '#FEF2F2' : '#E5E7EB', // Rojo suave si hay error
-            color: error ? '#991B1B' : '#000000',           
-            border: error ? '2px solid #EF4444' : '1px solid #9CA3AF', // Borde rojo explícito
-            ...style 
+        style={{
+          backgroundColor: error ? '#FEF2F2' : '#E5E7EB', // Rojo suave si hay error
+          color: error ? '#991B1B' : '#000000',
+          border: error ? '2px solid #EF4444' : '1px solid #9CA3AF', // Borde rojo explícito
+          ...style
         }}
+        onFocus={(e) => e.target.select()}
         {...props}
       />
     </div>
@@ -222,7 +223,7 @@ export const StatCard: React.FC<{ title: string; value: string | number; icon: s
 
 export const WhatsAppButton: React.FC<{ phoneNumber?: string }> = ({ phoneNumber }) => {
   const [position, setPosition] = useState({ bottom: 20, right: 20 });
-  
+
   // Clean number
   const targetNumber = phoneNumber ? phoneNumber.replace(/[^0-9]/g, '') : '50499999999';
 
