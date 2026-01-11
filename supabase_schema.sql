@@ -11,7 +11,12 @@ CREATE TABLE IF NOT EXISTS categories (
   name TEXT NOT NULL,
   color TEXT,
   icon TEXT,
-  "defaultMinStock" NUMERIC
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  color TEXT,
+  icon TEXT,
+  "defaultMinStock" NUMERIC,
+  active BOOLEAN DEFAULT true
 );
 
 -- Branches
@@ -120,10 +125,13 @@ CREATE TABLE IF NOT EXISTS promotions (
 -- Suppliers
 CREATE TABLE IF NOT EXISTS suppliers (
   id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  phone TEXT,
+  "companyName" TEXT,
+  "contactName" TEXT,
   email TEXT,
-  address TEXT
+  phone TEXT,
+  rtn TEXT,
+  address TEXT,
+  active BOOLEAN DEFAULT true
 );
 
 -- Consumables
@@ -131,7 +139,11 @@ CREATE TABLE IF NOT EXISTS consumables (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   stock NUMERIC,
-  "minStock" NUMERIC
+  "minStock" NUMERIC,
+  category TEXT,
+  cost NUMERIC,
+  unit TEXT,
+  active BOOLEAN DEFAULT true
 );
 
 -- Quotes
