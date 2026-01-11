@@ -298,6 +298,7 @@ class StorageService {
   }
 
   async saveCategory(cat: Category) {
+    if (!cat.id) cat.id = Date.now().toString();
     if (cat.active === undefined) cat.active = true;
     await db_engine.categories.put(cat);
     const settings = await this.getSettings();
@@ -570,24 +571,28 @@ class StorageService {
   // --- LEGACY COMPATIBILITY WRAPPERS (To avoid breaking App.tsx) ---
   async getSuppliers() { return await db_engine.suppliers.toArray(); }
   async saveSupplier(s: Supplier) {
+    if (!s.id) s.id = Date.now().toString();
     await db_engine.suppliers.put(s);
     const settings = await this.getSettings();
     if (settings.autoSync) this.triggerAutoSync();
   }
   async getConsumables() { return await db_engine.consumables.toArray(); }
   async saveConsumable(c: Consumable) {
+    if (!c.id) c.id = Date.now().toString();
     await db_engine.consumables.put(c);
     const settings = await this.getSettings();
     if (settings.autoSync) this.triggerAutoSync();
   }
   async getPromotions() { return await db_engine.promotions.toArray(); }
   async savePromotion(p: Promotion) {
+    if (!p.id) p.id = Date.now().toString();
     await db_engine.promotions.put(p);
     const settings = await this.getSettings();
     if (settings.autoSync) this.triggerAutoSync();
   }
   async getUsers() { return await db_engine.users.toArray(); }
   async saveUser(u: User) {
+    if (!u.id) u.id = Date.now().toString();
     await db_engine.users.put(u);
     const settings = await this.getSettings();
     if (settings.autoSync) this.triggerAutoSync();
@@ -603,12 +608,14 @@ class StorageService {
   }
   async getBranches() { return await db_engine.branches.toArray(); }
   async saveBranch(b: Branch) {
+    if (!b.id) b.id = Date.now().toString();
     await db_engine.branches.put(b);
     const settings = await this.getSettings();
     if (settings.autoSync) this.triggerAutoSync();
   }
   async getQuotes() { return await db_engine.quotes.toArray(); }
   async saveQuote(q: Quote) {
+    if (!q.id) q.id = Date.now().toString();
     await db_engine.quotes.put(q);
     const settings = await this.getSettings();
     if (settings.autoSync) this.triggerAutoSync();
@@ -757,7 +764,10 @@ class StorageService {
     return { cash, card, transfer };
   }
 
-  async saveCashCut(cut: CashCut) { await db_engine.cashCuts.put(cut); }
+  async saveCashCut(cut: CashCut) {
+    if (!cut.id) cut.id = Date.now().toString();
+    await db_engine.cashCuts.put(cut);
+  }
 
   async refundCreditNote(id: string) {
     const nc = await db_engine.creditNotes.get(id);
