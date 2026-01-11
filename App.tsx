@@ -18,6 +18,7 @@ import { Orders } from './pages/Orders';
 import { Expenses } from './pages/Expenses';
 import { InventoryHistory } from './pages/InventoryHistory';
 import { Credits } from './pages/Credits';
+import { SARBooks } from './pages/SARBooks';
 // Fix: Added Card to the imported components from UIComponents
 import { Button, Input, Card, useNotifications } from './components/UIComponents';
 
@@ -223,6 +224,7 @@ function App() {
       case 'customers': return <Customers customers={customers} onUpdate={refreshData} />;
       case 'credits': return <Credits settings={safeSettings} />;
       case 'reports': return <Reports sales={sales} products={products} customers={customers} categories={categories} />;
+      case 'sarBooks': return <SARBooks />;
       case 'settings': return <Settings onUpdate={refreshData} />;
       case 'cashCut': return <CashCut />;
       case 'orders': return <Orders onUpdate={refreshData} />;

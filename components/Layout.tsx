@@ -24,6 +24,7 @@ const MENU_ITEMS = [
   { id: 'salesHistory', label: 'Facturación / Caja', icon: 'file-invoice-dollar' },
   { id: 'customers', label: 'Clientes / Puntos', icon: 'users' },
   { id: 'reports', label: 'Inteligencia Negocio', icon: 'chart-bar' },
+  { id: 'sarBooks', label: 'Libros SAR', icon: 'book' },
   { id: 'settings', label: 'Configuración', icon: 'cog' },
 ];
 

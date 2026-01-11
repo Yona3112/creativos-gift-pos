@@ -594,16 +594,36 @@ export const POS: React.FC<POSProps> = ({
                     <div className="flex flex-col gap-3">
                         <Button className="w-full py-4 text-lg" icon="print" onClick={async () => {
                             if (lastSale) {
-                                const html = await db.generateTicketHTML(lastSale, selectedCustomer || undefined);
-                                const win = window.open('', '', 'width=400,height=600');
-                                if (win) {
-                                    win.document.write(html);
-                                    win.document.close();
-                                    win.focus();
-                                    setTimeout(() => { win.print(); win.close(); }, 500);
+                                // Generate ticket HTML for both copies
+                                const htmlOriginal = await db.generateTicketHTML(lastSale, selectedCustomer || undefined);
+
+                                // Print Customer Copy (ORIGINAL)
+                                const winCliente = window.open('', '', 'width=400,height=600');
+                                if (winCliente) {
+                                    const clienteHtml = htmlOriginal.replace('</style>', `
+                                        .copy-type { text-align: center; font-weight: bold; font-size: 10px; margin-bottom: 5px; padding: 3px; background: #f0f0f0; }
+                                        </style>`).replace('<body>', '<body><div class="copy-type">*** ORIGINAL - CLIENTE ***</div>');
+                                    winCliente.document.write(clienteHtml);
+                                    winCliente.document.close();
+                                    winCliente.focus();
+                                    winCliente.print();
                                 }
+
+                                // Print SAR Copy (COPIA FISCAL) after a short delay
+                                setTimeout(async () => {
+                                    const winSAR = window.open('', '', 'width=400,height=600');
+                                    if (winSAR) {
+                                        const sarHtml = htmlOriginal.replace('</style>', `
+                                            .copy-type { text-align: center; font-weight: bold; font-size: 10px; margin-bottom: 5px; padding: 3px; background: #e0e0e0; border: 1px dashed #666; }
+                                            </style>`).replace('<body>', '<body><div class="copy-type">*** COPIA - SAR / ARCHIVO ***</div>');
+                                        winSAR.document.write(sarHtml);
+                                        winSAR.document.close();
+                                        winSAR.focus();
+                                        winSAR.print();
+                                    }
+                                }, 1000);
                             }
-                        }}>Imprimir Comprobante</Button>
+                        }}>Imprimir (2 Copias)</Button>
 
                         <div className="flex gap-2">
                             <Button variant="secondary" className="flex-1" onClick={() => setIsSuccessModalOpen(false)}>Nueva Venta</Button>
