@@ -583,6 +583,11 @@ class StorageService {
     const settings = await this.getSettings();
     if (settings.autoSync) this.triggerAutoSync();
   }
+  async deleteConsumable(id: string) {
+    await db_engine.consumables.delete(id);
+    const settings = await this.getSettings();
+    if (settings.autoSync) this.triggerAutoSync();
+  }
   async getPromotions() { return await db_engine.promotions.toArray(); }
   async savePromotion(p: Promotion) {
     if (!p.id) p.id = Date.now().toString();
@@ -625,6 +630,11 @@ class StorageService {
   async login(email: string, pass: string): Promise<User | null> {
     const users = await db_engine.users.toArray();
     return users.find(u => u.email === email && u.password === pass && u.active) || null;
+  }
+
+  async getCurrentUser(): Promise<User | null> {
+    const stored = localStorage.getItem('active_user');
+    return stored ? JSON.parse(stored) : null;
   }
 
   async getAllData() {
