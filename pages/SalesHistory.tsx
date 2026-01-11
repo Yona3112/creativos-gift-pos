@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Sale, Customer, User, CreditNote, UserRole, CompanySettings } from '../types';
-import { Card, Button, Input, Badge, Modal, Pagination, useDebounce, ConfirmDialog } from '../components/UIComponents';
+import { Card, Button, Input, Badge, Modal, Pagination, useDebounce, ConfirmDialog, showToast } from '../components/UIComponents';
 import { db } from '../services/storageService';
 
 // Import sub-modules
@@ -101,13 +101,13 @@ export const SalesHistory: React.FC<SalesHistoryProps> = ({ sales, customers, us
         }
 
         if (confirmWord.toUpperCase() !== 'ANULAR') {
-            alert("Debe escribir la palabra 'ANULAR' para continuar.");
+            showToast("Debe escribir la palabra 'ANULAR' para continuar.", "error");
             return;
         }
 
         if (selectedSale) {
             await db.cancelSale(selectedSale.id, user?.id || 'system');
-            alert("Venta anulada correctamente. Se ha generado una Nota de Crédito.");
+            showToast("Venta anulada. Se ha generado una Nota de Crédito.", "success");
             onUpdate();
             const cn = await db.getCreditNotes();
             setCreditNotes(cn);
@@ -433,7 +433,7 @@ export const SalesHistory: React.FC<SalesHistoryProps> = ({ sales, customers, us
                     const cn = await db.getCreditNotes();
                     setCreditNotes(cn);
                     setRefundConfirm({ open: false, id: '' });
-                    alert("Reembolso registrado.");
+                    showToast("Reembolso registrado.", "success");
                 }}
                 onCancel={() => setRefundConfirm({ open: false, id: '' })}
             />

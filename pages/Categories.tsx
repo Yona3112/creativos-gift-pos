@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Category, ICONS, CompanySettings } from '../types';
-import { Card, Button, Input, Modal, ConfirmDialog } from '../components/UIComponents';
+import { Card, Button, Input, Modal, ConfirmDialog, showToast } from '../components/UIComponents';
 import { db } from '../services/storageService';
 
 interface CategoriesProps {
@@ -46,7 +46,7 @@ export const Categories: React.FC<CategoriesProps> = ({ categories, onUpdate, se
         const products = allProducts.filter(p => p.categoryId === selectedCategoryForShare.id);
 
         if (products.length === 0) {
-            alert("No hay productos en esta categoría.");
+            showToast("No hay productos en esta categoría.", "warning");
             return;
         }
 
@@ -80,7 +80,7 @@ export const Categories: React.FC<CategoriesProps> = ({ categories, onUpdate, se
             }
         } else {
             navigator.clipboard.writeText(text).then(() => {
-                alert("Texto copiado. Abriendo WhatsApp...");
+                showToast("Texto copiado. Abriendo WhatsApp...", "success");
                 window.open(`https://wa.me/?text=${encodeURIComponent(text.substring(0, 2000))}`, '_blank');
                 setIsShareModalOpen(false);
             });
@@ -95,7 +95,7 @@ export const Categories: React.FC<CategoriesProps> = ({ categories, onUpdate, se
         const products = allProducts.filter(p => p.categoryId === category.id);
 
         if (products.length === 0) {
-            alert('No hay productos en esta categoría para generar el catálogo.');
+            showToast("No hay productos en esta categoría para generar el catálogo.", "warning");
             return;
         }
 
@@ -308,7 +308,7 @@ export const Categories: React.FC<CategoriesProps> = ({ categories, onUpdate, se
             }
         } else {
             downloadFile(file, fileName);
-            alert("El archivo se ha descargado. Puedes enviarlo manualmente.");
+            showToast("Archivo descargado. Puedes enviarlo manualmente.", "info");
         }
     };
 
@@ -494,7 +494,7 @@ export const Categories: React.FC<CategoriesProps> = ({ categories, onUpdate, se
                     if (formData.id && formData.defaultMinStock) {
                         await db.updateCategoryStockThreshold(formData.id, formData.defaultMinStock);
                         setStockConfirm(false);
-                        alert('Productos actualizados correctamente.');
+                        showToast("Productos actualizados correctamente.", "success");
                     }
                 }}
                 onCancel={() => setStockConfirm(false)}

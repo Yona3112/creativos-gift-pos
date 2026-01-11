@@ -20,7 +20,7 @@ import { InventoryHistory } from './pages/InventoryHistory';
 import { Credits } from './pages/Credits';
 import { SARBooks } from './pages/SARBooks';
 // Fix: Added Card to the imported components from UIComponents
-import { Button, Input, Card, useNotifications } from './components/UIComponents';
+import { Button, Input, Card, useNotifications, ToastContainer } from './components/UIComponents';
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -256,6 +256,7 @@ function App() {
       >
         {renderPage()}
       </Layout>
+      <ToastContainer />
     </div>
   );
 }

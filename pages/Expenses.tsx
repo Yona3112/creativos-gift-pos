@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Expense, User } from '../types';
-import { Card, Button, Input, Modal, Badge, ConfirmDialog } from '../components/UIComponents';
+import { Card, Button, Input, Modal, Badge, ConfirmDialog, showToast } from '../components/UIComponents';
 import { db } from '../services/storageService';
 
 interface ExpensesProps {
@@ -31,7 +31,7 @@ export const Expenses: React.FC<ExpensesProps> = ({ user, onUpdate }) => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!user) {
-            alert("Sesión no válida. Por favor, reingrese.");
+            showToast("Sesión no válida. Por favor, reingrese.", "error");
             return;
         }
         await db.saveExpense({ ...formData, userId: user.id } as Expense);

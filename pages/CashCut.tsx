@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/storageService';
 import { CashCut as ICashCut, Sale } from '../types';
-import { Button, Input, Card, ConfirmDialog } from '../components/UIComponents';
+import { Button, Input, Card, ConfirmDialog, showToast } from '../components/UIComponents';
 
 export const CashCut: React.FC = () => {
   const [todaySales, setTodaySales] = useState<Sale[]>([]);
@@ -85,7 +85,7 @@ export const CashCut: React.FC = () => {
       details: denominations
     };
     await db.saveCashCut(cut);
-    alert('Corte guardado exitosamente');
+    showToast('Corte de caja guardado exitosamente', 'success');
     setDenominations({ bill500: 0, bill200: 0, bill100: 0, bill50: 0, bill20: 0, bill10: 0, bill5: 0, bill2: 0, bill1: 0, coins: 0 });
     setCashCutConfirm(false);
   };

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { CreditAccount, Customer, CreditPayment, CompanySettings } from '../types';
-import { Card, Button, Input, Badge, Modal, Alert } from '../components/UIComponents';
+import { Card, Button, Input, Badge, Modal, Alert, showToast } from '../components/UIComponents';
 import { db } from '../services/storageService';
 
 interface CreditsProps {
@@ -107,7 +107,7 @@ export const Credits: React.FC<CreditsProps> = ({ settings }) => {
                 win.close();
             }, 500);
         } else {
-            alert("⚠️ El navegador bloqueó la impresión. Por favor habilite las ventanas emergentes (Pop-ups).");
+            showToast("El navegador bloqueó la impresión. Habilite ventanas emergentes.", "warning");
         }
     };
 
@@ -179,7 +179,7 @@ export const Credits: React.FC<CreditsProps> = ({ settings }) => {
                 win.close();
             }, 500);
         } else {
-            alert("⚠️ El navegador bloqueó la impresión. Por favor habilite las ventanas emergentes (Pop-ups).");
+            showToast("El navegador bloqueó la impresión. Habilite ventanas emergentes.", "warning");
         }
     };
 
@@ -236,7 +236,7 @@ export const Credits: React.FC<CreditsProps> = ({ settings }) => {
                 win.close();
             }, 500);
         } else {
-            alert("⚠️ El navegador bloqueó la impresión. Por favor habilite las ventanas emergentes (Pop-ups).");
+            showToast("El navegador bloqueó la impresión. Habilite ventanas emergentes.", "warning");
         }
     };
 
@@ -246,7 +246,7 @@ export const Credits: React.FC<CreditsProps> = ({ settings }) => {
         const remaining = selectedCredit.totalAmount - selectedCredit.paidAmount;
 
         if (isNaN(amount) || amount <= 0 || amount > (remaining + 0.05)) {
-            alert(`Monto inválido. El saldo pendiente es L ${remaining.toFixed(2)}`);
+            showToast(`Monto inválido. Saldo pendiente: L ${remaining.toFixed(2)}`, "error");
             return;
         }
 
@@ -269,7 +269,7 @@ export const Credits: React.FC<CreditsProps> = ({ settings }) => {
         setPayAmount('');
         setPayRef('');
         setPayMethod('Efectivo');
-        alert("Pago registrado y recibo generado.");
+        showToast("Pago registrado y recibo generado.", "success");
     };
 
     const openLiquidationModal = (credit: CreditAccount) => {
@@ -279,7 +279,7 @@ export const Credits: React.FC<CreditsProps> = ({ settings }) => {
             setLiquidationDetails(details);
             setLiquidationModalOpen(true);
         } else {
-            alert("No se puede liquidar anticipadamente este crédito (quizás ya está pagado o no tiene tasa configurada).");
+            showToast("No se puede liquidar este crédito (ya pagado o sin tasa configurada).", "warning");
         }
     };
 
@@ -291,7 +291,7 @@ export const Credits: React.FC<CreditsProps> = ({ settings }) => {
             });
             setLiquidationModalOpen(false);
             refresh();
-            alert("Crédito liquidado exitosamente.");
+            showToast("Crédito liquidado exitosamente.", "success");
         }
     };
 

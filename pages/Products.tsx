@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { Product, Category, User } from '../types';
-import { Button, Input, Card, Modal, useDebounce, Pagination, ConfirmDialog } from '../components/UIComponents';
+import { Button, Input, Card, Modal, useDebounce, Pagination, ConfirmDialog, showToast } from '../components/UIComponents';
 import { db } from '../services/storageService';
 import { GoogleGenAI } from "@google/genai";
 
@@ -111,7 +111,7 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
             setScanQty(1);
             setTimeout(() => qtyInputRef.current?.focus(), 100);
         } else {
-            alert('Producto no encontrado');
+            showToast('Producto no encontrado', 'warning');
             setScanCode('');
             scanInputRef.current?.focus();
         }

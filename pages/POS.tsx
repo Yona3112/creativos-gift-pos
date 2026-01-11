@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Product, Customer, Category, CartItem, Sale, User, PaymentDetails, Quote, LoyaltyLevel, FulfillmentStatus, CompanySettings } from '../types';
-import { Button, Input, Modal, Badge, Alert } from '../components/UIComponents';
+import { Button, Input, Modal, Badge, Alert, showToast } from '../components/UIComponents';
 import { db } from '../services/storageService';
 
 interface POSProps {
@@ -123,7 +123,7 @@ export const POS: React.FC<POSProps> = ({
         if (!product.id.startsWith('manual-')) {
             const currentQty = existing ? existing.quantity : 0;
             if (currentQty >= product.stock) {
-                alert(`Stock insuficiente para "${product.name}". Disponible: ${product.stock}`);
+                showToast(`Stock insuficiente para "${product.name}". Disponible: ${product.stock}`, "warning");
                 return;
             }
         }
@@ -176,7 +176,7 @@ export const POS: React.FC<POSProps> = ({
 
         // Validación crítica: ventas a crédito requieren cliente
         if (paymentMethod === 'Crédito' && !selectedCustomer) {
-            alert('Debe seleccionar un cliente para ventas a crédito.');
+            showToast('Debe seleccionar un cliente para ventas a crédito.', 'warning');
             return;
         }
 
@@ -219,7 +219,7 @@ export const POS: React.FC<POSProps> = ({
             setIsPaymentModalOpen(false);
             onSaleComplete();
         } catch (e: any) {
-            alert(e.message || "Error al procesar venta");
+            showToast(e.message || "Error al procesar venta", "error");
         } finally {
             setIsProcessing(false);
         }

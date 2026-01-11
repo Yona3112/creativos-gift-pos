@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { db } from '../services/storageService';
 import { CompanySettings, LoyaltyLevel, Product, Sale, User, UserRole } from '../types';
-import { Button, Input, Card, Alert, Modal, Badge, ConfirmDialog } from '../components/UIComponents';
+import { Button, Input, Card, Alert, Modal, Badge, ConfirmDialog, showToast } from '../components/UIComponents';
 import { createClient } from '@supabase/supabase-js';
 import { SupabaseService } from '../services/supabaseService';
 
@@ -65,7 +65,7 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
         const compressedLogo = await db.compressImage(file);
         setSettings(prev => prev ? ({ ...prev, logo: compressedLogo }) : null);
       } catch (err) {
-        alert("Error al procesar el logo.");
+        showToast("Error al procesar el logo.", "error");
       }
     }
   };
@@ -112,7 +112,7 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
       try {
         const data = JSON.parse(event.target?.result as string);
         setRestoreConfirm({ open: true, data });
-      } catch (err) { alert('Archivo inválido.'); }
+      } catch (err) { showToast('Archivo inválido.', 'error'); }
     };
     reader.readAsText(file);
   };
@@ -120,7 +120,7 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
   // User Management Handlers
   const handleSaveUser = async () => {
     if (!userFormData.name || !userFormData.email || !userFormData.password) {
-      alert("Complete todos los campos obligatorios");
+      showToast("Complete todos los campos obligatorios", "warning");
       return;
     }
     const newUser: User = {

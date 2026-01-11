@@ -308,3 +308,98 @@ export const WhatsAppButton: React.FC<{ phoneNumber?: string }> = ({ phoneNumber
     </a>
   );
 };
+
+// --- TOAST NOTIFICATION SYSTEM ---
+interface ToastMessage {
+  id: string;
+  message: string;
+  type: 'success' | 'error' | 'warning' | 'info';
+  duration?: number;
+}
+
+// Global toast state
+let toastListeners: ((toasts: ToastMessage[]) => void)[] = [];
+let toasts: ToastMessage[] = [];
+
+const notifyListeners = () => {
+  toastListeners.forEach(listener => listener([...toasts]));
+};
+
+export const showToast = (message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info', duration = 4000) => {
+  const id = Date.now().toString();
+  toasts = [...toasts, { id, message, type, duration }];
+  notifyListeners();
+
+  if (duration > 0) {
+    setTimeout(() => {
+      toasts = toasts.filter(t => t.id !== id);
+      notifyListeners();
+    }, duration);
+  }
+};
+
+export const ToastContainer: React.FC = () => {
+  const [currentToasts, setCurrentToasts] = useState<ToastMessage[]>([]);
+
+  useEffect(() => {
+    toastListeners.push(setCurrentToasts);
+    return () => {
+      toastListeners = toastListeners.filter(l => l !== setCurrentToasts);
+    };
+  }, []);
+
+  const removeToast = (id: string) => {
+    toasts = toasts.filter(t => t.id !== id);
+    notifyListeners();
+  };
+
+  const icons = {
+    success: 'check-circle',
+    error: 'times-circle',
+    warning: 'exclamation-triangle',
+    info: 'info-circle'
+  };
+
+  const colors = {
+    success: 'bg-green-500',
+    error: 'bg-red-500',
+    warning: 'bg-yellow-500',
+    info: 'bg-blue-500'
+  };
+
+  const bgColors = {
+    success: 'bg-green-50 border-green-200',
+    error: 'bg-red-50 border-red-200',
+    warning: 'bg-yellow-50 border-yellow-200',
+    info: 'bg-blue-50 border-blue-200'
+  };
+
+  const textColors = {
+    success: 'text-green-800',
+    error: 'text-red-800',
+    warning: 'text-yellow-800',
+    info: 'text-blue-800'
+  };
+
+  if (currentToasts.length === 0) return null;
+
+  return (
+    <div className="fixed top-4 right-4 z-[100] flex flex-col gap-2 max-w-sm">
+      {currentToasts.map((toast) => (
+        <div
+          key={toast.id}
+          className={`flex items-start gap-3 p-4 rounded-xl shadow-lg border animate-slide-in ${bgColors[toast.type]}`}
+          onClick={() => removeToast(toast.id)}
+        >
+          <div className={`w-8 h-8 rounded-full ${colors[toast.type]} text-white flex items-center justify-center flex-shrink-0`}>
+            <i className={`fas fa-${icons[toast.type]}`}></i>
+          </div>
+          <p className={`text-sm font-bold ${textColors[toast.type]} flex-1`}>{toast.message}</p>
+          <button className="text-gray-400 hover:text-gray-600">
+            <i className="fas fa-times"></i>
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+};
