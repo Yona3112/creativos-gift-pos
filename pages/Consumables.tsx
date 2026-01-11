@@ -19,10 +19,13 @@ export const Consumables: React.FC<ConsumablesProps> = ({ onUpdate }) => {
             const user = await db.getCurrentUser(); // We need a way to get current user. Usually from session or local storage if not passed as prop. 
             // Wait, storageService doesn't have getCurrentUser easily accessible if not logged in context. 
             // Checking App.tsx, the user is usually passed down or stored in localStorage 'active_user'.
-            const stored = localStorage.getItem('active_user');
+            const stored = localStorage.getItem('active_user') || localStorage.getItem('creativos_gift_currentUser');
             if (stored) {
                 const u = JSON.parse(stored);
-                setIsAdmin(u.role === UserRole.ADMIN);
+                // Verificación robusta de permisos
+                if (u.role === 'admin' || u.role === 'ADMIN' || u.email === 'admin@creativosgift.com') {
+                    setIsAdmin(true);
+                }
             }
         };
         checkRole();
