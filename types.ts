@@ -239,6 +239,7 @@ export interface Supplier {
   phone: string;
   rtn?: string;
   address?: string;
+  active?: boolean;
 }
 
 export interface Consumable {
@@ -249,6 +250,7 @@ export interface Consumable {
   minStock: number;
   cost: number;
   unit: string;
+  active?: boolean;
 }
 
 export interface Promotion {

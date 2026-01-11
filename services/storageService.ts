@@ -569,24 +569,41 @@ class StorageService {
   }
 
   // --- LEGACY COMPATIBILITY WRAPPERS (To avoid breaking App.tsx) ---
-  async getSuppliers() { return await db_engine.suppliers.toArray(); }
   async saveSupplier(s: Supplier) {
     if (!s.id) s.id = Date.now().toString();
+    if (s.active === undefined) s.active = true;
     await db_engine.suppliers.put(s);
     const settings = await this.getSettings();
     if (settings.autoSync) this.triggerAutoSync();
   }
-  async getConsumables() { return await db_engine.consumables.toArray(); }
+  async deleteSupplier(id: string) {
+    const s = await db_engine.suppliers.get(id);
+    if (s) {
+      s.active = false;
+      await db_engine.suppliers.put(s);
+      const settings = await this.getSettings();
+      if (settings.autoSync) this.triggerAutoSync();
+    }
+  }
+  async getConsumables() {
+    const items = await db_engine.consumables.toArray();
+    return items.filter(i => i.active !== false);
+  }
   async saveConsumable(c: Consumable) {
     if (!c.id) c.id = Date.now().toString();
+    if (c.active === undefined) c.active = true;
     await db_engine.consumables.put(c);
     const settings = await this.getSettings();
     if (settings.autoSync) this.triggerAutoSync();
   }
   async deleteConsumable(id: string) {
-    await db_engine.consumables.delete(id);
-    const settings = await this.getSettings();
-    if (settings.autoSync) this.triggerAutoSync();
+    const c = await db_engine.consumables.get(id);
+    if (c) {
+      c.active = false;
+      await db_engine.consumables.put(c);
+      const settings = await this.getSettings();
+      if (settings.autoSync) this.triggerAutoSync();
+    }
   }
   async getPromotions() { return await db_engine.promotions.toArray(); }
   async savePromotion(p: Promotion) {
@@ -595,7 +612,10 @@ class StorageService {
     const settings = await this.getSettings();
     if (settings.autoSync) this.triggerAutoSync();
   }
-  async getUsers() { return await db_engine.users.toArray(); }
+  async getUsers() {
+    const users = await db_engine.users.toArray();
+    return users.filter(u => u.active !== false);
+  }
   async saveUser(u: User) {
     if (!u.id) u.id = Date.now().toString();
     await db_engine.users.put(u);
