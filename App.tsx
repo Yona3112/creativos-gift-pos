@@ -218,7 +218,7 @@ function App() {
       case 'pos': return <POS products={products} customers={customers} categories={categories} user={user} branchId={currentBranch?.id || ''} onSaleComplete={refreshData} loadedQuote={quoteToLoad} onQuoteProcessed={() => setQuoteToLoad(null)} onRefreshData={refreshData} settings={safeSettings} />;
       case 'expenses': return <Expenses user={user} onUpdate={refreshData} />;
       case 'inventoryHistory': return <InventoryHistory products={products} users={users} />;
-      case 'products': return <Products products={products} categories={categories} users={users} onUpdate={refreshData} initialFilter={pageParams?.filter} initialTab={pageParams?.tab} />;
+      case 'products': return <Products products={products} categories={categories} users={users} onUpdate={refreshData} initialFilter={pageParams?.filter} initialTab={pageParams?.tab} settings={safeSettings} />;
       case 'salesHistory': return <SalesHistory sales={sales} customers={customers} users={users} onUpdate={refreshData} user={user} branchId={currentBranch?.id} onLoadQuote={setQuoteToLoad} settings={safeSettings} />;
       case 'customers': return <Customers customers={customers} onUpdate={refreshData} />;
       case 'credits': return <Credits settings={safeSettings} />;

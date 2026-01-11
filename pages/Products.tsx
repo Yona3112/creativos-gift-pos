@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { Product, Category, User } from '../types';
-import { Button, Input, Card, Modal, useDebounce, Pagination } from '../components/UIComponents';
+import { Button, Input, Card, Modal, useDebounce, Pagination, ConfirmDialog } from '../components/UIComponents';
 import { db } from '../services/storageService';
 import { GoogleGenAI } from "@google/genai";
 
@@ -18,11 +18,12 @@ interface ProductsProps {
     onUpdate: () => void;
     initialFilter?: string;
     initialTab?: string;
+    settings?: { name?: string; branchName?: string };
 }
 
 const ITEMS_PER_PAGE = 8;
 
-export const Products: React.FC<ProductsProps> = ({ products, categories, users, onUpdate, initialFilter, initialTab }) => {
+export const Products: React.FC<ProductsProps> = ({ products, categories, users, onUpdate, initialFilter, initialTab, settings }) => {
     const [activeTab, setActiveTab] = useState<'products' | 'categories' | 'consumables' | 'suppliers' | 'kardex' | 'prices'>('products');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -31,6 +32,7 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
     const [filterCategory, setFilterCategory] = useState('all');
     const debouncedSearch = useDebounce(searchTerm, 300);
     const [currentPage, setCurrentPage] = useState(1);
+    const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; id: string; name: string }>({ open: false, id: '', name: '' });
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -127,6 +129,7 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
     };
 
     const printBarcode = (product: Product) => {
+        const storeName = settings?.name || 'Mi Tienda';
         const win = window.open('', '', 'width=300,height=200');
         if (win) {
             win.document.write(`
@@ -149,9 +152,10 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
                             overflow: hidden;
                         }
                         .ticket { width: 100%; text-align: center; }
-                        h2 { font-size: 10px; margin: 0; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; width: 100%; }
-                        #barcode { width: 90% !important; height: 12mm !important; }
-                        .price { font-size: 11px; font-weight: bold; margin-top: 1px; }
+                        .store-name { font-size: 7px; font-weight: bold; margin: 0; text-transform: uppercase; letter-spacing: 1px; color: #333; }
+                        h2 { font-size: 9px; margin: 1px 0; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; width: 100%; }
+                        #barcode { width: 90% !important; height: 10mm !important; }
+                        .price { font-size: 10px; font-weight: bold; margin-top: 1px; }
                         
                         /* Screen Preview Style */
                         @media screen {
@@ -162,6 +166,7 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
                 </head>
                 <body>
                     <div class="ticket">
+                        <p class="store-name">${storeName}</p>
                         <h2>${product.name}</h2>
                         <svg id="barcode"></svg>
                         <div class="price">L ${product.price.toFixed(2)}</div>
@@ -171,9 +176,9 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
                             JsBarcode("#barcode", "${product.code}", {
                                 format: "CODE128",
                                 width: 1.5,
-                                height: 30,
+                                height: 25,
                                 displayValue: true,
-                                fontSize: 9,
+                                fontSize: 8,
                                 margin: 0
                             });
                             window.print();
@@ -252,11 +257,8 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
                                         <td className="px-6 py-4 text-right">
                                             <Button size="sm" variant="ghost" onClick={() => printBarcode(p)} icon="print" className="mr-2" title="Imprimir Código"></Button>
                                             <Button size="sm" variant="ghost" onClick={() => openModal(p)} icon="edit"></Button>
-                                            <Button size="sm" variant="ghost" onClick={async () => {
-                                                if (confirm(`¿Eliminar ${p.name}?`)) {
-                                                    await db.deleteProduct(p.id);
-                                                    onUpdate();
-                                                }
+                                            <Button size="sm" variant="ghost" onClick={() => {
+                                                setDeleteConfirm({ open: true, id: p.id, name: p.name });
                                             }} icon="trash" className="text-red-400 hover:text-red-600"></Button>
                                         </td>
                                     </tr>
@@ -311,12 +313,9 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
 
                     <div className="flex justify-between gap-2 pt-4 border-t">
                         {formData.id && (
-                            <Button type="button" variant="danger" onClick={async () => {
-                                if (confirm('¿Seguro que deseas eliminar este producto?')) {
-                                    await db.deleteProduct(formData.id!);
-                                    setIsModalOpen(false);
-                                    onUpdate();
-                                }
+                            <Button type="button" variant="danger" onClick={() => {
+                                setDeleteConfirm({ open: true, id: formData.id!, name: formData.name || '' });
+                                setIsModalOpen(false);
                             }} icon="trash">Eliminar</Button>
                         )}
                         <div className="flex gap-2 ml-auto">
@@ -377,6 +376,21 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
                     )}
                 </div>
             </Modal>
+
+            <ConfirmDialog
+                isOpen={deleteConfirm.open}
+                title="Eliminar Producto"
+                message={`¿Estás seguro de eliminar "${deleteConfirm.name}"? Esta acción no se puede deshacer.`}
+                confirmText="Eliminar"
+                cancelText="Cancelar"
+                variant="danger"
+                onConfirm={async () => {
+                    await db.deleteProduct(deleteConfirm.id);
+                    setDeleteConfirm({ open: false, id: '', name: '' });
+                    onUpdate();
+                }}
+                onCancel={() => setDeleteConfirm({ open: false, id: '', name: '' })}
+            />
         </div>
     );
 };
