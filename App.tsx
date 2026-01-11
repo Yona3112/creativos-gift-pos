@@ -163,6 +163,8 @@ function App() {
   const navigateTo = (p: string, params?: any) => {
     setPage(p);
     setPageParams(params);
+    // Soft refresh: sync with cloud when changing modules
+    refreshData(true);
   };
 
   if (loading) {
@@ -248,7 +250,7 @@ function App() {
         onLogout={handleLogout}
         onChangeBranch={(id) => setCurrentBranch(branches.find(b => b.id === id) || null)}
         currentPage={page}
-        onNavigate={setPage}
+        onNavigate={navigateTo}
       >
         {renderPage()}
       </Layout>
