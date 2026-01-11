@@ -171,6 +171,13 @@ export const POS: React.FC<POSProps> = ({
 
     const handleCheckout = async () => {
         if (cart.length === 0 || isProcessing) return;
+
+        // Validación crítica: ventas a crédito requieren cliente
+        if (paymentMethod === 'Crédito' && !selectedCustomer) {
+            alert('Debe seleccionar un cliente para ventas a crédito.');
+            return;
+        }
+
         setIsProcessing(true);
         try {
             const saleData = {

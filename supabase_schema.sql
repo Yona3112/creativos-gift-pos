@@ -11,10 +11,6 @@ CREATE TABLE IF NOT EXISTS categories (
   name TEXT NOT NULL,
   color TEXT,
   icon TEXT,
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  color TEXT,
-  icon TEXT,
   "defaultMinStock" NUMERIC,
   active BOOLEAN DEFAULT true
 );
@@ -24,6 +20,8 @@ CREATE TABLE IF NOT EXISTS branches (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   address TEXT,
+  phone TEXT,
+  manager TEXT,
   active BOOLEAN DEFAULT true
 );
 
@@ -37,7 +35,9 @@ CREATE TABLE IF NOT EXISTS products (
   cost NUMERIC,
   stock NUMERIC DEFAULT 0,
   "minStock" NUMERIC DEFAULT 0,
+  "enableLowStockAlert" BOOLEAN DEFAULT true,
   "categoryId" TEXT REFERENCES categories(id),
+  "providerId" TEXT,
   image TEXT,
   active BOOLEAN DEFAULT true,
   "isTaxable" BOOLEAN DEFAULT true
@@ -46,16 +46,19 @@ CREATE TABLE IF NOT EXISTS products (
 -- Customers
 CREATE TABLE IF NOT EXISTS customers (
   id TEXT PRIMARY KEY,
+  type TEXT,
   name TEXT NOT NULL,
+  "legalRepresentative" TEXT,
   phone TEXT,
   rtn TEXT,
+  dni TEXT,
   email TEXT,
   address TEXT,
+  "birthDate" TEXT,
   points NUMERIC DEFAULT 0,
   "totalSpent" NUMERIC DEFAULT 0,
   level TEXT,
-  active BOOLEAN DEFAULT true,
-  type TEXT
+  active BOOLEAN DEFAULT true
 );
 
 -- Users
@@ -90,7 +93,8 @@ CREATE TABLE IF NOT EXISTS sales (
   "pointsUsed" NUMERIC,
   "pointsMonetaryValue" NUMERIC,
   "fulfillmentStatus" TEXT,
-  "shippingDetails" JSONB
+  "shippingDetails" JSONB,
+  "originalQuoteId" TEXT
 );
 
 -- Credits
@@ -114,12 +118,13 @@ CREATE TABLE IF NOT EXISTS credits (
 CREATE TABLE IF NOT EXISTS promotions (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
-  description TEXT,
-  "discountPercent" NUMERIC,
+  type TEXT,
+  value NUMERIC,
   "startDate" TIMESTAMP WITH TIME ZONE,
   "endDate" TIMESTAMP WITH TIME ZONE,
   active BOOLEAN DEFAULT true,
-  "categoryId" TEXT REFERENCES categories(id)
+  "productIds" JSONB,
+  "categoryIds" JSONB
 );
 
 -- Suppliers
@@ -153,8 +158,13 @@ CREATE TABLE IF NOT EXISTS quotes (
   date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   items JSONB NOT NULL,
   subtotal NUMERIC,
+  "taxAmount" NUMERIC,
+  discount NUMERIC DEFAULT 0,
   total NUMERIC,
   "customerId" TEXT,
+  "userId" TEXT,
+  "branchId" TEXT,
+  "expirationDate" TIMESTAMP WITH TIME ZONE,
   status TEXT
 );
 
@@ -164,14 +174,11 @@ CREATE TABLE IF NOT EXISTS cash_cuts (
   date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   "userId" TEXT,
   "branchId" TEXT,
-  "initialCash" NUMERIC,
-  "salesCash" NUMERIC,
-  "salesCard" NUMERIC,
-  "salesTransfer" NUMERIC,
-  "totalCollected" NUMERIC,
-  "totalExpected" NUMERIC,
+  "totalSales" NUMERIC,
+  "cashExpected" NUMERIC,
+  "cashCounted" NUMERIC,
   difference NUMERIC,
-  notes TEXT
+  details JSONB
 );
 
 -- Credit Notes
@@ -194,6 +201,7 @@ CREATE TABLE IF NOT EXISTS expenses (
   description TEXT,
   amount NUMERIC NOT NULL,
   "categoryId" TEXT,
+  "paymentMethod" TEXT,
   "userId" TEXT,
   "branchId" TEXT
 );
@@ -243,6 +251,8 @@ CREATE TABLE IF NOT EXISTS settings (
   "pointValue" NUMERIC,
   "defaultCreditRate" NUMERIC,
   "defaultCreditTerm" INTEGER,
+  "creditDueDateAlertDays" INTEGER,
+  "enableCreditAlerts" BOOLEAN,
   "showFloatingWhatsapp" BOOLEAN,
   "whatsappTemplate" TEXT,
   "logo" TEXT,
@@ -250,5 +260,6 @@ CREATE TABLE IF NOT EXISTS settings (
   "whatsappNumber" TEXT,
   "masterPassword" TEXT,
   "supabaseUrl" TEXT,
-  "supabaseKey" TEXT
+  "supabaseKey" TEXT,
+  "autoSync" BOOLEAN DEFAULT false
 );

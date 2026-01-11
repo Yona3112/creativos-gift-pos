@@ -10,7 +10,7 @@ export const Promotions: React.FC = () => {
     const [products, setProducts] = useState<Product[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [formData, setFormData] = useState<Partial<Promotion>>({});
-    
+
     const [scopeType, setScopeType] = useState<'all' | 'category' | 'product'>('all');
     const [selectedItems, setSelectedItems] = useState<string[]>([]);
 
@@ -31,7 +31,7 @@ export const Promotions: React.FC = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        
+
         const updatedPromo: Partial<Promotion> = {
             ...formData,
             active: formData.active !== undefined ? formData.active : true,
@@ -76,14 +76,14 @@ export const Promotions: React.FC = () => {
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <h1 className="text-2xl font-bold text-gray-800">Promociones</h1>
-                <Button onClick={() => { 
-                    setFormData({ type: 'percent', active: true }); 
-                    setScopeType('all'); 
-                    setSelectedItems([]); 
-                    setIsModalOpen(true); 
+                <Button onClick={() => {
+                    setFormData({ type: 'percent', active: true });
+                    setScopeType('all');
+                    setSelectedItems([]);
+                    setIsModalOpen(true);
                 }} icon="plus">Nueva Promo</Button>
             </div>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {Array.isArray(promotions) && promotions.map(p => (
                     <Card key={p.id} className={`border-l-4 ${p.active ? 'border-accent' : 'border-gray-300 opacity-75'}`}>
@@ -94,11 +94,11 @@ export const Promotions: React.FC = () => {
                             </div>
                         </div>
                         <p className="text-sm text-gray-500 mb-2">
-                            {p.type === 'percent' ? `${(p.value * 100).toFixed(0)}% Descuento` : 
-                             p.type === 'amount' ? `L ${p.value} Descuento` : 
-                             p.type === '2x1' ? '2x1' : p.type}
+                            {p.type === 'percent' ? `${(p.value * 100).toFixed(0)}% Descuento` :
+                                p.type === 'amount' ? `L ${p.value} Descuento` :
+                                    p.type === '2x1' ? '2x1' : p.type}
                         </p>
-                        
+
                         <div className="mb-4">
                             {p.categoryIds && p.categoryIds.length > 0 ? (
                                 <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded font-bold">
@@ -119,12 +119,18 @@ export const Promotions: React.FC = () => {
                             <span>Inicio: {p.startDate}</span>
                             <span>Fin: {p.endDate}</span>
                         </div>
-                        <div className="mt-3 flex justify-end">
+                        <div className="mt-3 flex justify-end gap-2">
                             <Button size="sm" variant="ghost" onClick={() => handleEdit(p)} icon="edit">Editar</Button>
+                            <Button size="sm" variant="danger" onClick={async () => {
+                                if (window.confirm(`¿Eliminar promoción "${p.name}"?`)) {
+                                    await db.deletePromotion(p.id);
+                                    await loadData();
+                                }
+                            }} icon="trash">Eliminar</Button>
                         </div>
                     </Card>
                 ))}
-                
+
                 {(!promotions || promotions.length === 0) && (
                     <div className="col-span-3 text-center py-10 text-gray-400">
                         No hay promociones registradas.
@@ -134,12 +140,12 @@ export const Promotions: React.FC = () => {
 
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={formData.id ? "Editar Promoción" : "Crear Promoción"} size="lg">
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    <Input label="Nombre Promoción" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} required placeholder="Ej: Verano 2024" />
-                    
+                    <Input label="Nombre Promoción" value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} required placeholder="Ej: Verano 2024" />
+
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de Oferta</label>
-                            <select className="w-full px-3 py-2 border rounded-lg bg-white text-gray-900" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value as any})}>
+                            <select className="w-full px-3 py-2 border rounded-lg bg-white text-gray-900" value={formData.type} onChange={e => setFormData({ ...formData, type: e.target.value as any })}>
                                 <option value="percent">Porcentaje (%)</option>
                                 <option value="amount">Monto Fijo (L)</option>
                                 <option value="2x1">2x1</option>
@@ -149,15 +155,15 @@ export const Promotions: React.FC = () => {
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                                 {formData.type === 'percent' ? 'Porcentaje (Ej: 0.15 = 15%)' : 'Monto de Descuento'}
                             </label>
-                            <Input type="number" step="0.01" value={formData.value || 0} onChange={e => setFormData({...formData, value: parseFloat(e.target.value)})} required />
+                            <Input type="number" step="0.01" value={formData.value || 0} onChange={e => setFormData({ ...formData, value: parseFloat(e.target.value) })} required />
                         </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
-                        <Input label="Fecha Inicio" type="date" value={formData.startDate || ''} onChange={e => setFormData({...formData, startDate: e.target.value})} required />
-                        <Input label="Fecha Fin" type="date" value={formData.endDate || ''} onChange={e => setFormData({...formData, endDate: e.target.value})} required />
+                        <Input label="Fecha Inicio" type="date" value={formData.startDate || ''} onChange={e => setFormData({ ...formData, startDate: e.target.value })} required />
+                        <Input label="Fecha Fin" type="date" value={formData.endDate || ''} onChange={e => setFormData({ ...formData, endDate: e.target.value })} required />
                     </div>
-                    
+
                     <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 mt-4">
                         <h4 className="font-bold text-gray-800 mb-2">Alcance de la Promoción</h4>
                         <div className="flex gap-2 mb-4">
@@ -170,9 +176,9 @@ export const Promotions: React.FC = () => {
                             <div className="max-h-40 overflow-y-auto border rounded p-2 bg-white grid grid-cols-2 gap-2">
                                 {categories.map(c => (
                                     <label key={c.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 p-1 rounded">
-                                        <input 
-                                            type="checkbox" 
-                                            checked={selectedItems.includes(c.id)} 
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedItems.includes(c.id)}
                                             onChange={() => handleItemSelection(c.id)}
                                             className="w-4 h-4 accent-primary"
                                         />
@@ -187,9 +193,9 @@ export const Promotions: React.FC = () => {
                                 <div className="max-h-48 overflow-y-auto border rounded p-2 bg-white space-y-1">
                                     {products.map(p => (
                                         <label key={p.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 p-1 rounded border-b border-gray-50 last:border-0">
-                                            <input 
-                                                type="checkbox" 
-                                                checked={selectedItems.includes(p.id)} 
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedItems.includes(p.id)}
                                                 onChange={() => handleItemSelection(p.id)}
                                                 className="w-4 h-4 accent-primary"
                                             />
@@ -203,14 +209,14 @@ export const Promotions: React.FC = () => {
                             </div>
                         )}
                         <p className="text-xs text-gray-500 mt-2">
-                            {selectedItems.length > 0 
-                                ? `${selectedItems.length} items seleccionados.` 
+                            {selectedItems.length > 0
+                                ? `${selectedItems.length} items seleccionados.`
                                 : scopeType === 'all' ? 'Se aplicará a todos los productos.' : 'Seleccione al menos un item.'}
                         </p>
                     </div>
 
                     <div className="flex items-center gap-2 pt-2">
-                        <input type="checkbox" checked={formData.active ?? true} onChange={e => setFormData({...formData, active: e.target.checked})} className="w-4 h-4 accent-primary" />
+                        <input type="checkbox" checked={formData.active ?? true} onChange={e => setFormData({ ...formData, active: e.target.checked })} className="w-4 h-4 accent-primary" />
                         <span className="text-sm text-gray-700">Promoción Activa Inmediatamente</span>
                     </div>
 

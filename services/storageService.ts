@@ -621,6 +621,15 @@ class StorageService {
     const settings = await this.getSettings();
     if (settings.autoSync) this.triggerAutoSync();
   }
+  async deletePromotion(id: string) {
+    const p = await db_engine.promotions.get(id);
+    if (p) {
+      p.active = false;
+      await db_engine.promotions.put(p);
+      const settings = await this.getSettings();
+      if (settings.autoSync) this.triggerAutoSync();
+    }
+  }
   async getUsers() {
     const users = await db_engine.users.toArray();
     return users.filter(u => u.active !== false);
@@ -809,6 +818,8 @@ class StorageService {
   async saveCashCut(cut: CashCut) {
     if (!cut.id) cut.id = Date.now().toString();
     await db_engine.cashCuts.put(cut);
+    const settings = await this.getSettings();
+    if (settings.autoSync) this.triggerAutoSync();
   }
 
   async refundCreditNote(id: string) {
@@ -900,7 +911,7 @@ class StorageService {
         <div class="hr"></div>
         <p><strong>Pago:</strong> ${sale.paymentMethod}</p>
         ${sale.paymentDetails?.cash ? `<p>Efectivo: L ${sale.paymentDetails.cash.toFixed(2)}</p>` : ''}
-        ${sale.paymentDetails?.cash ? `<p>Cambio: L ${(sale.paymentDetails.cash - sale.total).toFixed(2)}</p>` : ''}
+        ${sale.paymentDetails?.cash && sale.paymentDetails.cash >= sale.total ? `<p>Cambio: L ${(sale.paymentDetails.cash - sale.total).toFixed(2)}</p>` : ''}
 
         ${isFiscal ? `
           <div class="hr"></div>

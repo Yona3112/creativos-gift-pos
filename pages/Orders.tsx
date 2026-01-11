@@ -14,7 +14,7 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [viewMode, setViewMode] = useState<'board' | 'list'>('board');
     const [statusFilter, setStatusFilter] = useState<FulfillmentStatus | 'all'>('all');
-    
+
     // Edit Modal State
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [selectedOrder, setSelectedOrder] = useState<Sale | null>(null);
@@ -40,9 +40,9 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
     const handleQuickStatusUpdate = async (order: Sale, direction: 'next' | 'prev') => {
         const workflow: FulfillmentStatus[] = ['pending', 'production', 'ready', 'shipped', 'delivered'];
         const currentIndex = workflow.indexOf(order.fulfillmentStatus || 'pending');
-        
+
         let newIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1;
-        
+
         if (newIndex < 0) newIndex = 0;
         if (newIndex >= workflow.length) newIndex = workflow.length - 1;
 
@@ -68,7 +68,7 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
 
     const handleSaveUpdate = async () => {
         if (!selectedOrder) return;
-        
+
         const isShipping = !!(editForm.shippingCompany || editForm.tracking);
 
         await db.updateSaleStatus(selectedOrder.id, editForm.status, {
@@ -96,18 +96,17 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
 
     const filteredOrders = useMemo(() => {
         return sales.filter(s => {
-            if (viewMode === 'board' && !searchTerm && s.fulfillmentStatus === 'delivered') return false;
 
             const matchStatus = statusFilter === 'all' ? true : s.fulfillmentStatus === statusFilter;
-            
+
             const customerName = getCustomerName(s.customerId);
-            const matchSearch = 
+            const matchSearch =
                 s.folio.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (s.shippingDetails?.trackingNumber || '').toLowerCase().includes(searchTerm.toLowerCase());
 
             return matchStatus && matchSearch;
-        }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()); 
+        }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     }, [sales, searchTerm, statusFilter, customers, viewMode]);
 
     const columns: { id: FulfillmentStatus, label: string, color: string, icon: string }[] = [
@@ -115,10 +114,11 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
         { id: 'production', label: 'En Producción', color: 'border-blue-400 bg-blue-50', icon: 'tools' },
         { id: 'ready', label: 'Listos / Empaquetado', color: 'border-green-400 bg-green-50', icon: 'box-open' },
         { id: 'shipped', label: 'En Ruta / Enviado', color: 'border-purple-400 bg-purple-50', icon: 'shipping-fast' },
+        { id: 'delivered', label: 'Entregados', color: 'border-gray-400 bg-gray-50', icon: 'check-circle' },
     ];
 
     const getStatusBadge = (status?: FulfillmentStatus) => {
-        switch(status) {
+        switch (status) {
             case 'pending': return <Badge variant="warning">Pendiente</Badge>;
             case 'production': return <Badge variant="info">En Producción</Badge>;
             case 'ready': return <Badge variant="success">Listo</Badge>;
@@ -134,15 +134,15 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                 <div className="flex items-center gap-3">
                     <h1 className="text-2xl font-bold text-gray-800">Gestión de Pedidos</h1>
                     <div className="bg-gray-100 p-1 rounded-lg flex">
-                        <button 
-                            onClick={() => setViewMode('board')} 
+                        <button
+                            onClick={() => setViewMode('board')}
                             className={`p-2 rounded-md text-sm font-bold transition-all ${viewMode === 'board' ? 'bg-white shadow-sm text-primary' : 'text-gray-500'}`}
                             title="Vista Tablero"
                         >
                             <i className="fas fa-columns"></i>
                         </button>
-                        <button 
-                            onClick={() => setViewMode('list')} 
+                        <button
+                            onClick={() => setViewMode('list')}
                             className={`p-2 rounded-md text-sm font-bold transition-all ${viewMode === 'list' ? 'bg-white shadow-sm text-primary' : 'text-gray-500'}`}
                             title="Vista Lista"
                         >
@@ -191,7 +191,7 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                                                 <p className="text-xs text-gray-500 line-clamp-2 mb-3 bg-gray-50 p-1.5 rounded">
                                                     {order.items.map(i => `${i.quantity} ${i.name}`).join(', ')}
                                                 </p>
-                                                
+
                                                 {order.shippingDetails?.notes && (
                                                     <div className="mb-3 text-[10px] bg-yellow-50 text-yellow-800 p-1.5 rounded border border-yellow-100 flex gap-1">
                                                         <i className="fas fa-sticky-note mt-0.5"></i>
@@ -200,22 +200,22 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                                                 )}
 
                                                 <div className="flex items-center justify-between border-t pt-2 gap-2">
-                                                    <button 
+                                                    <button
                                                         onClick={(e) => { e.stopPropagation(); handleQuickStatusUpdate(order, 'prev'); }}
                                                         disabled={col.id === 'pending'}
                                                         className="w-7 h-7 rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 disabled:opacity-30 flex items-center justify-center transition-colors"
                                                     >
                                                         <i className="fas fa-chevron-left text-xs"></i>
                                                     </button>
-                                                    
-                                                    <button 
+
+                                                    <button
                                                         onClick={() => openEditModal(order)}
                                                         className="flex-1 text-xs font-bold text-primary hover:bg-indigo-50 py-1.5 rounded transition-colors"
                                                     >
                                                         Ver / Editar
                                                     </button>
 
-                                                    <button 
+                                                    <button
                                                         onClick={(e) => { e.stopPropagation(); handleQuickStatusUpdate(order, 'next'); }}
                                                         className="w-7 h-7 rounded-full bg-primary text-white hover:bg-indigo-700 shadow-md flex items-center justify-center transition-colors"
                                                     >
@@ -252,7 +252,7 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                                         <div className="font-bold text-lg text-gray-900">{getCustomerName(order.customerId)}</div>
                                         <div className="text-sm text-gray-500 mt-1">{order.items.map(i => `${i.quantity}x ${i.name}`).join(', ')}</div>
                                     </div>
-                                    
+
                                     {order.shippingDetails?.trackingNumber && (
                                         <div className="text-right px-4 border-l border-gray-100 hidden md:block">
                                             <p className="text-[10px] text-gray-400 uppercase font-bold">Tracking</p>
@@ -261,7 +261,22 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                                         </div>
                                     )}
 
-                                    <div className="flex gap-2 w-full md:w-auto mt-2 md:mt-0">
+                                    <div className="flex gap-2 items-center w-full md:w-auto mt-2 md:mt-0">
+                                        {/* Quick Deliver Checkbox */}
+                                        <label className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-all ${order.fulfillmentStatus === 'delivered' ? 'bg-green-100 text-green-700' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'}`}>
+                                            <input
+                                                type="checkbox"
+                                                checked={order.fulfillmentStatus === 'delivered'}
+                                                onChange={async () => {
+                                                    const newStatus = order.fulfillmentStatus === 'delivered' ? 'shipped' : 'delivered';
+                                                    await db.updateSaleStatus(order.id, newStatus);
+                                                    refresh();
+                                                    if (onUpdate) onUpdate();
+                                                }}
+                                                className="w-4 h-4 accent-green-600"
+                                            />
+                                            <span className="text-xs font-bold">Entregado</span>
+                                        </label>
                                         <Button size="sm" variant="secondary" className="flex-1 md:flex-none" onClick={() => openEditModal(order)}>Gestionar</Button>
                                     </div>
                                 </div>
@@ -291,10 +306,10 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                     <div>
                         <label className="block text-sm font-bold text-gray-700 mb-2">Estado del Proceso</label>
                         <div className="grid grid-cols-1 gap-2">
-                            <select 
+                            <select
                                 className="w-full p-3 rounded-xl border border-gray-300 bg-white font-bold outline-none focus:ring-2 focus:ring-primary/50"
                                 value={editForm.status}
-                                onChange={(e) => setEditForm({...editForm, status: e.target.value as any})}
+                                onChange={(e) => setEditForm({ ...editForm, status: e.target.value as any })}
                             >
                                 <option value="pending">🟡 Pendiente (En Cola)</option>
                                 <option value="production">🔵 En Producción / Taller</option>
@@ -310,18 +325,18 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                             <i className="fas fa-truck"></i> Datos de Envío
                         </h4>
                         <div className="grid grid-cols-2 gap-3">
-                            <Input label="Empresa de Envío" placeholder="Ej: Cargo Expreso" value={editForm.shippingCompany} onChange={e => setEditForm({...editForm, shippingCompany: e.target.value})} style={{background: 'white'}} />
-                            <Input label="No. de Guía / Tracking" placeholder="Ej: 12345678" value={editForm.tracking} onChange={e => setEditForm({...editForm, tracking: e.target.value})} style={{background: 'white'}} />
+                            <Input label="Empresa de Envío" placeholder="Ej: Cargo Expreso" value={editForm.shippingCompany} onChange={e => setEditForm({ ...editForm, shippingCompany: e.target.value })} style={{ background: 'white' }} />
+                            <Input label="No. de Guía / Tracking" placeholder="Ej: 12345678" value={editForm.tracking} onChange={e => setEditForm({ ...editForm, tracking: e.target.value })} style={{ background: 'white' }} />
                         </div>
                     </div>
 
                     <div>
                         <label className="block text-sm font-bold text-gray-700 mb-1">Notas Internas / Producción</label>
-                        <textarea 
+                        <textarea
                             className="w-full p-3 rounded-xl border border-gray-300 bg-white h-24 text-sm outline-none focus:border-primary font-medium"
                             placeholder="Ej: Cliente solicitó envoltorio azul, entregar después de las 5pm..."
                             value={editForm.notes}
-                            onChange={e => setEditForm({...editForm, notes: e.target.value})}
+                            onChange={e => setEditForm({ ...editForm, notes: e.target.value })}
                         ></textarea>
                     </div>
 
