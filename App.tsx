@@ -55,12 +55,14 @@ function App() {
         if (sett.supabaseUrl && sett.supabaseKey) {
           const { SupabaseService } = await import('./services/supabaseService');
           try {
+            // CRITICAL: Push local changes FIRST, then pull remote changes
+            await SupabaseService.syncAll();
             const result = await SupabaseService.pullAll();
             if (result) {
               console.log("☁️ Sincronización con la nube exitosa.");
             }
           } catch (pullErr) {
-            console.warn("⚠️ No se pudo descargar de la nube, usando datos locales:", pullErr);
+            console.warn("⚠️ No se pudo sincronizar con la nube, usando datos locales:", pullErr);
           }
         }
       }

@@ -174,7 +174,7 @@ class StorageService {
       } catch (e) {
         console.warn("Fallo en sincronización automática:", e);
       }
-    }, 5000); // Wait 5 seconds after last change to sync
+    }, 500); // Sync quickly (500ms debounce) to prevent race conditions
   }
 
   // --- PRODUCTS & KARDEX ---
