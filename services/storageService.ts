@@ -150,13 +150,31 @@ class StorageService {
       defaultCreditRate: 0,
       defaultCreditTerm: 1,
       showFloatingWhatsapp: true,
-      whatsappTemplate: "👋 Hola *{CLIENT_NAME}*, me interesa hacer el siguiente pedido personalizado:\n\n{ITEMS_LIST}\n\n💰 *TOTAL: {TOTAL}*\n\n📍 Quedo pendiente de los detalles de personalización."
+      whatsappTemplate: "👋 Hola *{CLIENT_NAME}*, me interesa hacer el siguiente pedido personalizado:\n\n{ITEMS_LIST}\n\n💰 *TOTAL: {TOTAL}*\n\n📍 Quedo pendiente de los detalles de personalización.",
+      supabaseUrl: import.meta.env.VITE_SUPABASE_URL || '',
+      supabaseKey: import.meta.env.VITE_SUPABASE_ANON_KEY || ''
     };
     return saved ? { ...defaults, ...saved } : defaults;
   }
 
   async saveSettings(settings: CompanySettings) {
     await db_engine.settings.put({ id: 'main', ...settings });
+    if (settings.autoSync) this.triggerAutoSync();
+  }
+
+  // --- AUTO SYNC HELPER ---
+  private syncTimeout: any = null;
+  triggerAutoSync() {
+    if (this.syncTimeout) clearTimeout(this.syncTimeout);
+    this.syncTimeout = setTimeout(async () => {
+      try {
+        const { SupabaseService } = await import('./supabaseService');
+        await SupabaseService.syncAll();
+        console.log("Sincronización automática completada.");
+      } catch (e) {
+        console.warn("Fallo en sincronización automática:", e);
+      }
+    }, 5000); // Wait 5 seconds after last change to sync
   }
 
   // --- PRODUCTS & KARDEX ---
@@ -206,6 +224,8 @@ class StorageService {
     }
 
     await db_engine.products.put(product);
+    const settings = await this.getSettings();
+    if (settings.autoSync) this.triggerAutoSync();
   }
 
   async deleteProduct(id: string) {
@@ -213,6 +233,8 @@ class StorageService {
     if (p) {
       p.active = false;
       await db_engine.products.put(p);
+      const settings = await this.getSettings();
+      if (settings.autoSync) this.triggerAutoSync();
     }
   }
 
@@ -264,25 +286,49 @@ class StorageService {
     const cats = await db_engine.categories.toArray();
     if (cats.length === 0) {
       const defaults: Category[] = [
-        { id: 'general', name: 'General', color: '#6366F1', icon: 'tag', defaultMinStock: 5 },
-        { id: 'tazas', name: 'Tazas', color: '#F59E0B', icon: 'mug-hot', defaultMinStock: 10 },
-        { id: 'camisas', name: 'Camisas', color: '#10B981', icon: 'tshirt', defaultMinStock: 10 },
-        { id: 'manualidades', name: 'Manualidades', color: '#EC4899', icon: 'cut', defaultMinStock: 5 }
+        { id: 'general', name: 'General', color: '#6366F1', icon: 'tag', defaultMinStock: 5, active: true },
+        { id: 'tazas', name: 'Tazas', color: '#F59E0B', icon: 'mug-hot', defaultMinStock: 10, active: true },
+        { id: 'camisas', name: 'Camisas', color: '#10B981', icon: 'tshirt', defaultMinStock: 10, active: true },
+        { id: 'manualidades', name: 'Manualidades', color: '#EC4899', icon: 'cut', defaultMinStock: 5, active: true }
       ];
       await db_engine.categories.bulkAdd(defaults);
       return defaults;
     }
-    return cats;
+    return cats.filter(c => c.active !== false);
   }
 
-  async saveCategory(cat: Category) { await db_engine.categories.put(cat); }
+  async saveCategory(cat: Category) {
+    if (cat.active === undefined) cat.active = true;
+    await db_engine.categories.put(cat);
+    const settings = await this.getSettings();
+    if (settings.autoSync) this.triggerAutoSync();
+  }
+
+  async deleteCategory(id: string) {
+    const cat = await db_engine.categories.get(id);
+    if (cat) {
+      cat.active = false;
+      await db_engine.categories.put(cat);
+      const settings = await this.getSettings();
+      if (settings.autoSync) this.triggerAutoSync();
+    }
+  }
 
   // --- CUSTOMERS ---
   async getCustomers(): Promise<Customer[]> { return await db_engine.customers.toArray(); }
-  async saveCustomer(c: Customer) { await db_engine.customers.put(c); }
+  async saveCustomer(c: Customer) {
+    await db_engine.customers.put(c);
+    const settings = await this.getSettings();
+    if (settings.autoSync) this.triggerAutoSync();
+  }
   async deleteCustomer(id: string) {
     const c = await db_engine.customers.get(id);
-    if (c) { c.active = false; await db_engine.customers.put(c); }
+    if (c) {
+      c.active = false;
+      await db_engine.customers.put(c);
+      const settings = await this.getSettings();
+      if (settings.autoSync) this.triggerAutoSync();
+    }
   }
 
   // --- SALES ---
@@ -394,6 +440,7 @@ class StorageService {
         });
       }
 
+      if (settings.autoSync) this.triggerAutoSync();
       return newSale;
     });
   }
@@ -473,8 +520,14 @@ class StorageService {
   async saveExpense(e: Expense) {
     if (!e.id) e.id = Date.now().toString();
     await db_engine.expenses.put(e);
+    const settings = await this.getSettings();
+    if (settings.autoSync) this.triggerAutoSync();
   }
-  async deleteExpense(id: string) { await db_engine.expenses.delete(id); }
+  async deleteExpense(id: string) {
+    await db_engine.expenses.delete(id);
+    const settings = await this.getSettings();
+    if (settings.autoSync) this.triggerAutoSync();
+  }
 
   // --- CREDITS ---
   async getCredits(): Promise<CreditAccount[]> { return await db_engine.credits.toArray(); }
@@ -514,21 +567,50 @@ class StorageService {
 
   // --- LEGACY COMPATIBILITY WRAPPERS (To avoid breaking App.tsx) ---
   async getSuppliers() { return await db_engine.suppliers.toArray(); }
-  async saveSupplier(s: Supplier) { await db_engine.suppliers.put(s); }
+  async saveSupplier(s: Supplier) {
+    await db_engine.suppliers.put(s);
+    const settings = await this.getSettings();
+    if (settings.autoSync) this.triggerAutoSync();
+  }
   async getConsumables() { return await db_engine.consumables.toArray(); }
-  async saveConsumable(c: Consumable) { await db_engine.consumables.put(c); }
+  async saveConsumable(c: Consumable) {
+    await db_engine.consumables.put(c);
+    const settings = await this.getSettings();
+    if (settings.autoSync) this.triggerAutoSync();
+  }
   async getPromotions() { return await db_engine.promotions.toArray(); }
-  async savePromotion(p: Promotion) { await db_engine.promotions.put(p); }
+  async savePromotion(p: Promotion) {
+    await db_engine.promotions.put(p);
+    const settings = await this.getSettings();
+    if (settings.autoSync) this.triggerAutoSync();
+  }
   async getUsers() { return await db_engine.users.toArray(); }
-  async saveUser(u: User) { await db_engine.users.put(u); }
+  async saveUser(u: User) {
+    await db_engine.users.put(u);
+    const settings = await this.getSettings();
+    if (settings.autoSync) this.triggerAutoSync();
+  }
   async deleteUser(id: string) {
     const u = await db_engine.users.get(id);
-    if (u) { u.active = false; await db_engine.users.put(u); }
+    if (u) {
+      u.active = false;
+      await db_engine.users.put(u);
+      const settings = await this.getSettings();
+      if (settings.autoSync) this.triggerAutoSync();
+    }
   }
   async getBranches() { return await db_engine.branches.toArray(); }
-  async saveBranch(b: Branch) { await db_engine.branches.put(b); }
+  async saveBranch(b: Branch) {
+    await db_engine.branches.put(b);
+    const settings = await this.getSettings();
+    if (settings.autoSync) this.triggerAutoSync();
+  }
   async getQuotes() { return await db_engine.quotes.toArray(); }
-  async saveQuote(q: Quote) { await db_engine.quotes.put(q); }
+  async saveQuote(q: Quote) {
+    await db_engine.quotes.put(q);
+    const settings = await this.getSettings();
+    if (settings.autoSync) this.triggerAutoSync();
+  }
   async getCreditNotes() { return await db_engine.creditNotes.toArray(); }
 
   async login(email: string, pass: string): Promise<User | null> {

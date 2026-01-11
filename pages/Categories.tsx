@@ -5,110 +5,110 @@ import { Card, Button, Input, Modal } from '../components/UIComponents';
 import { db } from '../services/storageService';
 
 interface CategoriesProps {
-  categories: Category[];
-  onUpdate: () => void;
-  settings: CompanySettings; // Added settings prop
+    categories: Category[];
+    onUpdate: () => void;
+    settings: CompanySettings; // Added settings prop
 }
 
 export const Categories: React.FC<CategoriesProps> = ({ categories, onUpdate, settings }) => {
-  // Modal States
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
-  
-  // Data States
-  const [formData, setFormData] = useState<Partial<Category>>({});
-  const [selectedCategoryForShare, setSelectedCategoryForShare] = useState<Category | null>(null);
+    // Modal States
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isShareModalOpen, setIsShareModalOpen] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    await db.saveCategory(formData as Category);
-    setIsModalOpen(false);
-    onUpdate();
-  };
+    // Data States
+    const [formData, setFormData] = useState<Partial<Category>>({});
+    const [selectedCategoryForShare, setSelectedCategoryForShare] = useState<Category | null>(null);
 
-  const applyStockToProducts = async () => {
-      if (!formData.id || !formData.defaultMinStock) return;
-      if(confirm(`¿Estás seguro de actualizar el stock mínimo a ${formData.defaultMinStock} para TODOS los productos de esta categoría?`)) {
-          await db.updateCategoryStockThreshold(formData.id, formData.defaultMinStock);
-          alert('Productos actualizados correctamente.');
-      }
-  };
-
-  const handleShareClick = (category: Category) => {
-      setSelectedCategoryForShare(category);
-      setIsShareModalOpen(true);
-  };
-
-  const shareTextList = async () => {
-      if (!selectedCategoryForShare) return;
-      const allProducts = await db.getProducts();
-      const products = allProducts.filter(p => p.categoryId === selectedCategoryForShare.id);
-      
-      if (products.length === 0) {
-          alert("No hay productos en esta categoría.");
-          return;
-      }
-
-      // Generate Item List
-      let itemList = "";
-      products.forEach(p => {
-          itemList += `▪ ${p.name} - L ${p.price.toFixed(2)}\n`;
-      });
-
-      // Use Template
-      let template = settings.whatsappTemplate || "👋 Hola *{CLIENT_NAME}*, catálogo *{CATALOG_NAME}*:\n\n{ITEMS_LIST}";
-      
-      // Replace Placeholders
-      const text = template
-          .replace('{CLIENT_NAME}', settings.name)
-          .replace('{CATALOG_NAME}', selectedCategoryForShare.name.toUpperCase())
-          .replace('{ITEMS_LIST}', itemList)
-          .replace('{TOTAL}', '') 
-          .replace(/\n\n\n/g, '\n\n'); 
-
-      // Share Logic
-      if (navigator.share) {
-          try {
-              await navigator.share({
-                  title: `Catálogo ${selectedCategoryForShare.name}`,
-                  text: text
-              });
-              setIsShareModalOpen(false);
-          } catch (err) {
-              console.log('Share canceled', err);
-          }
-      } else {
-          navigator.clipboard.writeText(text).then(() => {
-              alert("Texto copiado. Abriendo WhatsApp...");
-              window.open(`https://wa.me/?text=${encodeURIComponent(text.substring(0, 2000))}`, '_blank');
-              setIsShareModalOpen(false);
-          });
-      }
-  };
-
-  const shareCatalogHTML = async () => {
-    if (!selectedCategoryForShare) return;
-    
-    const category = selectedCategoryForShare;
-    const allProducts = await db.getProducts();
-    const products = allProducts.filter(p => p.categoryId === category.id);
-    
-    if (products.length === 0) {
-      alert('No hay productos en esta categoría para generar el catálogo.');
-      return;
-    }
-
-    const targetPhone = settings.whatsappNumber || settings.phone;
-    const cleanPhone = targetPhone.replace(/[^0-9]/g, '');
-    
-    const catalogConfig = {
-        phoneNumber: cleanPhone,
-        clientName: settings.name,
-        catalogName: category.name,
-        messageTemplate: settings.whatsappTemplate || "👋 Hola *{CLIENT_NAME}*, pedido de *{CATALOG_NAME}*:\n\n{ITEMS_LIST}\n\n💰 *TOTAL: {TOTAL}*"
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        await db.saveCategory(formData as Category);
+        setIsModalOpen(false);
+        onUpdate();
     };
 
-    const htmlContent = `
+    const applyStockToProducts = async () => {
+        if (!formData.id || !formData.defaultMinStock) return;
+        if (confirm(`¿Estás seguro de actualizar el stock mínimo a ${formData.defaultMinStock} para TODOS los productos de esta categoría?`)) {
+            await db.updateCategoryStockThreshold(formData.id, formData.defaultMinStock);
+            alert('Productos actualizados correctamente.');
+        }
+    };
+
+    const handleShareClick = (category: Category) => {
+        setSelectedCategoryForShare(category);
+        setIsShareModalOpen(true);
+    };
+
+    const shareTextList = async () => {
+        if (!selectedCategoryForShare) return;
+        const allProducts = await db.getProducts();
+        const products = allProducts.filter(p => p.categoryId === selectedCategoryForShare.id);
+
+        if (products.length === 0) {
+            alert("No hay productos en esta categoría.");
+            return;
+        }
+
+        // Generate Item List
+        let itemList = "";
+        products.forEach(p => {
+            itemList += `▪ ${p.name} - L ${p.price.toFixed(2)}\n`;
+        });
+
+        // Use Template
+        let template = settings.whatsappTemplate || "👋 Hola *{CLIENT_NAME}*, catálogo *{CATALOG_NAME}*:\n\n{ITEMS_LIST}";
+
+        // Replace Placeholders
+        const text = template
+            .replace('{CLIENT_NAME}', settings.name)
+            .replace('{CATALOG_NAME}', selectedCategoryForShare.name.toUpperCase())
+            .replace('{ITEMS_LIST}', itemList)
+            .replace('{TOTAL}', '')
+            .replace(/\n\n\n/g, '\n\n');
+
+        // Share Logic
+        if (navigator.share) {
+            try {
+                await navigator.share({
+                    title: `Catálogo ${selectedCategoryForShare.name}`,
+                    text: text
+                });
+                setIsShareModalOpen(false);
+            } catch (err) {
+                console.log('Share canceled', err);
+            }
+        } else {
+            navigator.clipboard.writeText(text).then(() => {
+                alert("Texto copiado. Abriendo WhatsApp...");
+                window.open(`https://wa.me/?text=${encodeURIComponent(text.substring(0, 2000))}`, '_blank');
+                setIsShareModalOpen(false);
+            });
+        }
+    };
+
+    const shareCatalogHTML = async () => {
+        if (!selectedCategoryForShare) return;
+
+        const category = selectedCategoryForShare;
+        const allProducts = await db.getProducts();
+        const products = allProducts.filter(p => p.categoryId === category.id);
+
+        if (products.length === 0) {
+            alert('No hay productos en esta categoría para generar el catálogo.');
+            return;
+        }
+
+        const targetPhone = settings.whatsappNumber || settings.phone;
+        const cleanPhone = targetPhone.replace(/[^0-9]/g, '');
+
+        const catalogConfig = {
+            phoneNumber: cleanPhone,
+            clientName: settings.name,
+            catalogName: category.name,
+            messageTemplate: settings.whatsappTemplate || "👋 Hola *{CLIENT_NAME}*, pedido de *{CATALOG_NAME}*:\n\n{ITEMS_LIST}\n\n💰 *TOTAL: {TOTAL}*"
+        };
+
+        const htmlContent = `
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -290,179 +290,201 @@ export const Categories: React.FC<CategoriesProps> = ({ categories, onUpdate, se
 </html>
     `;
 
-    const fileName = `Catalogo_${category.name.replace(/\s+/g, '_')}.html`;
-    const file = new File([htmlContent], fileName, { type: 'text/html' });
+        const fileName = `Catalogo_${category.name.replace(/\s+/g, '_')}.html`;
+        const file = new File([htmlContent], fileName, { type: 'text/html' });
 
-    if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-        try {
-            await navigator.share({
-                files: [file],
-                title: `Catálogo ${category.name}`,
-                text: 'Te comparto nuestro catálogo interactivo. Ábrelo en tu navegador para hacer tu pedido.'
-            });
-            setIsShareModalOpen(false);
-        } catch (error) {
-            console.log("Error al compartir", error);
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+            try {
+                await navigator.share({
+                    files: [file],
+                    title: `Catálogo ${category.name}`,
+                    text: 'Te comparto nuestro catálogo interactivo. Ábrelo en tu navegador para hacer tu pedido.'
+                });
+                setIsShareModalOpen(false);
+            } catch (error) {
+                console.log("Error al compartir", error);
+                downloadFile(file, fileName);
+            }
+        } else {
             downloadFile(file, fileName);
+            alert("El archivo se ha descargado. Puedes enviarlo manualmente.");
         }
-    } else {
-        downloadFile(file, fileName);
-        alert("El archivo se ha descargado. Puedes enviarlo manualmente.");
-    }
-  };
+    };
 
-  const downloadFile = (file: File | Blob, fileName: string) => {
-    const url = URL.createObjectURL(file);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
+    const downloadFile = (file: File | Blob, fileName: string) => {
+        const url = URL.createObjectURL(file);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
 
-  return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-800">Categorías</h1>
-        <Button onClick={() => { setFormData({ color: '#3B82F6', icon: 'tag', defaultMinStock: 5 }); setIsModalOpen(true); }} icon="plus">Nueva Categoría</Button>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-        {categories.map(c => (
-          <Card key={c.id} className="group hover:shadow-lg transition-all">
-            <div className="flex flex-col h-full">
-               <div className="flex items-center gap-4 mb-4">
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white shadow-md" style={{ backgroundColor: c.color }}>
-                     <i className={`fas fa-${c.icon} text-xl`}></i>
-                  </div>
-                  <h3 className="font-bold text-gray-800 text-lg">{c.name}</h3>
-               </div>
-               
-               <div className="mb-2">
-                   <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-1 rounded">Min. Stock: {c.defaultMinStock || 5}</span>
-               </div>
-
-               <div className="mt-auto flex gap-2 pt-4 border-t border-gray-100">
-                  <Button 
-                    variant="secondary" 
-                    size="sm" 
-                    className="flex-1 text-xs bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-indigo-200"
-                    onClick={() => handleShareClick(c)}
-                    title="Enviar por WhatsApp"
-                  >
-                    <i className="fas fa-share-alt mr-1"></i> Compartir
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => { setFormData(c); setIsModalOpen(true); }}>
-                    <i className="fas fa-edit text-gray-400 hover:text-primary"></i>
-                  </Button>
-               </div>
+    return (
+        <div className="space-y-6">
+            <div className="flex justify-between items-center">
+                <h1 className="text-2xl font-bold text-gray-800">Categorías</h1>
+                <Button onClick={() => { setFormData({ color: '#3B82F6', icon: 'tag', defaultMinStock: 5 }); setIsModalOpen(true); }} icon="plus">Nueva Categoría</Button>
             </div>
-          </Card>
-        ))}
-      </div>
 
-      <Modal isOpen={isShareModalOpen} onClose={() => setIsShareModalOpen(false)} title="Compartir Catálogo" size="sm">
-          <div className="space-y-4">
-              <div className="bg-gradient-to-r from-indigo-50 to-blue-50 p-4 rounded-xl border border-indigo-100 mb-4">
-                  <p className="text-sm text-indigo-900 font-bold text-center">
-                      <i className="fas fa-mobile-alt mr-2"></i>
-                      Selecciona una opción para enviar <strong>"{selectedCategoryForShare?.name}"</strong>
-                  </p>
-              </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                {categories.map(c => (
+                    <Card key={c.id} className="group hover:shadow-lg transition-all">
+                        <div className="flex flex-col h-full">
+                            <div className="flex items-center gap-4 mb-4">
+                                <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white shadow-md" style={{ backgroundColor: c.color }}>
+                                    <i className={`fas fa-${c.icon} text-xl`}></i>
+                                </div>
+                                <h3 className="font-bold text-gray-800 text-lg">{c.name}</h3>
+                            </div>
 
-              <button 
-                  onClick={shareCatalogHTML}
-                  className="w-full p-4 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md hover:border-indigo-500 hover:ring-1 hover:ring-indigo-500 transition-all flex items-center gap-4 group active:scale-[0.98]"
-              >
-                  <div className="w-12 h-12 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                      <i className="fas fa-file-code text-xl"></i>
-                  </div>
-                  <div className="text-left flex-1">
-                      <h4 className="font-bold text-gray-900">Enviar Catálogo App (HTML)</h4>
-                      <p className="text-xs text-gray-500">Envía un archivo que tus clientes abren como una App con fotos y carrito.</p>
-                  </div>
-                  <i className="fas fa-share text-gray-300"></i>
-              </button>
+                            <div className="mb-2">
+                                <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-1 rounded">Min. Stock: {c.defaultMinStock || 5}</span>
+                            </div>
 
-              <button 
-                  onClick={shareTextList}
-                  className="w-full p-4 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md hover:border-green-500 hover:ring-1 hover:ring-green-500 transition-all flex items-center gap-4 group active:scale-[0.98]"
-              >
-                  <div className="w-12 h-12 rounded-full bg-green-100 text-green-600 flex items-center justify-center group-hover:bg-green-600 group-hover:text-white transition-colors">
-                      <i className="fab fa-whatsapp text-2xl"></i>
-                  </div>
-                  <div className="text-left flex-1">
-                      <h4 className="font-bold text-gray-900">Enviar Lista de Texto</h4>
-                      <p className="text-xs text-gray-500">Envía un mensaje de WhatsApp simple con la lista de precios.</p>
-                  </div>
-                   <i className="fas fa-share text-gray-300"></i>
-              </button>
-
-              <div className="text-center pt-2">
-                  <button onClick={() => setIsShareModalOpen(false)} className="text-gray-400 text-sm font-bold hover:text-gray-600 px-4 py-2">Cancelar</button>
-              </div>
-          </div>
-      </Modal>
-
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={formData.id ? "Editar Categoría" : "Nueva Categoría"}>
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <Input label="Nombre de Categoría" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} required />
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Color Identificativo</label>
-            <div className="flex gap-3">
-               <input 
-                 type="color" 
-                 value={formData.color || '#3B82F6'} 
-                 onChange={e => setFormData({...formData, color: e.target.value})} 
-                 className="w-12 h-12 rounded-xl border-0 p-1 cursor-pointer shadow-sm"
-               />
-               <div className="flex-1 flex items-center px-4 bg-gray-50 rounded-xl text-sm font-mono text-gray-600 border border-gray-200">
-                 {formData.color}
-               </div>
+                            <div className="mt-auto flex gap-2 pt-4 border-t border-gray-100">
+                                <Button
+                                    variant="secondary"
+                                    size="sm"
+                                    className="flex-1 text-xs bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-indigo-200"
+                                    onClick={() => handleShareClick(c)}
+                                    title="Enviar por WhatsApp"
+                                >
+                                    <i className="fas fa-share-alt mr-1"></i> Compartir
+                                </Button>
+                                <Button variant="ghost" size="sm" onClick={() => { setFormData(c); setIsModalOpen(true); }}>
+                                    <i className="fas fa-edit text-gray-400 hover:text-primary"></i>
+                                </Button>
+                                <Button variant="ghost" size="sm" onClick={async () => {
+                                    if (confirm(`¿Eliminar categoría ${c.name}? Esto no eliminará los productos, pero se quedarán sin categoría.`)) {
+                                        await db.deleteCategory(c.id);
+                                        onUpdate();
+                                    }
+                                }}>
+                                    <i className="fas fa-trash text-gray-400 hover:text-red-500"></i>
+                                </Button>
+                            </div>
+                        </div>
+                    </Card>
+                ))}
             </div>
-          </div>
 
-          <Input 
-            label="Alerta de Stock Bajo (Cantidad por Defecto)" 
-            type="number" 
-            min="0" 
-            value={formData.defaultMinStock || 0} 
-            onChange={e => setFormData({...formData, defaultMinStock: parseInt(e.target.value)})} 
-            placeholder="Ej: 5"
-            required
-          />
+            <Modal isOpen={isShareModalOpen} onClose={() => setIsShareModalOpen(false)} title="Compartir Catálogo" size="sm">
+                <div className="space-y-4">
+                    <div className="bg-gradient-to-r from-indigo-50 to-blue-50 p-4 rounded-xl border border-indigo-100 mb-4">
+                        <p className="text-sm text-indigo-900 font-bold text-center">
+                            <i className="fas fa-mobile-alt mr-2"></i>
+                            Selecciona una opción para enviar <strong>"{selectedCategoryForShare?.name}"</strong>
+                        </p>
+                    </div>
 
-          {formData.id && (
-              <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-100 text-sm text-yellow-800">
-                  <p className="mb-2 font-semibold">¿Actualizar productos existentes?</p>
-                  <Button type="button" size="sm" variant="secondary" onClick={applyStockToProducts} className="w-full">
-                      Aplicar {formData.defaultMinStock} a productos de esta categoría
-                  </Button>
-              </div>
-          )}
+                    <button
+                        onClick={shareCatalogHTML}
+                        className="w-full p-4 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md hover:border-indigo-500 hover:ring-1 hover:ring-indigo-500 transition-all flex items-center gap-4 group active:scale-[0.98]"
+                    >
+                        <div className="w-12 h-12 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                            <i className="fas fa-file-code text-xl"></i>
+                        </div>
+                        <div className="text-left flex-1">
+                            <h4 className="font-bold text-gray-900">Enviar Catálogo App (HTML)</h4>
+                            <p className="text-xs text-gray-500">Envía un archivo que tus clientes abren como una App con fotos y carrito.</p>
+                        </div>
+                        <i className="fas fa-share text-gray-300"></i>
+                    </button>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Icono</label>
-            <div className="grid grid-cols-6 gap-2 max-h-40 overflow-y-auto p-2 border border-gray-100 rounded-xl bg-gray-50">
-               {ICONS.map(icon => (
-                 <button
-                   type="button"
-                   key={icon}
-                   onClick={() => setFormData({...formData, icon})}
-                   className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all ${formData.icon === icon ? 'bg-primary text-white shadow-md scale-110' : 'bg-white text-gray-500 hover:bg-gray-100'}`}
-                 >
-                   <i className={`fas fa-${icon}`}></i>
-                 </button>
-               ))}
-            </div>
-          </div>
+                    <button
+                        onClick={shareTextList}
+                        className="w-full p-4 bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md hover:border-green-500 hover:ring-1 hover:ring-green-500 transition-all flex items-center gap-4 group active:scale-[0.98]"
+                    >
+                        <div className="w-12 h-12 rounded-full bg-green-100 text-green-600 flex items-center justify-center group-hover:bg-green-600 group-hover:text-white transition-colors">
+                            <i className="fab fa-whatsapp text-2xl"></i>
+                        </div>
+                        <div className="text-left flex-1">
+                            <h4 className="font-bold text-gray-900">Enviar Lista de Texto</h4>
+                            <p className="text-xs text-gray-500">Envía un mensaje de WhatsApp simple con la lista de precios.</p>
+                        </div>
+                        <i className="fas fa-share text-gray-300"></i>
+                    </button>
 
-          <Button type="submit" className="w-full">Guardar Categoría</Button>
-        </form>
-      </Modal>
-    </div>
-  );
+                    <div className="text-center pt-2">
+                        <button onClick={() => setIsShareModalOpen(false)} className="text-gray-400 text-sm font-bold hover:text-gray-600 px-4 py-2">Cancelar</button>
+                    </div>
+                </div>
+            </Modal>
+
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={formData.id ? "Editar Categoría" : "Nueva Categoría"}>
+                <form onSubmit={handleSubmit} className="space-y-6">
+                    <Input label="Nombre de Categoría" value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} required />
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Color Identificativo</label>
+                        <div className="flex gap-3">
+                            <input
+                                type="color"
+                                value={formData.color || '#3B82F6'}
+                                onChange={e => setFormData({ ...formData, color: e.target.value })}
+                                className="w-12 h-12 rounded-xl border-0 p-1 cursor-pointer shadow-sm"
+                            />
+                            <div className="flex-1 flex items-center px-4 bg-gray-50 rounded-xl text-sm font-mono text-gray-600 border border-gray-200">
+                                {formData.color}
+                            </div>
+                        </div>
+                    </div>
+
+                    <Input
+                        label="Alerta de Stock Bajo (Cantidad por Defecto)"
+                        type="number"
+                        min="0"
+                        value={formData.defaultMinStock || 0}
+                        onChange={e => setFormData({ ...formData, defaultMinStock: parseInt(e.target.value) })}
+                        placeholder="Ej: 5"
+                        required
+                    />
+
+                    {formData.id && (
+                        <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-100 text-sm text-yellow-800">
+                            <p className="mb-2 font-semibold">¿Actualizar productos existentes?</p>
+                            <Button type="button" size="sm" variant="secondary" onClick={applyStockToProducts} className="w-full">
+                                Aplicar {formData.defaultMinStock} a productos de esta categoría
+                            </Button>
+                        </div>
+                    )}
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Icono</label>
+                        <div className="grid grid-cols-6 gap-2 max-h-40 overflow-y-auto p-2 border border-gray-100 rounded-xl bg-gray-50">
+                            {ICONS.map(icon => (
+                                <button
+                                    type="button"
+                                    key={icon}
+                                    onClick={() => setFormData({ ...formData, icon })}
+                                    className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all ${formData.icon === icon ? 'bg-primary text-white shadow-md scale-110' : 'bg-white text-gray-500 hover:bg-gray-100'}`}
+                                >
+                                    <i className={`fas fa-${icon}`}></i>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="flex justify-between gap-3 pt-4 border-t border-gray-100">
+                        {formData.id && (
+                            <Button type="button" variant="danger" onClick={async () => {
+                                if (confirm('¿Seguro que deseas eliminar esta categoría?')) {
+                                    await db.deleteCategory(formData.id!);
+                                    setIsModalOpen(false);
+                                    onUpdate();
+                                }
+                            }} icon="trash">Eliminar</Button>
+                        )}
+                        <div className="flex gap-2 ml-auto">
+                            <Button type="button" variant="secondary" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
+                            <Button type="submit">Guardar Categoría</Button>
+                        </div>
+                    </div>
+                </form>
+            </Modal>
+        </div>
+    );
 };

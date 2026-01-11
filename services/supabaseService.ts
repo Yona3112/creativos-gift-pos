@@ -10,10 +10,24 @@ export class SupabaseService {
 
         const settings = await db.getSettings();
         if (settings.supabaseUrl && settings.supabaseKey) {
-            this.client = createClient(settings.supabaseUrl, settings.supabaseKey);
-            return this.client;
+            try {
+                this.client = createClient(settings.supabaseUrl, settings.supabaseKey);
+                return this.client;
+            } catch (e) {
+                console.error("Error al crear cliente Supabase:", e);
+                return null;
+            }
         }
         return null;
+    }
+
+    static async testConnection() {
+        const client = await this.getClient();
+        if (!client) throw new Error("Supabase no está configurado (URL o Key faltante).");
+
+        const { data, error } = await client.from('settings').select('id').limit(1);
+        if (error) throw new Error(`Error de conexión: ${error.message}`);
+        return true;
     }
 
     static async syncAll() {
@@ -23,16 +37,13 @@ export class SupabaseService {
         const data = await db.getAllData();
         const results: any = {};
 
-        // For simplicity in this first version, we'll do an 'upsert' of everything
-        // Note: In a real production app, we'd handle conflicts and timestamps
-
         const tables = [
-            { name: 'products', data: data.products },
             { name: 'categories', data: data.categories },
-            { name: 'customers', data: data.customers },
-            { name: 'sales', data: data.sales },
-            { name: 'users', data: data.users },
             { name: 'branches', data: data.branches },
+            { name: 'products', data: data.products },
+            { name: 'customers', data: data.customers },
+            { name: 'users', data: data.users },
+            { name: 'sales', data: data.sales },
             { name: 'credits', data: data.credits },
             { name: 'promotions', data: data.promotions },
             { name: 'suppliers', data: data.suppliers },
@@ -47,14 +58,22 @@ export class SupabaseService {
 
         for (const table of tables) {
             if (table.data && table.data.length > 0) {
+                // Ensure data is clean for Supabase (remove or rename fields if necessary)
+                // For now, we assume the schema matches the local data
                 const { error } = await client.from(table.name).upsert(table.data);
-                results[table.name] = error ? `Error: ${error.message}` : 'Sincronizado';
+                if (error) {
+                    console.error(`Error sincronizando tabla ${table.name}:`, error);
+                    results[table.name] = `Error: ${error.message}`;
+                } else {
+                    results[table.name] = 'Sincronizado';
+                }
             }
         }
 
         // Settings is a special case (single row)
         if (data.settings) {
-            await client.from('settings').upsert({ id: 'main', ...data.settings });
+            const { error } = await client.from('settings').upsert({ id: 'main', ...data.settings });
+            results['settings'] = error ? `Error: ${error.message}` : 'Sincronizado';
         }
 
         return results;
@@ -77,31 +96,42 @@ export class SupabaseService {
             const { data, error } = await client.from(table).select('*');
             if (!error && data) {
                 pulledData[table] = data;
+            } else if (error) {
+                console.error(`Error descargando tabla ${table}:`, error);
             }
         }
 
         // Map back to Dexie names
-        const dexieData = {
-            products: pulledData.products,
-            categories: pulledData.categories,
-            customers: pulledData.customers,
-            sales: pulledData.sales,
-            users: pulledData.users,
-            branches: pulledData.branches,
-            credits: pulledData.credits,
-            promotions: pulledData.promotions,
-            suppliers: pulledData.suppliers,
-            consumables: pulledData.consumables,
-            quotes: pulledData.quotes,
-            cash_cuts: pulledData.cash_cuts,
-            credit_notes: pulledData.credit_notes,
-            expenses: pulledData.expenses,
-            inventoryHistory: pulledData.inventory_history,
-            priceHistory: pulledData.price_history,
+        const dexieData: any = {
+            products: pulledData.products || [],
+            categories: pulledData.categories || [],
+            customers: pulledData.customers || [],
+            sales: pulledData.sales || [],
+            users: pulledData.users || [],
+            branches: pulledData.branches || [],
+            credits: pulledData.credits || [],
+            promotions: pulledData.promotions || [],
+            suppliers: pulledData.suppliers || [],
+            consumables: pulledData.consumables || [],
+            quotes: pulledData.quotes || [],
+            cash_cuts: pulledData.cash_cuts || [],
+            credit_notes: pulledData.credit_notes || [],
+            expenses: pulledData.expenses || [],
+            inventoryHistory: pulledData.inventory_history || [],
+            priceHistory: pulledData.price_history || [],
             settings: pulledData.settings?.find((s: any) => s.id === 'main')
         };
 
-        await db.restoreData(dexieData);
-        return dexieData;
+        const hasAnyData = dexieData.products.length > 0 ||
+            dexieData.sales.length > 0 ||
+            dexieData.customers.length > 0 ||
+            dexieData.settings;
+
+        if (hasAnyData) {
+            await db.restoreData(dexieData);
+            return dexieData;
+        }
+
+        return null;
     }
 }

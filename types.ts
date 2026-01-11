@@ -84,6 +84,7 @@ export interface Category {
   color: string;
   icon: string;
   defaultMinStock?: number;
+  active?: boolean;
 }
 
 export enum LoyaltyLevel {
@@ -124,7 +125,7 @@ export interface PaymentDetails {
   credit?: number;
   creditNoteReference?: string;
   authCode?: string;
-  cardRef?: string; 
+  cardRef?: string;
   transferRef?: string;
   bank?: string;
 }
@@ -159,7 +160,7 @@ export interface Sale {
   status: 'active' | 'cancelled';
   pointsUsed?: number;
   pointsMonetaryValue?: number;
-  documentType?: 'FACTURA' | 'TICKET'; 
+  documentType?: 'FACTURA' | 'TICKET';
   originalQuoteId?: string;
   fulfillmentStatus?: FulfillmentStatus;
   shippingDetails?: ShippingDetails;
@@ -174,7 +175,7 @@ export interface CreditNote {
   remainingAmount: number;
   reason: string;
   date: string;
-  status: 'active' | 'used'; 
+  status: 'active' | 'used';
 }
 
 export interface Quote extends Omit<Sale, 'id' | 'folio' | 'cai' | 'paymentMethod' | 'status'> {
@@ -211,6 +212,7 @@ export interface CompanySettings {
   themeColor?: string;
   supabaseUrl?: string;
   supabaseKey?: string;
+  autoSync?: boolean;
 }
 
 export interface CashCut {

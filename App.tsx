@@ -47,7 +47,27 @@ function App() {
   const [quoteToLoad, setQuoteToLoad] = useState<Quote | null>(null);
   const { sendNotification } = useNotifications();
 
-  const refreshData = async () => {
+  const refreshData = async (shouldPullFromCloud = false) => {
+    try {
+      if (shouldPullFromCloud) {
+        const sett = await db.getSettings();
+        // Sincronizar automáticamente si las credenciales están presentes
+        if (sett.supabaseUrl && sett.supabaseKey) {
+          const { SupabaseService } = await import('./services/supabaseService');
+          try {
+            const result = await SupabaseService.pullAll();
+            if (result) {
+              console.log("☁️ Sincronización con la nube exitosa.");
+            }
+          } catch (pullErr) {
+            console.warn("⚠️ No se pudo descargar de la nube, usando datos locales:", pullErr);
+          }
+        }
+      }
+    } catch (e) {
+      console.error("Error en sincronización inicial:", e);
+    }
+
     const [p, c, cust, s, b, u, cr, pr, con, sett, exp] = await Promise.all([
       db.getProducts(), db.getCategories(), db.getCustomers(),
       db.getSales(), db.getBranches(), db.getUsers(),
@@ -70,6 +90,11 @@ function App() {
   useEffect(() => {
     const initApp = async () => {
       await db.init();
+
+      // Intentar sincronización inicial antes de procesar login
+      // Esto trae usuarios actualizados y configuraciones globales
+      await refreshData(true);
+
       const storedUser = localStorage.getItem('creativos_gift_currentUser');
       if (storedUser) {
         try {
@@ -77,14 +102,12 @@ function App() {
           const dbUser = await db.login(parsedUser.email, parsedUser.password);
           if (dbUser) {
             setUser(dbUser);
-            await refreshData();
+            // Ya cargamos la data arriba, así que solo refrescamos la sucursal
             const bList = await db.getBranches();
             setCurrentBranch(bList.find(b => b.id === dbUser.branchId) || bList[0]);
           }
         } catch (e) { localStorage.removeItem('creativos_gift_currentUser'); }
       }
-      const sett = await db.getSettings();
-      setSettings(sett);
       setLoading(false);
     };
     initApp();
@@ -97,7 +120,7 @@ function App() {
     if (dbUser) {
       setUser(dbUser);
       localStorage.setItem('creativos_gift_currentUser', JSON.stringify({ email: loginEmail, password: loginPassword }));
-      await refreshData();
+      await refreshData(true);
       const b = await db.getBranches();
       setCurrentBranch(b.find(br => br.id === dbUser.branchId) || b[0]);
       setPage('dashboard');

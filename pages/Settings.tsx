@@ -327,10 +327,42 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
             </Alert>
             <div className="grid grid-cols-1 gap-4">
               <Input label="Supabase URL" name="supabaseUrl" value={settings.supabaseUrl || ''} onChange={handleChange} placeholder="https://xyz.supabase.co" />
-              <Input label="Supabase Anon Key" name="supabaseKey" value={settings.supabaseKey || ''} onChange={handleChange} type="password" placeholder="eyJhb..." />
+              <div className="flex gap-2 items-end">
+                <Input label="Supabase Anon Key" name="supabaseKey" value={settings.supabaseKey || ''} onChange={handleChange} type="password" placeholder="eyJhb..." className="flex-1" />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="mb-1"
+                  onClick={async () => {
+                    setSyncStatus({ type: 'info', message: 'Probando conexión...' });
+                    try {
+                      await SupabaseService.testConnection();
+                      setSyncStatus({ type: 'success', message: '¡Conexión exitosa!' });
+                    } catch (err: any) {
+                      setSyncStatus({ type: 'danger', message: `Fallo: ${err.message}` });
+                    }
+                  }}
+                >
+                  Probar
+                </Button>
+              </div>
             </div>
 
-            {settings.supabaseUrl && settings.supabaseKey && (
+            <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-xl">
+              <input
+                type="checkbox"
+                id="autoSync"
+                checked={!!settings.autoSync}
+                onChange={(e) => setSettings(s => s ? ({ ...s, autoSync: e.target.checked }) : null)}
+                className="w-5 h-5 accent-primary"
+              />
+              <label htmlFor="autoSync" className="text-sm font-bold text-gray-700 cursor-pointer">
+                Sincronización Automática (Respaldo en la nube después de cada cambio)
+              </label>
+            </div>
+
+            {(settings.supabaseUrl && settings.supabaseKey) && (
               <div className="flex flex-col gap-3 pt-4 border-t">
                 <div className="flex gap-2">
                   <Button

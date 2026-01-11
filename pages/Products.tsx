@@ -252,6 +252,12 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
                                         <td className="px-6 py-4 text-right">
                                             <Button size="sm" variant="ghost" onClick={() => printBarcode(p)} icon="print" className="mr-2" title="Imprimir Código"></Button>
                                             <Button size="sm" variant="ghost" onClick={() => openModal(p)} icon="edit"></Button>
+                                            <Button size="sm" variant="ghost" onClick={async () => {
+                                                if (confirm(`¿Eliminar ${p.name}?`)) {
+                                                    await db.deleteProduct(p.id);
+                                                    onUpdate();
+                                                }
+                                            }} icon="trash" className="text-red-400 hover:text-red-600"></Button>
                                         </td>
                                     </tr>
                                 ))}
@@ -303,9 +309,20 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
                         <Input label="Mínimo" type="number" value={formData.minStock || 0} onChange={e => setFormData({ ...formData, minStock: parseFloat(e.target.value) })} required />
                     </div>
 
-                    <div className="flex justify-end gap-2 pt-4 border-t">
-                        <Button type="button" variant="secondary" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
-                        <Button type="submit">Guardar Producto</Button>
+                    <div className="flex justify-between gap-2 pt-4 border-t">
+                        {formData.id && (
+                            <Button type="button" variant="danger" onClick={async () => {
+                                if (confirm('¿Seguro que deseas eliminar este producto?')) {
+                                    await db.deleteProduct(formData.id!);
+                                    setIsModalOpen(false);
+                                    onUpdate();
+                                }
+                            }} icon="trash">Eliminar</Button>
+                        )}
+                        <div className="flex gap-2 ml-auto">
+                            <Button type="button" variant="secondary" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
+                            <Button type="submit">Guardar Producto</Button>
+                        </div>
                     </div>
                 </form>
             </Modal>
