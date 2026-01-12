@@ -2,10 +2,10 @@
 import React, { useState, useMemo } from 'react';
 import { Sale, Product, Customer, Category } from '../types';
 import { Card, StatCard, Button, Input, Badge } from '../components/UIComponents';
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
-  ResponsiveContainer, PieChart, Pie, Cell, LineChart, 
-  Line, AreaChart, Area, Legend 
+import {
+    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+    ResponsiveContainer, PieChart, Pie, Cell, LineChart,
+    Line, AreaChart, Area, Legend
 } from 'recharts';
 
 interface ReportsProps {
@@ -48,7 +48,7 @@ export const Reports: React.FC<ReportsProps> = ({ sales: allSales, products: all
             totalSales += s.total;
             totalTax += s.taxAmount || 0;
             totalDiscount += s.discount || 0;
-            
+
             s.items.forEach(item => {
                 totalCost += (item.cost || 0) * item.quantity;
             });
@@ -66,7 +66,7 @@ export const Reports: React.FC<ReportsProps> = ({ sales: allSales, products: all
         const data: Record<string, number> = {};
         const start = new Date(startDate);
         const end = new Date(endDate);
-        
+
         let curr = new Date(start);
         while (curr <= end) {
             data[getLocalDate(curr)] = 0;
@@ -191,45 +191,49 @@ export const Reports: React.FC<ReportsProps> = ({ sales: allSales, products: all
             {activeTab === 'overview' && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in">
                     <Card title="Tendencia de Ventas Diarias" className="h-[400px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={dailyTrendData}>
-                                <defs>
-                                    <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.3}/>
-                                        <stop offset="95%" stopColor="#4F46E5" stopOpacity={0}/>
-                                    </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94a3b8'}} dy={10} />
-                                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94a3b8'}} tickFormatter={(v) => `L${v}`} />
-                                <Tooltip 
-                                    contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'}}
-                                    formatter={(v: any) => [`L ${v.toLocaleString()}`, 'Ventas']}
-                                />
-                                <Area type="monotone" dataKey="total" stroke="#4F46E5" strokeWidth={3} fillOpacity={1} fill="url(#colorTotal)" />
-                            </AreaChart>
-                        </ResponsiveContainer>
+                        <div style={{ width: '100%', height: '100%', minHeight: 300 }}>
+                            <ResponsiveContainer width="100%" height="100%">
+                                <AreaChart data={dailyTrendData}>
+                                    <defs>
+                                        <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.3} />
+                                            <stop offset="95%" stopColor="#4F46E5" stopOpacity={0} />
+                                        </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} dy={10} />
+                                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} tickFormatter={(v) => `L${v}`} />
+                                    <Tooltip
+                                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
+                                        formatter={(v: any) => [`L ${v.toLocaleString()}`, 'Ventas']}
+                                    />
+                                    <Area type="monotone" dataKey="total" stroke="#4F46E5" strokeWidth={3} fillOpacity={1} fill="url(#colorTotal)" />
+                                </AreaChart>
+                            </ResponsiveContainer>
+                        </div>
                     </Card>
 
                     <Card title="Ventas por Categoría" className="h-[400px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                                <Pie 
-                                    data={categoryData} 
-                                    cx="50%" cy="50%" 
-                                    innerRadius={70} 
-                                    outerRadius={110} 
-                                    paddingAngle={5} 
-                                    dataKey="value"
-                                >
-                                    {categoryData.map((_, index) => (
-                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} cornerRadius={8} />
-                                    ))}
-                                </Pie>
-                                <Tooltip formatter={(v: any) => `L ${v.toLocaleString()}`} />
-                                <Legend verticalAlign="bottom" height={36}/>
-                            </PieChart>
-                        </ResponsiveContainer>
+                        <div style={{ width: '100%', height: '100%', minHeight: 300 }}>
+                            <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                    <Pie
+                                        data={categoryData}
+                                        cx="50%" cy="50%"
+                                        innerRadius={70}
+                                        outerRadius={110}
+                                        paddingAngle={5}
+                                        dataKey="value"
+                                    >
+                                        {categoryData.map((_, index) => (
+                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} cornerRadius={8} />
+                                        ))}
+                                    </Pie>
+                                    <Tooltip formatter={(v: any) => `L ${v.toLocaleString()}`} />
+                                    <Legend verticalAlign="bottom" height={36} />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        </div>
                     </Card>
                 </div>
             )}
@@ -274,19 +278,21 @@ export const Reports: React.FC<ReportsProps> = ({ sales: allSales, products: all
             {activeTab === 'customers' && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in">
                     <Card title="Top 8 Clientes por Compras" className="lg:col-span-2 h-[450px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={topCustomersData} layout="vertical" margin={{ left: 40, right: 40 }}>
-                                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />
-                                <XAxis type="number" hide />
-                                <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{fontSize: 11, fontWeight: 'bold'}} width={120} />
-                                <Tooltip formatter={(v: any) => `L ${v.toLocaleString()}`} cursor={{fill: '#f8fafc'}} />
-                                <Bar dataKey="total" fill="#4F46E5" radius={[0, 10, 10, 0]} barSize={25}>
-                                    {topCustomersData.map((_, index) => (
-                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                    ))}
-                                </Bar>
-                            </BarChart>
-                        </ResponsiveContainer>
+                        <div style={{ width: '100%', height: '100%', minHeight: 350 }}>
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={topCustomersData} layout="vertical" margin={{ left: 40, right: 40 }}>
+                                    <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />
+                                    <XAxis type="number" hide />
+                                    <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fontSize: 11, fontWeight: 'bold' }} width={120} />
+                                    <Tooltip formatter={(v: any) => `L ${v.toLocaleString()}`} cursor={{ fill: '#f8fafc' }} />
+                                    <Bar dataKey="total" fill="#4F46E5" radius={[0, 10, 10, 0]} barSize={25}>
+                                        {topCustomersData.map((_, index) => (
+                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                        ))}
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
                     </Card>
 
                     <div className="space-y-4">
@@ -298,7 +304,7 @@ export const Reports: React.FC<ReportsProps> = ({ sales: allSales, products: all
                                 </div>
                                 <div className="pt-4 border-t border-indigo-500/50">
                                     <p className="text-indigo-200 text-xs font-bold uppercase mb-1">Ventas a Clientes Registrados</p>
-                                    <p className="text-xl font-bold">L {filteredSales.filter(s => s.customerId).reduce((acc,s) => acc+s.total, 0).toLocaleString()}</p>
+                                    <p className="text-xl font-bold">L {filteredSales.filter(s => s.customerId).reduce((acc, s) => acc + s.total, 0).toLocaleString()}</p>
                                 </div>
                             </div>
                         </Card>
