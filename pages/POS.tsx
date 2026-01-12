@@ -243,9 +243,12 @@ export const POS: React.FC<POSProps> = ({
     const handleSaveQuote = async () => {
         if (cart.length === 0) return;
 
+        // Get sequential folio number
+        const folio = await db.getNextQuoteNumber();
+
         const quote: Quote = {
             id: Date.now().toString(),
-            folio: `COT-${Date.now().toString().slice(-6)}`,
+            folio,
             date: new Date().toISOString(),
             customerId: selectedCustomer?.id,
             items: cart,

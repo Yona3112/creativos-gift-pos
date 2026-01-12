@@ -182,7 +182,7 @@ export interface Quote extends Omit<Sale, 'id' | 'folio' | 'cai' | 'paymentMetho
   id: string;
   folio: string;
   expirationDate: string;
-  status: 'pending' | 'accepted' | 'expired';
+  status: 'pending' | 'accepted' | 'expired' | 'deleted';
 }
 
 export interface CompanySettings {
@@ -201,6 +201,8 @@ export interface CompanySettings {
   billingDeadline: string;
   currentInvoiceNumber: number;
   currentTicketNumber?: number;
+  currentProductCode?: number;  // Sequential code for products
+  currentQuoteNumber?: number;  // Sequential code for quotes
   printerSize: '58mm' | '80mm';
   logo?: string;
   moneyPerPoint: number;

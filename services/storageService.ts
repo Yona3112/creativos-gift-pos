@@ -144,6 +144,8 @@ class StorageService {
       billingDeadline: new Date().toISOString().split('T')[0],
       currentInvoiceNumber: 1,
       currentTicketNumber: 1,
+      currentProductCode: 1,
+      currentQuoteNumber: 1,
       printerSize: '80mm',
       moneyPerPoint: 10,
       pointValue: 0.1,
@@ -175,6 +177,27 @@ class StorageService {
         console.warn("Fallo en sincronización automática:", e);
       }
     }, 500); // Sync quickly (500ms debounce) to prevent race conditions
+  }
+
+  // --- SEQUENTIAL CODE GENERATORS ---
+  async getNextProductCode(): Promise<string> {
+    const settings = await this.getSettings();
+    const nextNum = (settings.currentProductCode || 1);
+    const code = `PROD${nextNum.toString().padStart(5, '0')}`;
+    // Increment and save for next use
+    settings.currentProductCode = nextNum + 1;
+    await this.saveSettings(settings);
+    return code;
+  }
+
+  async getNextQuoteNumber(): Promise<string> {
+    const settings = await this.getSettings();
+    const nextNum = (settings.currentQuoteNumber || 1);
+    const folio = `COT-${nextNum.toString().padStart(6, '0')}`;
+    // Increment and save for next use
+    settings.currentQuoteNumber = nextNum + 1;
+    await this.saveSettings(settings);
+    return folio;
   }
 
   // --- PRODUCTS & KARDEX ---
@@ -668,7 +691,11 @@ class StorageService {
     const settings = await this.getSettings();
     if (settings.autoSync) this.triggerAutoSync();
   }
-  async getQuotes() { return await db_engine.quotes.toArray(); }
+  async getQuotes() {
+    const quotes = await db_engine.quotes.toArray();
+    // Filtrar cotizaciones eliminadas (soft-delete)
+    return quotes.filter(q => q.status !== 'deleted');
+  }
   async saveQuote(q: Quote) {
     if (!q.id) q.id = Date.now().toString();
     await db_engine.quotes.put(q);
@@ -725,9 +752,14 @@ class StorageService {
   }
 
   async deleteQuote(id: string) {
-    await db_engine.quotes.delete(id);
-    const settings = await this.getSettings();
-    if (settings.autoSync) this.triggerAutoSync();
+    // Soft-delete para sincronización correcta con la nube
+    const quote = await db_engine.quotes.get(id);
+    if (quote) {
+      quote.status = 'deleted';
+      await db_engine.quotes.put(quote);
+      const settings = await this.getSettings();
+      if (settings.autoSync) this.triggerAutoSync();
+    }
   }
 
   async updateCategoryStockThreshold(categoryId: string, threshold: number) {
