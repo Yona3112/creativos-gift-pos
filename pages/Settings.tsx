@@ -28,6 +28,7 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
   const [restoreConfirm, setRestoreConfirm] = useState<{ open: boolean; data: any }>({ open: false, data: null });
   const [deleteUserConfirm, setDeleteUserConfirm] = useState<{ open: boolean; id: string }>({ open: false, id: '' });
   const [downloadConfirm, setDownloadConfirm] = useState(false);
+  const [showClearDataConfirm, setShowClearDataConfirm] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -181,6 +182,21 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
                   )}
                 </div>
               </div>
+            </div>
+
+            <div className="space-y-4">
+              <label className="text-sm font-bold text-gray-700 block">Ajuste de Logo</label>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 cursor-pointer bg-gray-50 p-2 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors">
+                  <input type="radio" name="logoObjectFit" value="cover" checked={settings.logoObjectFit !== 'contain'} onChange={() => setSettings(prev => prev ? ({ ...prev, logoObjectFit: 'cover' }) : null)} className="accent-primary" />
+                  <span className="text-sm">Rellenar Círculo</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer bg-gray-50 p-2 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors">
+                  <input type="radio" name="logoObjectFit" value="contain" checked={settings.logoObjectFit === 'contain'} onChange={() => setSettings(prev => prev ? ({ ...prev, logoObjectFit: 'contain' }) : null)} className="accent-primary" />
+                  <span className="text-sm">Ajustar al Círculo</span>
+                </label>
+              </div>
+              <p className="text-[10px] text-gray-400">Seleccione "Ajustar" si su logo se corta en los bordes.</p>
             </div>
 
             <div className="space-y-4">
@@ -411,6 +427,16 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
           </div>
         </Card>
 
+        <Card title="Zona de Peligro" className="border-red-200 bg-red-50">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-bold text-red-700">Borrar Datos de Prueba</h3>
+              <p className="text-xs text-red-600 font-medium">Elimina VENTAS, GASTOS, COTIZACIONES y MOVIMIENTOS. No elimina productos ni clientes.</p>
+            </div>
+            <Button type="button" variant="danger" onClick={() => setShowClearDataConfirm(true)}>⚠️ Eliminar Historial</Button>
+          </div>
+        </Card>
+
 
         <div className="flex justify-end pb-10">
           <Button type="submit" size="lg" icon="save">Guardar Configuración</Button>
@@ -494,6 +520,22 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
           }
         }}
         onCancel={() => setDownloadConfirm(false)}
+      />
+
+      <ConfirmDialog
+        isOpen={showClearDataConfirm}
+        title="¿BORRAR TODO EL HISTORIAL?"
+        message="Esta acción es IRREVERSIBLE. Se eliminarán todas las ventas, reportes, cierres y movimientos de inventario. Úselo solo para limpiar datos de prueba antes de iniciar operaciones reales."
+        confirmText="SÍ, BORRAR TODO"
+        cancelText="Cancelar"
+        variant="danger"
+        onConfirm={async () => {
+          setShowClearDataConfirm(false);
+          await db.clearTransactionalData();
+          showToast('Datos transaccionales eliminados correctamente.', 'success');
+          setTimeout(() => window.location.reload(), 1500);
+        }}
+        onCancel={() => setShowClearDataConfirm(false)}
       />
     </div>
   );

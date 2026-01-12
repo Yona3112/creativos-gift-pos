@@ -148,7 +148,7 @@ export const Layout: React.FC<LayoutProps> = ({
               className="w-12 h-12 rounded-full bg-gradient-to-tr from-primary to-accent flex items-center justify-center text-white shadow-lg shrink-0 p-0.5 hover:scale-105 transition-transform cursor-zoom-in group relative"
             >
               {settings?.logo ? (
-                <img src={settings.logo} className="w-full h-full object-cover rounded-full bg-white group-hover:brightness-90 transition-all" alt="Logo" />
+                <img src={settings.logo} className={`w-full h-full object-${settings.logoObjectFit || 'cover'} rounded-full bg-white group-hover:brightness-90 transition-all`} alt="Logo" />
               ) : (
                 <i className="fas fa-store text-xl"></i>
               )}

@@ -1109,6 +1109,15 @@ class StorageService {
       </html>
     `;
   }
+  async clearTransactionalData(): Promise<void> {
+    await db_engine.sales.clear();
+    await db_engine.expenses.clear();
+    await db_engine.credits.clear();
+    await db_engine.creditNotes.clear();
+    await db_engine.cashCuts.clear();
+    await db_engine.quotes.clear();
+    await db_engine.inventoryHistory.clear();
+  }
 }
 
 export const db = new StorageService();

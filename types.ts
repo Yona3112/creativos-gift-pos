@@ -219,6 +219,7 @@ export interface CompanySettings {
   supabaseKey?: string;
   autoSync?: boolean;
   lastBackupDate?: string | null;
+  logoObjectFit?: 'cover' | 'contain';
 }
 
 export interface CashCut {

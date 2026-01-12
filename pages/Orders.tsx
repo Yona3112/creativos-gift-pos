@@ -15,6 +15,7 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [viewMode, setViewMode] = useState<'board' | 'list'>('board');
     const [statusFilter, setStatusFilter] = useState<FulfillmentStatus | 'all'>('all');
+    const [dateFilter, setDateFilter] = useState('');
 
     // Edit Modal State
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -161,6 +162,7 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
         return sales.filter(s => {
 
             const matchStatus = statusFilter === 'all' ? true : s.fulfillmentStatus === statusFilter;
+            const matchDate = dateFilter ? s.date.startsWith(dateFilter) : true;
 
             const customerName = getCustomerName(s.customerId);
             const matchSearch =
@@ -168,7 +170,7 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                 customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (s.shippingDetails?.trackingNumber || '').toLowerCase().includes(searchTerm.toLowerCase());
 
-            return matchStatus && matchSearch;
+            return matchStatus && matchSearch && matchDate;
         }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     }, [sales, searchTerm, statusFilter, customers, viewMode]);
 
@@ -215,6 +217,7 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                 </div>
 
                 <div className="flex gap-2 w-full sm:w-auto">
+                    <Input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)} className="w-auto" />
                     <Input icon="search" placeholder="Buscar..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full sm:w-64" />
                 </div>
             </div>
