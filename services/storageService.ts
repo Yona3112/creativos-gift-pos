@@ -786,24 +786,70 @@ class StorageService {
     }
   }
 
+  // SMART MERGE: Instead of replacing all data, merge with local keeping newest
   async restoreData(data: any) {
-    if (data.products) await db_engine.products.clear(), await db_engine.products.bulkPut(data.products);
-    if (data.categories) await db_engine.categories.clear(), await db_engine.categories.bulkPut(data.categories);
-    if (data.customers) await db_engine.customers.clear(), await db_engine.customers.bulkPut(data.customers);
-    if (data.sales) await db_engine.sales.clear(), await db_engine.sales.bulkPut(data.sales);
-    if (data.users) await db_engine.users.clear(), await db_engine.users.bulkPut(data.users);
-    if (data.branches) await db_engine.branches.clear(), await db_engine.branches.bulkPut(data.branches);
-    if (data.credits) await db_engine.credits.clear(), await db_engine.credits.bulkPut(data.credits);
-    if (data.promotions) await db_engine.promotions.clear(), await db_engine.promotions.bulkPut(data.promotions);
-    if (data.suppliers) await db_engine.suppliers.clear(), await db_engine.suppliers.bulkPut(data.suppliers);
-    if (data.consumables) await db_engine.consumables.clear(), await db_engine.consumables.bulkPut(data.consumables);
-    if (data.quotes) await db_engine.quotes.clear(), await db_engine.quotes.bulkPut(data.quotes);
-    if (data.cash_cuts) await db_engine.cashCuts.clear(), await db_engine.cashCuts.bulkPut(data.cash_cuts);
-    if (data.credit_notes) await db_engine.creditNotes.clear(), await db_engine.creditNotes.bulkPut(data.credit_notes);
-    if (data.expenses) await db_engine.expenses.clear(), await db_engine.expenses.bulkPut(data.expenses);
-    if (data.inventoryHistory) await db_engine.inventoryHistory.clear(), await db_engine.inventoryHistory.bulkPut(data.inventoryHistory);
-    if (data.priceHistory) await db_engine.priceHistory.clear(), await db_engine.priceHistory.bulkPut(data.priceHistory);
-    if (data.settings) await db_engine.settings.put(data.settings);
+    // Helper function to merge data intelligently
+    const mergeTable = async (table: any, remoteData: any[], idField: string = 'id') => {
+      if (!remoteData || remoteData.length === 0) return;
+
+      for (const remoteItem of remoteData) {
+        const localItem = await table.get(remoteItem[idField]);
+
+        if (!localItem) {
+          // Item doesn't exist locally, add it
+          await table.put(remoteItem);
+        } else {
+          // Item exists locally - compare by date if available, otherwise keep local
+          const remoteDate = remoteItem.date || remoteItem.createdAt || remoteItem.updatedAt;
+          const localDate = localItem.date || localItem.createdAt || localItem.updatedAt;
+
+          if (remoteDate && localDate) {
+            // Keep the most recent version
+            if (new Date(remoteDate) > new Date(localDate)) {
+              await table.put(remoteItem);
+            }
+            // If local is newer, keep local (do nothing)
+          }
+          // If no dates, keep local version (safer)
+        }
+      }
+    };
+
+    // Merge each table intelligently instead of replacing
+    if (data.products) await mergeTable(db_engine.products, data.products);
+    if (data.categories) await mergeTable(db_engine.categories, data.categories);
+    if (data.customers) await mergeTable(db_engine.customers, data.customers);
+    if (data.sales) await mergeTable(db_engine.sales, data.sales);
+    if (data.users) await mergeTable(db_engine.users, data.users);
+    if (data.branches) await mergeTable(db_engine.branches, data.branches);
+    if (data.credits) await mergeTable(db_engine.credits, data.credits);
+    if (data.promotions) await mergeTable(db_engine.promotions, data.promotions);
+    if (data.suppliers) await mergeTable(db_engine.suppliers, data.suppliers);
+    if (data.consumables) await mergeTable(db_engine.consumables, data.consumables);
+    if (data.quotes) await mergeTable(db_engine.quotes, data.quotes);
+    if (data.cash_cuts) await mergeTable(db_engine.cashCuts, data.cash_cuts);
+    if (data.credit_notes) await mergeTable(db_engine.creditNotes, data.credit_notes);
+    if (data.expenses) await mergeTable(db_engine.expenses, data.expenses);
+    if (data.inventoryHistory) await mergeTable(db_engine.inventoryHistory, data.inventoryHistory);
+    if (data.priceHistory) await mergeTable(db_engine.priceHistory, data.priceHistory);
+
+    // Settings: merge instead of replace, keeping local values for critical fields
+    if (data.settings) {
+      const localSettings = await db_engine.settings.get('main');
+      if (localSettings) {
+        // Keep local counters which are critical for sequence
+        const merged = {
+          ...data.settings,
+          currentInvoiceNumber: Math.max(localSettings.currentInvoiceNumber || 1, data.settings.currentInvoiceNumber || 1),
+          currentTicketNumber: Math.max(localSettings.currentTicketNumber || 1, data.settings.currentTicketNumber || 1),
+          currentProductCode: Math.max(localSettings.currentProductCode || 1, data.settings.currentProductCode || 1),
+          currentQuoteNumber: Math.max(localSettings.currentQuoteNumber || 1, data.settings.currentQuoteNumber || 1),
+        };
+        await db_engine.settings.put(merged);
+      } else {
+        await db_engine.settings.put(data.settings);
+      }
+    }
   }
 
   calculateEarlyPayoff(credit: CreditAccount) {
