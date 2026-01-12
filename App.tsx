@@ -98,12 +98,23 @@ function App() {
         await db.init();
         // Carga rápida desde IndexedDB
         await refreshData(false);
-        // Sync en background
+        // Sync en background (solo una vez al inicio)
         refreshData(true);
 
-        intervalId = setInterval(() => {
-          refreshData(true);
-        }, 60000);
+        // IMPORTANTE: El intervalo solo hace PUSH, no PULL
+        // Esto evita que datos viejos de la nube sobrescriban cambios locales
+        intervalId = setInterval(async () => {
+          try {
+            const sett = await db.getSettings();
+            if (sett.supabaseUrl && sett.supabaseKey && sett.autoSync) {
+              const { SupabaseService } = await import('./services/supabaseService');
+              await SupabaseService.syncAll(); // Solo PUSH, no pull
+              console.log("🔄 Auto-sync push completado.");
+            }
+          } catch (e) {
+            console.warn("⚠️ Error en auto-sync:", e);
+          }
+        }, 30000); // Cada 30 segundos
 
         const storedUser = localStorage.getItem('creativos_gift_currentUser');
         if (storedUser) {

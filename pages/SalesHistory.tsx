@@ -40,6 +40,7 @@ export const SalesHistory: React.FC<SalesHistoryProps> = ({ sales, customers, us
     const [adminPassword, setAdminPassword] = useState('');
     const [confirmWord, setConfirmWord] = useState('');
     const [passwordError, setPasswordError] = useState('');
+    const [refundType, setRefundType] = useState<'cash' | 'creditNote'>('creditNote');
 
     // Refund confirm state
     const [refundConfirm, setRefundConfirm] = useState<{ open: boolean; id: string }>({ open: false, id: '' });
@@ -89,6 +90,7 @@ export const SalesHistory: React.FC<SalesHistoryProps> = ({ sales, customers, us
         setAdminPassword('');
         setConfirmWord('');
         setPasswordError('');
+        setRefundType('creditNote');
         setCancelModalOpen(true);
     };
 
@@ -106,8 +108,11 @@ export const SalesHistory: React.FC<SalesHistoryProps> = ({ sales, customers, us
         }
 
         if (selectedSale) {
-            await db.cancelSale(selectedSale.id, user?.id || 'system');
-            showToast("Venta anulada. Se ha generado una Nota de Crédito.", "success");
+            await db.cancelSale(selectedSale.id, user?.id || 'system', refundType);
+            const msg = refundType === 'cash'
+                ? 'Venta anulada. Devolución en efectivo registrada.'
+                : 'Venta anulada. Se ha generado una Nota de Crédito.';
+            showToast(msg, 'success');
             onUpdate();
             const cn = await db.getCreditNotes();
             setCreditNotes(cn);
@@ -378,8 +383,34 @@ export const SalesHistory: React.FC<SalesHistoryProps> = ({ sales, customers, us
                         <i className="fas fa-exclamation-triangle text-red-600 text-2xl mt-1"></i>
                         <div className="text-sm text-red-900 font-bold">
                             <p>¡ESTA ACCIÓN NO SE PUEDE DESHACER!</p>
-                            <p className="font-normal mt-1">Se anulará la factura {selectedSale?.folio}. El stock regresará al inventario y se generará una nota de crédito por L {selectedSale?.total.toFixed(2)}.</p>
+                            <p className="font-normal mt-1">Se anulará la factura {selectedSale?.folio}. El stock regresará al inventario.</p>
                         </div>
+                    </div>
+
+                    {/* Tipo de Reembolso */}
+                    <div className="space-y-2">
+                        <label className="block text-sm font-bold text-gray-700">Tipo de Devolución</label>
+                        <div className="grid grid-cols-2 gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setRefundType('cash')}
+                                className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${refundType === 'cash' ? 'border-green-500 bg-green-50' : 'border-gray-200 hover:border-gray-300'}`}
+                            >
+                                <i className={`fas fa-money-bill-wave text-2xl ${refundType === 'cash' ? 'text-green-600' : 'text-gray-400'}`}></i>
+                                <span className={`font-bold text-sm ${refundType === 'cash' ? 'text-green-700' : 'text-gray-600'}`}>Efectivo</span>
+                                <span className="text-xs text-gray-500">Devolver dinero ahora</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setRefundType('creditNote')}
+                                className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${refundType === 'creditNote' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}
+                            >
+                                <i className={`fas fa-file-invoice text-2xl ${refundType === 'creditNote' ? 'text-blue-600' : 'text-gray-400'}`}></i>
+                                <span className={`font-bold text-sm ${refundType === 'creditNote' ? 'text-blue-700' : 'text-gray-600'}`}>Nota de Crédito</span>
+                                <span className="text-xs text-gray-500">Saldo para futuras compras</span>
+                            </button>
+                        </div>
+                        <p className="text-xs text-gray-500 text-center">L {selectedSale?.total.toFixed(2)} se {refundType === 'cash' ? 'devolverá en efectivo' : 'acreditará para futuras compras'}</p>
                     </div>
 
                     <div className="space-y-4">

@@ -474,7 +474,7 @@ class StorageService {
     });
   }
 
-  async cancelSale(saleId: string, userId: string = 'system') {
+  async cancelSale(saleId: string, userId: string = 'system', refundType: 'cash' | 'creditNote' = 'creditNote') {
     await db_engine.transaction('rw', [db_engine.sales, db_engine.products, db_engine.inventoryHistory, db_engine.customers, db_engine.settings, db_engine.creditNotes], async () => {
       const sale = await db_engine.sales.get(saleId);
       if (sale && sale.status === 'active') {
@@ -524,22 +524,41 @@ class StorageService {
           }
         }
 
-        // Generar Nota de Crédito si aplica
+        // Generar registro de reembolso
         let refundable = sale.total;
         if (sale.paymentMethod === 'Crédito') refundable = 0;
+
         if (refundable > 0) {
-          await db_engine.creditNotes.add({
-            id: Date.now().toString(),
-            folio: `NC-${sale.folio}`,
-            saleId: sale.id,
-            customerId: sale.customerId || '',
-            originalTotal: refundable,
-            remainingAmount: refundable,
-            reason: 'Anulación de Venta',
-            date: new Date().toISOString(),
-            status: 'active'
-          });
+          if (refundType === 'cash') {
+            // Devolución en efectivo: registrar como nota de crédito USADA inmediatamente
+            await db_engine.creditNotes.add({
+              id: Date.now().toString(),
+              folio: `DEV-${sale.folio}`,
+              saleId: sale.id,
+              customerId: sale.customerId || '',
+              originalTotal: refundable,
+              remainingAmount: 0, // Ya devuelto
+              reason: 'Devolución en Efectivo',
+              date: new Date().toISOString(),
+              status: 'used' // Marcada como usada porque ya se devolvió el dinero
+            });
+          } else {
+            // Nota de Crédito tradicional: disponible para uso futuro
+            await db_engine.creditNotes.add({
+              id: Date.now().toString(),
+              folio: `NC-${sale.folio}`,
+              saleId: sale.id,
+              customerId: sale.customerId || '',
+              originalTotal: refundable,
+              remainingAmount: refundable,
+              reason: 'Anulación de Venta',
+              date: new Date().toISOString(),
+              status: 'active'
+            });
+          }
         }
+
+        if (settings.autoSync) this.triggerAutoSync();
       }
     });
   }
