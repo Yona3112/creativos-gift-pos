@@ -244,8 +244,10 @@ CREATE TABLE IF NOT EXISTS settings (
   "billingRangeStart" TEXT,
   "billingRangeEnd" TEXT,
   "billingDeadline" TEXT,
-  "currentInvoiceNumber" INTEGER,
-  "currentTicketNumber" INTEGER,
+  "currentInvoiceNumber" INTEGER DEFAULT 1,
+  "currentTicketNumber" INTEGER DEFAULT 1,
+  "currentProductCode" INTEGER DEFAULT 1,
+  "currentQuoteNumber" INTEGER DEFAULT 1,
   "printerSize" TEXT,
   "moneyPerPoint" NUMERIC,
   "pointValue" NUMERIC,
@@ -263,3 +265,10 @@ CREATE TABLE IF NOT EXISTS settings (
   "supabaseKey" TEXT,
   "autoSync" BOOLEAN DEFAULT false
 );
+
+-- ================================================
+-- RUN THESE IF YOUR TABLES ALREADY EXIST:
+-- (To add the new columns to existing settings table)
+-- ================================================
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS "currentProductCode" INTEGER DEFAULT 1;
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS "currentQuoteNumber" INTEGER DEFAULT 1;
