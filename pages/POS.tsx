@@ -39,6 +39,12 @@ export const POS: React.FC<POSProps> = ({
     const [creditTerm, setCreditTerm] = useState<string>('1');
     const [creditDownPayment, setCreditDownPayment] = useState<string>('0');
 
+    // Credit Note Usage State
+    const [creditNoteFolio, setCreditNoteFolio] = useState<string>('');
+    const [creditNoteAmount, setCreditNoteAmount] = useState<number>(0);
+    const [creditNoteValid, setCreditNoteValid] = useState<boolean>(false);
+    const [creditNoteMax, setCreditNoteMax] = useState<number>(0);
+
     const [isNewCustomerModalOpen, setIsNewCustomerModalOpen] = useState(false);
     const [newCustomerData, setNewCustomerData] = useState<Partial<Customer>>({ name: '', phone: '', rtn: '', type: 'Natural' });
     const [isManualModalOpen, setIsManualModalOpen] = useState(false);
@@ -209,6 +215,12 @@ export const POS: React.FC<POSProps> = ({
             };
 
             const finalSale = await db.createSale(saleData);
+
+            // Process credit note usage if applicable
+            if (creditNoteValid && creditNoteAmount > 0) {
+                await db.processCreditNoteUsage(creditNoteFolio, creditNoteAmount);
+            }
+
             setLastSale(finalSale);
             setIsSuccessModalOpen(true);
 
@@ -217,6 +229,11 @@ export const POS: React.FC<POSProps> = ({
             setGlobalDiscount('');
             setReceivedAmount('');
             setIsPaymentModalOpen(false);
+            // Reset credit note state
+            setCreditNoteFolio('');
+            setCreditNoteAmount(0);
+            setCreditNoteValid(false);
+            setCreditNoteMax(0);
             onSaleComplete();
         } catch (e: any) {
             showToast(e.message || "Error al procesar venta", "error");
@@ -490,6 +507,61 @@ export const POS: React.FC<POSProps> = ({
                                 </button>
                             ))}
                         </div>
+                    </div>
+
+                    {/* Credit Note Usage Section */}
+                    <div className="bg-blue-50 p-4 rounded-xl border border-blue-200">
+                        <div className="flex items-center gap-2 mb-3">
+                            <i className="fas fa-file-invoice text-blue-600"></i>
+                            <span className="font-bold text-blue-800 text-sm">¿Aplicar Nota de Crédito?</span>
+                        </div>
+                        <div className="flex gap-2">
+                            <Input
+                                placeholder="Folio: NC-xxx o DEV-xxx"
+                                value={creditNoteFolio}
+                                onChange={e => {
+                                    setCreditNoteFolio(e.target.value);
+                                    setCreditNoteValid(false);
+                                    setCreditNoteAmount(0);
+                                }}
+                                className="flex-1"
+                            />
+                            <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={async () => {
+                                    if (!creditNoteFolio) return;
+                                    const cn = await db.getCreditNotes();
+                                    const found = cn.find(n => n.folio.toLowerCase() === creditNoteFolio.toLowerCase() && n.status === 'active');
+                                    if (found && found.remainingAmount > 0) {
+                                        setCreditNoteMax(found.remainingAmount);
+                                        setCreditNoteAmount(Math.min(found.remainingAmount, total));
+                                        setCreditNoteValid(true);
+                                        showToast(`Nota válida: L ${found.remainingAmount.toFixed(2)} disponible`, 'success');
+                                    } else {
+                                        setCreditNoteValid(false);
+                                        setCreditNoteAmount(0);
+                                        showToast('Nota de crédito no válida o ya usada', 'error');
+                                    }
+                                }}
+                            >
+                                Verificar
+                            </Button>
+                        </div>
+                        {creditNoteValid && (
+                            <div className="mt-3 p-3 bg-green-100 rounded-lg border border-green-300">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-green-800 font-bold text-sm">
+                                        <i className="fas fa-check-circle mr-2"></i>
+                                        Nota Válida
+                                    </span>
+                                    <span className="text-green-800 font-bold">-L {creditNoteAmount.toFixed(2)}</span>
+                                </div>
+                                <p className="text-xs text-green-700 mt-1">
+                                    Disponible: L {creditNoteMax.toFixed(2)} | Aplicando: L {Math.min(creditNoteMax, total).toFixed(2)}
+                                </p>
+                            </div>
+                        )}
                     </div>
 
                     <div className="bg-gray-50 p-4 rounded-2xl space-y-4">
