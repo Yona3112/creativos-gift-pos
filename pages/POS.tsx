@@ -576,7 +576,28 @@ export const POS: React.FC<POSProps> = ({
                         )}
 
                         {paymentMethod === 'Tarjeta' && (
-                            <Input label="Referencia de Transacción" placeholder="Últimos 4 dígitos o No. Autorización" value={paymentDetails.cardRef || ''} onChange={e => setPaymentDetails({ ...paymentDetails, cardRef: e.target.value })} />
+                            <div className="space-y-3">
+                                <div className="grid grid-cols-2 gap-3">
+                                    <Input
+                                        label="Banco Emisor"
+                                        placeholder="Ej: BAC, Ficohsa, Atlántida..."
+                                        value={paymentDetails.cardBank || ''}
+                                        onChange={e => setPaymentDetails({ ...paymentDetails, cardBank: e.target.value })}
+                                    />
+                                    <Input
+                                        label="Nombre en la Tarjeta"
+                                        placeholder="Nombre del titular"
+                                        value={paymentDetails.cardHolder || ''}
+                                        onChange={e => setPaymentDetails({ ...paymentDetails, cardHolder: e.target.value })}
+                                    />
+                                </div>
+                                <Input
+                                    label="Referencia de Transacción"
+                                    placeholder="Últimos 4 dígitos o No. Autorización"
+                                    value={paymentDetails.cardRef || ''}
+                                    onChange={e => setPaymentDetails({ ...paymentDetails, cardRef: e.target.value })}
+                                />
+                            </div>
                         )}
 
                         {paymentMethod === 'Transferencia' && (

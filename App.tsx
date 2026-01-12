@@ -48,28 +48,26 @@ function App() {
   const [quoteToLoad, setQuoteToLoad] = useState<Quote | null>(null);
   const { sendNotification } = useNotifications();
 
-  const refreshData = async (shouldPullFromCloud = false) => {
+  const refreshData = async (shouldPushToCloud = false) => {
     try {
-      if (shouldPullFromCloud) {
+      if (shouldPushToCloud) {
         const sett = await db.getSettings();
-        // Sincronizar automáticamente si las credenciales están presentes
-        if (sett.supabaseUrl && sett.supabaseKey) {
+        // SOLO PUSH: Subir cambios locales a la nube, NUNCA descargar automáticamente
+        // El pull solo debe hacerse manualmente desde Settings para evitar pérdida de datos
+        if (sett.supabaseUrl && sett.supabaseKey && sett.autoSync) {
           const { SupabaseService } = await import('./services/supabaseService');
           try {
-            // CRITICAL: Push local changes FIRST, then pull remote changes
-            await SupabaseService.syncAll();
-            const result = await SupabaseService.pullAll();
-            if (result) {
-              console.log("☁️ Sincronización con la nube exitosa.");
-            }
-          } catch (pullErr) {
-            console.warn("⚠️ No se pudo sincronizar con la nube, usando datos locales:", pullErr);
+            await SupabaseService.syncAll(); // Solo PUSH
+            console.log("☁️ Push a la nube completado.");
+          } catch (pushErr) {
+            console.warn("⚠️ No se pudo subir a la nube:", pushErr);
           }
         }
       }
     } catch (e) {
-      console.error("Error en sincronización inicial:", e);
+      console.error("Error en sincronización:", e);
     }
+
 
     const [p, c, cust, s, b, u, cr, pr, con, sett, exp] = await Promise.all([
       db.getProducts(), db.getCategories(), db.getCustomers(),
