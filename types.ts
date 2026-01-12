@@ -215,6 +215,7 @@ export interface CompanySettings {
   supabaseUrl?: string;
   supabaseKey?: string;
   autoSync?: boolean;
+  lastBackupDate?: string | null;
 }
 
 export interface CashCut {

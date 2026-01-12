@@ -373,7 +373,13 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
                       setSyncStatus({ type: 'info', message: 'Subiendo datos a la nube...' });
                       try {
                         await SupabaseService.syncAll();
+                        // Save last backup date
+                        const now = new Date().toISOString();
+                        const updatedSettings = { ...settings, lastBackupDate: now };
+                        await db.saveSettings(updatedSettings);
+                        setSettings(updatedSettings);
                         setSyncStatus({ type: 'success', message: '¡Datos subidos con éxito!' });
+                        if (onUpdate) onUpdate();
                       } catch (err: any) {
                         setSyncStatus({ type: 'danger', message: `Error al subir: ${err.message}` });
                       } finally {

@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Styles ported from index.html <style> */
+:root {
+  --primary-color: #4F46E5;
+  --accent-color: #8B5CF6;
+}
+
+body {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  background-color: #F3F4F6;
+  color: #111827;
+}
+
+#root {
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #94A3B8;
+  border-radius: 4px;
+}
+
+/* Fix for mobile input styling */
+input,
+select,
+textarea {
+  -webkit-appearance: none;
+}

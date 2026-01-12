@@ -133,12 +133,12 @@ interface CardProps {
 export const Card: React.FC<CardProps> = ({ title, children, className = '', actions, noPadding = false }) => (
   <div className={`bg-white rounded-2xl shadow-sm border border-gray-200 flex flex-col ${className}`}>
     {(title || actions) && (
-      <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50 rounded-t-2xl">
+      <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50 rounded-t-2xl shrink-0">
         {title && <h3 className="text-lg font-bold text-gray-900">{title}</h3>}
         {actions && <div className="flex gap-2">{actions}</div>}
       </div>
     )}
-    <div className={noPadding ? '' : 'p-6'}>{children}</div>
+    <div className={`${noPadding ? '' : 'p-6'} flex-1 h-full min-h-0`}>{children}</div>
   </div>
 );
 

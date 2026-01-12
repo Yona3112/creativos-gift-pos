@@ -154,7 +154,8 @@ class StorageService {
       showFloatingWhatsapp: true,
       whatsappTemplate: "👋 Hola *{CLIENT_NAME}*, me interesa hacer el siguiente pedido personalizado:\n\n{ITEMS_LIST}\n\n💰 *TOTAL: {TOTAL}*\n\n📍 Quedo pendiente de los detalles de personalización.",
       supabaseUrl: import.meta.env.VITE_SUPABASE_URL || '',
-      supabaseKey: import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+      supabaseKey: import.meta.env.VITE_SUPABASE_ANON_KEY || '',
+      lastBackupDate: null
     };
     return saved ? { ...defaults, ...saved } : defaults;
   }
