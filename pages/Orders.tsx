@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Sale, Customer, FulfillmentStatus, ShippingDetails } from '../types';
-import { Card, Button, Input, Badge, Modal } from '../components/UIComponents';
+import { Sale, Customer, FulfillmentStatus, ShippingDetails, CompanySettings } from '../types';
+import { Card, Button, Input, Badge, Modal, showToast } from '../components/UIComponents';
 import { db } from '../services/storageService';
 
 interface OrdersProps {
@@ -11,6 +11,7 @@ interface OrdersProps {
 export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
     const [sales, setSales] = useState<Sale[]>([]);
     const [customers, setCustomers] = useState<Customer[]>([]);
+    const [settings, setSettings] = useState<CompanySettings | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [viewMode, setViewMode] = useState<'board' | 'list'>('board');
     const [statusFilter, setStatusFilter] = useState<FulfillmentStatus | 'all'>('all');
@@ -25,6 +26,11 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
         notes: string;
     }>({ status: 'pending', shippingCompany: '', tracking: '', notes: '' });
 
+    // Admin Password Modal State
+    const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
+    const [adminPassword, setAdminPassword] = useState('');
+    const [pendingRollback, setPendingRollback] = useState<{ order: Sale, newStatus: FulfillmentStatus } | null>(null);
+
     useEffect(() => {
         refresh();
     }, []);
@@ -33,6 +39,7 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
         const allSales = await db.getSales();
         setSales(allSales.filter(s => s.status === 'active'));
         setCustomers(await db.getCustomers());
+        setSettings(await db.getSettings());
     };
 
     const getCustomerName = (id?: string) => customers.find(c => c.id === id)?.name || 'Consumidor Final';
@@ -49,9 +56,33 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
         const newStatus = workflow[newIndex];
 
         if (newStatus !== order.fulfillmentStatus) {
+            // Para retroceder, requerir contraseña de administrador
+            if (direction === 'prev') {
+                setPendingRollback({ order, newStatus });
+                setAdminPassword('');
+                setIsAdminModalOpen(true);
+                return;
+            }
+
             await db.updateSaleStatus(order.id, newStatus);
             refresh();
             if (onUpdate) onUpdate();
+        }
+    };
+
+    const confirmRollback = async () => {
+        if (!pendingRollback || !settings) return;
+
+        if (adminPassword === settings.masterPassword) {
+            await db.updateSaleStatus(pendingRollback.order.id, pendingRollback.newStatus);
+            setIsAdminModalOpen(false);
+            setPendingRollback(null);
+            setAdminPassword('');
+            showToast('Estado actualizado correctamente', 'success');
+            refresh();
+            if (onUpdate) onUpdate();
+        } else {
+            showToast('Contraseña incorrecta', 'error');
         }
     };
 
@@ -340,8 +371,72 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                         ></textarea>
                     </div>
 
-                    <div className="flex justify-end pt-2">
+                    {/* Payment Status Indicator */}
+                    {selectedOrder && selectedOrder.documentType !== 'FACTURA' && (
+                        <div className="bg-amber-50 p-4 rounded-xl border border-amber-200">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <i className="fas fa-exclamation-triangle text-amber-600"></i>
+                                    <span className="font-bold text-amber-800">Pedido sin facturar</span>
+                                </div>
+                                <Button
+                                    size="sm"
+                                    variant="primary"
+                                    icon="file-invoice"
+                                    onClick={async () => {
+                                        if (!selectedOrder) return;
+                                        // Update to FACTURA
+                                        await db.updateSaleStatus(selectedOrder.id, selectedOrder.fulfillmentStatus || 'pending');
+                                        // Note: For full invoice generation, we'd need to update sale.documentType
+                                        showToast('Para facturar, use el botón "Facturar" en el historial de ventas', 'info');
+                                    }}
+                                >
+                                    Facturar Ahora
+                                </Button>
+                            </div>
+                            <p className="text-xs text-amber-700 mt-2">Se cobrará al entregar</p>
+                        </div>
+                    )}
+
+                    {selectedOrder && selectedOrder.documentType === 'FACTURA' && (
+                        <div className="bg-green-50 p-3 rounded-xl border border-green-200 flex items-center gap-2">
+                            <i className="fas fa-check-circle text-green-600"></i>
+                            <span className="font-bold text-green-800 text-sm">Pedido Facturado - {selectedOrder.folio}</span>
+                        </div>
+                    )}
+
+                    <div className="flex justify-end pt-2 gap-2">
                         <Button onClick={handleSaveUpdate} variant="primary" size="lg" icon="save" className="w-full sm:w-auto">Guardar Cambios</Button>
+                    </div>
+                </div>
+            </Modal>
+
+            {/* Admin Password Modal for Rollback */}
+            <Modal isOpen={isAdminModalOpen} onClose={() => { setIsAdminModalOpen(false); setPendingRollback(null); }} title="Autorización Requerida" size="sm">
+                <div className="space-y-4">
+                    <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 text-center">
+                        <i className="fas fa-lock text-3xl text-amber-600 mb-2"></i>
+                        <p className="text-sm text-amber-800 font-bold">
+                            Retroceder el estado del pedido requiere autorización de un administrador.
+                        </p>
+                    </div>
+
+                    <Input
+                        label="Contraseña Maestra"
+                        type="password"
+                        placeholder="Ingrese contraseña de admin"
+                        value={adminPassword}
+                        onChange={e => setAdminPassword(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') confirmRollback(); }}
+                    />
+
+                    <div className="flex gap-2 pt-2">
+                        <Button variant="secondary" onClick={() => { setIsAdminModalOpen(false); setPendingRollback(null); }} className="flex-1">
+                            Cancelar
+                        </Button>
+                        <Button onClick={confirmRollback} className="flex-1" icon="unlock">
+                            Autorizar
+                        </Button>
                     </div>
                 </div>
             </Modal>

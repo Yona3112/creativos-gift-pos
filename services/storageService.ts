@@ -133,7 +133,7 @@ class StorageService {
   async getSettings(): Promise<CompanySettings> {
     const saved = await db_engine.settings.get('main');
     const defaults: CompanySettings = {
-      name: 'Creativos Gift',
+      name: 'Creativos Gift Shop',
       rtn: '00000000000000',
       address: 'Local Principal',
       phone: '9999-9999',
