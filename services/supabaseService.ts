@@ -45,10 +45,15 @@ export class SupabaseService {
     }
 
     static async syncAll() {
+        console.log("🔄 Iniciando sincronización con Supabase...");
         const client = await this.getClient();
-        if (!client) throw new Error("Supabase no está configurado.");
+        if (!client) {
+            console.error("❌ Supabase no está configurado - no hay cliente");
+            throw new Error("Supabase no está configurado.");
+        }
 
         const data = await db.getAllData();
+        console.log("📦 Datos locales obtenidos:", Object.keys(data));
         const results: any = {};
 
         const tables = [
@@ -72,24 +77,34 @@ export class SupabaseService {
 
         for (const table of tables) {
             if (table.data && table.data.length > 0) {
-                // Ensure data is clean for Supabase (remove or rename fields if necessary)
-                // For now, we assume the schema matches the local data
-                const { error } = await client.from(table.name).upsert(table.data);
+                console.log(`📤 Sincronizando ${table.name}: ${table.data.length} registros...`);
+                const { error, data: responseData } = await client.from(table.name).upsert(table.data);
                 if (error) {
-                    console.error(`Error sincronizando tabla ${table.name}:`, error);
+                    console.error(`❌ Error en ${table.name}:`, error);
                     results[table.name] = `Error: ${error.message}`;
                 } else {
+                    console.log(`✅ ${table.name} sincronizado`);
                     results[table.name] = 'Sincronizado';
                 }
+            } else {
+                console.log(`⏭️ ${table.name}: sin datos para sincronizar`);
             }
         }
 
         // Settings is a special case (single row)
         if (data.settings) {
+            console.log("📤 Sincronizando settings...");
             const { error } = await client.from('settings').upsert({ id: 'main', ...data.settings });
-            results['settings'] = error ? `Error: ${error.message}` : 'Sincronizado';
+            if (error) {
+                console.error("❌ Error en settings:", error);
+                results['settings'] = `Error: ${error.message}`;
+            } else {
+                console.log("✅ settings sincronizado");
+                results['settings'] = 'Sincronizado';
+            }
         }
 
+        console.log("🏁 Sincronización completa:", results);
         return results;
     }
 
