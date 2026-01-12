@@ -5,7 +5,7 @@ import {
   Branch, CreditAccount, Promotion, Supplier, Consumable,
   CashCut, Quote, CreditNote, CreditPayment,
   Expense, InventoryMovement, MovementType, FulfillmentStatus, ShippingDetails, UserRole,
-  PriceHistoryEntry
+  PriceHistoryEntry, PaymentDetails
 } from '../types';
 
 // --- DATABASE CONFIGURATION (DEXIE) ---
@@ -419,7 +419,10 @@ class StorageService {
         pointsUsed: data.pointsUsed,
         pointsMonetaryValue: data.pointsMonetaryValue,
         fulfillmentStatus: data.fulfillmentStatus || 'delivered',
-        shippingDetails: data.shippingDetails
+        shippingDetails: data.shippingDetails,
+        isOrder: data.isOrder,
+        deposit: data.deposit,
+        balance: data.balance
       };
 
       await db_engine.sales.add(newSale);
@@ -960,9 +963,68 @@ class StorageService {
   }
 
   // --- PRINTING HELPER ---
+  async completeOrder(saleId: string, paymentDetails: PaymentDetails, newDocumentType?: 'FACTURA' | 'TICKET'): Promise<Sale> {
+    const sale = await db_engine.sales.get(saleId);
+    if (!sale) throw new Error("Pedido no encontrado");
+
+    // Validar que tenga saldo
+    const balance = sale.balance || 0;
+    if (balance <= 0) throw new Error("Este pedido ya está pagado");
+
+    // Si cambia a FACTURA, asignar folio
+    let newFolio = sale.folio;
+    let newDocType = sale.documentType;
+    let newCAI = sale.cai;
+
+    if (newDocumentType === 'FACTURA' && sale.documentType !== 'FACTURA') {
+      const settings = await this.getSettings();
+
+      // Validaciones de Factura
+      const nextNum = settings.currentInvoiceNumber;
+      const startParts = settings.billingRangeStart.split('-');
+      const endParts = settings.billingRangeEnd.split('-');
+      const maxNum = parseInt(endParts[3]);
+
+      if (nextNum > maxNum) throw new Error(`Rango de facturación agotado.`);
+
+      const deadline = new Date(settings.billingDeadline + 'T23:59:59');
+      if (new Date() > deadline) throw new Error(`Fecha límite de facturación expirada.`);
+
+      if (!settings.cai) throw new Error('CAI no configurado.');
+
+      newFolio = `${startParts[0]}-${startParts[1]}-${startParts[2]}-${nextNum.toString().padStart(8, '0')}`;
+      settings.currentInvoiceNumber++;
+      await this.saveSettings(settings);
+      newDocType = 'FACTURA';
+      newCAI = settings.cai;
+    }
+
+    // Actualizar venta
+    sale.deposit = (sale.deposit || 0) + balance;
+    sale.balance = 0;
+    sale.isOrder = false; // Ya no está pendiente de pago
+    sale.folio = newFolio;
+    sale.documentType = newDocType;
+    sale.cai = newCAI;
+
+    // Actualizar detalles de pago (append note or merge)
+    // Simple merge for now
+    sale.paymentDetails = { ...sale.paymentDetails, ...paymentDetails };
+
+    await db_engine.sales.put(sale);
+    const settings = await this.getSettings();
+    if (settings.autoSync) this.triggerAutoSync();
+
+    return sale;
+  }
+
+  // --- PRINTING HELPER ---
   async generateTicketHTML(sale: Sale, customer?: Customer): Promise<string> {
     const settings = await this.getSettings();
     const isFiscal = sale.documentType === 'FACTURA';
+    const isOrder = sale.isOrder && (sale.balance || 0) > 0;
+
+    const title = isOrder ? 'TICKET DE PEDIDO' : (isFiscal ? 'FACTURA' : 'TICKET DE VENTA');
     const dateStr = new Date(sale.date).toLocaleString('es-HN');
 
     const itemsHtml = sale.items.map(item => `
@@ -984,17 +1046,19 @@ class StorageService {
           .hr { border-top: 1px dashed #000; margin: 10px 0; }
           table { width: 100%; border-collapse: collapse; }
           .footer { font-size: 10px; margin-top: 20px; }
+          .row { display: flex; justify-content: space-between; margin-bottom: 2px; }
         </style>
       </head>
       <body>
         <div class="center">
-          <h2 style="margin: 0;">${settings.name}</h2>
-          <p style="margin: 5px 0;">RTN: ${settings.rtn}</p>
+          ${settings.logo ? `<img src="${settings.logo}" style="max-height: 50px; margin-bottom: 5px;">` : ''}
+          <h2 style="margin: 0; font-size: 14px;">${settings.name}</h2>
+          <p style="margin: 2px 0;">RTN: ${settings.rtn}</p>
           <p style="margin: 2px 0;">${settings.address}</p>
           <p style="margin: 2px 0;">Tel: ${settings.phone}</p>
-          <p style="margin: 2px 0;">${settings.email}</p>
           <div class="hr"></div>
-          <p class="bold">${isFiscal ? 'FACTURA NO.' : 'TICKET NO.'} ${sale.folio}</p>
+          <p class="bold" style="font-size: 14px;">${title}</p>
+          <p class="bold">NO. ${sale.folio}</p>
           <p style="font-size: 10px;">${dateStr}</p>
         </div>
 
@@ -1008,17 +1072,25 @@ class StorageService {
         </table>
 
         <div class="hr"></div>
-        <table class="bold">
-          <tr><td>Subtotal (sin ISV):</td><td style="text-align: right;">L ${sale.subtotal.toFixed(2)}</td></tr>
-          <tr><td>ISV (15%):</td><td style="text-align: right;">L ${sale.taxAmount.toFixed(2)}</td></tr>
-          ${sale.discount > 0 ? `<tr><td>Descuento:</td><td style="text-align: right;">-L ${sale.discount.toFixed(2)}</td></tr>` : ''}
-          <tr style="font-size: 14px;"><td>TOTAL:</td><td style="text-align: right;">L ${sale.total.toFixed(2)}</td></tr>
-        </table>
+        <div class="bold">
+          <div class="row"><span>Subtotal:</span><span>L ${sale.subtotal.toFixed(2)}</span></div>
+          <div class="row"><span>ISV (15%):</span><span>L ${sale.taxAmount.toFixed(2)}</span></div>
+          ${sale.discount > 0 ? `<div class="row"><span>Descuento:</span><span>-L ${sale.discount.toFixed(2)}</span></div>` : ''}
+          
+          <div class="hr" style="border-top-style: solid;"></div>
+          <div class="row" style="font-size: 14px;"><span>TOTAL:</span><span>L ${sale.total.toFixed(2)}</span></div>
+          
+          ${isOrder ? `
+            <div class="hr"></div>
+            <div class="row"><span>ANTICIPO:</span><span>L ${(sale.deposit || 0).toFixed(2)}</span></div>
+            <div class="row" style="font-size: 14px;"><span>PENDIENTE:</span><span>L ${(sale.balance || 0).toFixed(2)}</span></div>
+          ` : ''}
+        </div>
 
         <div class="hr"></div>
         <p><strong>Pago:</strong> ${sale.paymentMethod}</p>
-        ${sale.paymentDetails?.cash ? `<p>Efectivo: L ${sale.paymentDetails.cash.toFixed(2)}</p>` : ''}
-        ${sale.paymentDetails?.cash && sale.paymentDetails.cash >= sale.total ? `<p>Cambio: L ${(sale.paymentDetails.cash - sale.total).toFixed(2)}</p>` : ''}
+        ${!isOrder && sale.paymentDetails?.cash ? `<p>Efectivo: L ${sale.paymentDetails.cash.toFixed(2)}</p>` : ''}
+        ${!isOrder && sale.paymentDetails?.cash && sale.paymentDetails.cash >= sale.total ? `<p>Cambio: L ${(sale.paymentDetails.cash - sale.total).toFixed(2)}</p>` : ''}
 
         ${isFiscal ? `
           <div class="hr"></div>

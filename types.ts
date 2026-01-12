@@ -164,6 +164,9 @@ export interface Sale {
   originalQuoteId?: string;
   fulfillmentStatus?: FulfillmentStatus;
   shippingDetails?: ShippingDetails;
+  isOrder?: boolean;
+  deposit?: number;
+  balance?: number;
 }
 
 export interface CreditNote {

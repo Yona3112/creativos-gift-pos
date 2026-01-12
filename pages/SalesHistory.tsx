@@ -243,7 +243,12 @@ export const SalesHistory: React.FC<SalesHistoryProps> = ({ sales, customers, us
                                                 <td className="px-6 py-4 text-xs text-gray-500 max-w-[200px] truncate">
                                                     {s.items?.map(i => i.name).join(', ')}
                                                 </td>
-                                                <td className="px-6 py-4 font-bold text-gray-800">L {s.total.toFixed(2)}</td>
+                                                <td className="px-6 py-4 font-bold text-gray-800">
+                                                    <div>L {s.total.toFixed(2)}</div>
+                                                    {s.balance && s.balance > 0 && (
+                                                        <div className="text-xs text-red-500 font-normal">Pend: L {s.balance.toFixed(2)}</div>
+                                                    )}
+                                                </td>
                                                 <td className="px-6 py-4"><Badge variant={s.status === 'active' ? 'success' : 'danger'}>{s.status === 'active' ? 'Válida' : 'Anulada'}</Badge></td>
                                                 <td className="px-6 py-4 text-right">
                                                     <Button size="sm" variant="secondary" onClick={() => { setSelectedSale(s); setDetailsOpen(true); }} icon="eye">Ver Detalle</Button>
@@ -363,8 +368,14 @@ export const SalesHistory: React.FC<SalesHistoryProps> = ({ sales, customers, us
                             </table>
                         </div>
 
-                        <div className="flex justify-end font-bold text-lg">
-                            <span>Total: L {selectedSale.total.toFixed(2)}</span>
+                        <div className="flex flex-col items-end gap-1">
+                            <div className="font-bold text-lg">Total: L {selectedSale.total.toFixed(2)}</div>
+                            {selectedSale.deposit && (
+                                <div className="text-sm text-gray-600">Pagado: L {selectedSale.deposit.toFixed(2)}</div>
+                            )}
+                            {selectedSale.balance && selectedSale.balance > 0 && (
+                                <div className="text-sm font-bold text-red-600">Pendiente: L {selectedSale.balance.toFixed(2)}</div>
+                            )}
                         </div>
 
                         <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">

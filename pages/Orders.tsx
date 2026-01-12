@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Sale, Customer, FulfillmentStatus, ShippingDetails, CompanySettings } from '../types';
+import { Sale, Customer, FulfillmentStatus, ShippingDetails, CompanySettings, PaymentDetails } from '../types';
 import { Card, Button, Input, Badge, Modal, showToast } from '../components/UIComponents';
 import { db } from '../services/storageService';
 
@@ -30,6 +30,13 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
     const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
     const [adminPassword, setAdminPassword] = useState('');
     const [pendingRollback, setPendingRollback] = useState<{ order: Sale, newStatus: FulfillmentStatus } | null>(null);
+
+    // Payment Modal State
+    const [isPayModalOpen, setIsPayModalOpen] = useState(false);
+    const [payMethod, setPayMethod] = useState<'Efectivo' | 'Tarjeta' | 'Transferencia'>('Efectivo');
+    const [payDetails, setPayDetails] = useState<any>({});
+    const [generateInvoice, setGenerateInvoice] = useState(true); // Default to Invoice when completing
+    const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
     useEffect(() => {
         refresh();
@@ -112,6 +119,31 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
         setIsEditModalOpen(false);
         refresh();
         if (onUpdate) onUpdate();
+    };
+
+    const handleCompletePayment = async () => {
+        if (!selectedOrder) return;
+        setIsProcessingPayment(true);
+        try {
+            const payment: PaymentDetails = {
+                cash: payMethod === 'Efectivo' ? selectedOrder.balance : undefined,
+                card: payMethod === 'Tarjeta' ? selectedOrder.balance : undefined,
+                transfer: payMethod === 'Transferencia' ? selectedOrder.balance : undefined,
+                ...payDetails
+            };
+
+            await db.completeOrder(selectedOrder.id, payment, generateInvoice ? 'FACTURA' : 'TICKET');
+
+            showToast('Pago completado y documento generado', 'success');
+            setIsPayModalOpen(false);
+            setIsEditModalOpen(false);
+            refresh();
+            if (onUpdate) onUpdate();
+        } catch (e: any) {
+            showToast(e.message || 'Error al completar pago', 'error');
+        } finally {
+            setIsProcessingPayment(false);
+        }
     };
 
     const timeAgo = (dateStr: string) => {
@@ -222,6 +254,12 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                                                 <p className="text-xs text-gray-500 line-clamp-2 mb-3 bg-gray-50 p-1.5 rounded">
                                                     {order.items.map(i => `${i.quantity} ${i.name}`).join(', ')}
                                                 </p>
+                                                {order.balance && order.balance > 0 ? (
+                                                    <div className="mb-2 text-[10px] font-bold text-red-500 bg-red-50 px-2 py-1 rounded border border-red-100 flex justify-between">
+                                                        <span>Pendiente:</span>
+                                                        <span>L {order.balance.toFixed(2)}</span>
+                                                    </div>
+                                                ) : null}
 
                                                 {order.shippingDetails?.notes && (
                                                     <div className="mb-3 text-[10px] bg-yellow-50 text-yellow-800 p-1.5 rounded border border-yellow-100 flex gap-1">
@@ -371,30 +409,46 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                         ></textarea>
                     </div>
 
-                    {/* Payment Status Indicator */}
-                    {selectedOrder && selectedOrder.documentType !== 'FACTURA' && (
-                        <div className="bg-amber-50 p-4 rounded-xl border border-amber-200">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <i className="fas fa-exclamation-triangle text-amber-600"></i>
-                                    <span className="font-bold text-amber-800">Pedido sin facturar</span>
+                    {/* Payment Status Section */}
+                    {selectedOrder && (
+                        <div className={`p-4 rounded-xl border ${selectedOrder.balance && selectedOrder.balance > 0 ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'}`}>
+                            <h4 className={`font-bold text-sm mb-3 flex items-center gap-2 ${selectedOrder.balance && selectedOrder.balance > 0 ? 'text-amber-800' : 'text-green-800'}`}>
+                                <i className={`fas fa-${selectedOrder.balance && selectedOrder.balance > 0 ? 'exclamation-circle' : 'check-circle'}`}></i>
+                                Estado de Cuenta
+                            </h4>
+
+                            <div className="grid grid-cols-3 gap-2 mb-4">
+                                <div className="bg-white/60 p-2 rounded-lg">
+                                    <p className="text-[10px] uppercase font-bold text-gray-500">Total</p>
+                                    <p className="font-bold text-gray-800">L {selectedOrder.total.toFixed(2)}</p>
                                 </div>
-                                <Button
-                                    size="sm"
-                                    variant="primary"
-                                    icon="file-invoice"
-                                    onClick={async () => {
-                                        if (!selectedOrder) return;
-                                        // Update to FACTURA
-                                        await db.updateSaleStatus(selectedOrder.id, selectedOrder.fulfillmentStatus || 'pending');
-                                        // Note: For full invoice generation, we'd need to update sale.documentType
-                                        showToast('Para facturar, use el botón "Facturar" en el historial de ventas', 'info');
-                                    }}
-                                >
-                                    Facturar Ahora
-                                </Button>
+                                <div className="bg-white/60 p-2 rounded-lg">
+                                    <p className="text-[10px] uppercase font-bold text-gray-500">Pagado</p>
+                                    <p className="font-bold text-gray-800">L {(selectedOrder.deposit || (selectedOrder.total - (selectedOrder.balance || 0))).toFixed(2)}</p>
+                                </div>
+                                <div className="bg-white/60 p-2 rounded-lg">
+                                    <p className="text-[10px] uppercase font-bold text-gray-500">Pendiente</p>
+                                    <p className={`font-black ${selectedOrder.balance && selectedOrder.balance > 0 ? 'text-red-500' : 'text-green-600'}`}>
+                                        L {(selectedOrder.balance || 0).toFixed(2)}
+                                    </p>
+                                </div>
                             </div>
-                            <p className="text-xs text-amber-700 mt-2">Se cobrará al entregar</p>
+
+                            {selectedOrder.balance && selectedOrder.balance > 0 ? (
+                                <Button
+                                    className="w-full"
+                                    variant="primary"
+                                    onClick={() => setIsPayModalOpen(true)}
+                                >
+                                    <i className="fas fa-cash-register mr-2"></i> Pagar Saldo y Facturar
+                                </Button>
+                            ) : (
+                                selectedOrder.documentType !== 'FACTURA' && (
+                                    <div className="text-center text-xs text-green-700 font-bold">
+                                        Venta completada (Ticket {selectedOrder.folio})
+                                    </div>
+                                )
+                            )}
                         </div>
                     )}
 
@@ -438,6 +492,58 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                             Autorizar
                         </Button>
                     </div>
+                </div>
+            </Modal>
+
+            {/* PAYMENT MODAL */}
+            <Modal isOpen={isPayModalOpen} onClose={() => setIsPayModalOpen(false)} title="Completar Pago Saldo">
+                <div className="space-y-4">
+                    <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 text-center">
+                        <p className="text-sm text-blue-800">Saldo Pendiente a Pagar</p>
+                        <p className="text-3xl font-black text-blue-600">L {selectedOrder?.balance?.toFixed(2)}</p>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Método de Pago</label>
+                        <div className="grid grid-cols-3 gap-2">
+                            {['Efectivo', 'Tarjeta', 'Transferencia'].map(m => (
+                                <button
+                                    key={m}
+                                    onClick={() => setPayMethod(m as any)}
+                                    className={`py-3 px-2 rounded-xl text-xs font-bold border-2 transition-all ${payMethod === m ? 'border-primary bg-primary/5 text-primary' : 'border-gray-100 text-gray-500'}`}
+                                >
+                                    {m}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {payMethod === 'Tarjeta' && (
+                        <Input label="Referencia / Voucher" placeholder="Calculado automáticamente" value={payDetails.cardRef || ''} onChange={e => setPayDetails({ ...payDetails, cardRef: e.target.value })} />
+                    )}
+                    {payMethod === 'Transferencia' && (
+                        <div className="grid grid-cols-2 gap-2">
+                            <Input label="Banco" value={payDetails.bank || ''} onChange={e => setPayDetails({ ...payDetails, bank: e.target.value })} />
+                            <Input label="Referencia" value={payDetails.transferRef || ''} onChange={e => setPayDetails({ ...payDetails, transferRef: e.target.value })} />
+                        </div>
+                    )}
+
+                    <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                        <input
+                            type="checkbox"
+                            checked={generateInvoice}
+                            onChange={e => setGenerateInvoice(e.target.checked)}
+                            className="w-5 h-5 accent-primary"
+                        />
+                        <div>
+                            <p className="font-bold text-sm text-gray-800">Generar Factura CAI</p>
+                            <p className="text-xs text-gray-500">Convierte el documento a Factura válida</p>
+                        </div>
+                    </div>
+
+                    <Button onClick={handleCompletePayment} className="w-full h-12" disabled={isProcessingPayment}>
+                        {isProcessingPayment ? <i className="fas fa-spinner fa-spin"></i> : 'Confirmar Pago y Finalizar'}
+                    </Button>
                 </div>
             </Modal>
         </div>
