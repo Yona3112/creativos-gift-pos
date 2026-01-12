@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { User, UserRole, Branch, CompanySettings } from '../types';
-import { WhatsAppButton } from './UIComponents';
+import { WhatsAppButton, Modal } from './UIComponents';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -127,6 +127,7 @@ export const Layout: React.FC<LayoutProps> = ({
   children, user, currentBranch, branches, settings, onLogout, onChangeBranch, currentPage, onNavigate
 }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showLogoModal, setShowLogoModal] = useState(false);
 
   const filteredMenu = MENU_ITEMS.filter(item => {
     const restrictedForVendor = ['settings', 'reports', 'branches', 'users'];
@@ -140,17 +141,23 @@ export const Layout: React.FC<LayoutProps> = ({
       {sidebarOpen && <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />}
 
       <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 transition-transform duration-300 transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 flex flex-col shrink-0 font-sans`}>
-        <div className="h-24 flex flex-col items-center justify-center px-6 border-b border-gray-100 mb-2">
+        <div className="h-24 flex flex-col items-center justify-center px-6 border-b border-gray-100 mb-2 shrink-0">
           <div className="flex items-center gap-3 w-full">
-            <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-primary to-accent flex items-center justify-center text-white shadow-lg shrink-0 p-0.5">
+            <button
+              onClick={() => setShowLogoModal(true)}
+              className="w-12 h-12 rounded-full bg-gradient-to-tr from-primary to-accent flex items-center justify-center text-white shadow-lg shrink-0 p-0.5 hover:scale-105 transition-transform cursor-zoom-in group relative"
+            >
               {settings?.logo ? (
-                <img src={settings.logo} className="w-full h-full object-cover rounded-full bg-white" alt="Logo" />
+                <img src={settings.logo} className="w-full h-full object-cover rounded-full bg-white group-hover:brightness-90 transition-all" alt="Logo" />
               ) : (
                 <i className="fas fa-store text-xl"></i>
               )}
-            </div>
+              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <i className="fas fa-search-plus text-white drop-shadow-md"></i>
+              </div>
+            </button>
             <div className="flex flex-col overflow-hidden">
-              <span className="text-lg font-black text-gray-900 leading-tight truncate tracking-tight uppercase">
+              <span className="text-lg font-black text-gray-900 leading-tight tracking-tight uppercase break-words line-clamp-2">
                 {settings?.name || 'Creativos Gift'}
               </span>
               <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
@@ -178,9 +185,29 @@ export const Layout: React.FC<LayoutProps> = ({
       </aside>
 
       <main className="flex-1 flex flex-col min-w-0 h-full relative">
-        <div className="hidden lg:block absolute top-6 right-8 z-20">
-          <BackupReminderBell settings={settings} onNavigate={onNavigate} />
-        </div>
+        <header className="hidden lg:flex h-16 bg-white border-b border-gray-200 items-center justify-between px-8 shrink-0 z-20">
+          <div className="font-bold text-gray-500 text-sm flex items-center gap-2">
+            <span className="opacity-50">Menú</span>
+            <i className="fas fa-chevron-right text-[10px]"></i>
+            <span className="text-primary">{MENU_ITEMS.find(i => i.id === currentPage)?.label || 'Panel Principal'}</span>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <BackupReminderBell settings={settings} onNavigate={onNavigate} />
+
+            <div className="h-8 w-px bg-gray-200 mx-2"></div>
+
+            <div className="flex items-center gap-3">
+              <div className="text-right hidden xl:block">
+                <p className="text-sm font-bold text-gray-800 leading-none">{user?.name}</p>
+                <p className="text-[10px] text-gray-500 font-bold uppercase mt-1">{user?.role}</p>
+              </div>
+              <div className="w-9 h-9 bg-primary/10 text-primary border border-primary/20 rounded-full flex items-center justify-center font-bold shadow-sm">
+                {user?.name?.charAt(0) || '?'}
+              </div>
+            </div>
+          </div>
+        </header>
         <header className="lg:hidden h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 shrink-0">
           <button onClick={() => setSidebarOpen(true)} className="w-10 h-10 flex items-center justify-center bg-gray-50 rounded-xl"><i className="fas fa-bars"></i></button>
           <span className="font-black text-primary">{settings?.name || 'Creativos Gift'}</span>
@@ -191,6 +218,24 @@ export const Layout: React.FC<LayoutProps> = ({
         </header>
         <div className="flex-1 overflow-y-auto p-4 lg:p-8 relative">{children}</div>
         {settings?.showFloatingWhatsapp && <WhatsAppButton phoneNumber={settings.whatsappNumber} />}
+
+        {/* LOGO MODAL */}
+        <Modal isOpen={showLogoModal} onClose={() => setShowLogoModal(false)} title={settings?.name || 'Logo de Tienda'}>
+          <div className="flex flex-col items-center justify-center p-4">
+            <div className="w-64 h-64 md:w-96 md:h-96 rounded-full overflow-hidden border-4 border-white shadow-2xl bg-gray-100 mb-4">
+              {settings?.logo ? (
+                <img src={settings.logo} className="w-full h-full object-cover" alt="Logo Full" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-gray-300">
+                  <i className="fas fa-store text-6xl"></i>
+                </div>
+              )}
+            </div>
+            <p className="text-center text-sm text-gray-500 font-bold uppercase tracking-widest">
+              Vista previa de imagen de perfil
+            </p>
+          </div>
+        </Modal>
       </main>
     </div>
   );
