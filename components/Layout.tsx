@@ -165,6 +165,9 @@ export const Layout: React.FC<LayoutProps> = ({
       </aside>
 
       <main className="flex-1 flex flex-col min-w-0 h-full relative">
+        <div className="hidden lg:block absolute top-6 right-8 z-20">
+          <BackupReminderBell settings={settings} onNavigate={onNavigate} />
+        </div>
         <header className="lg:hidden h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 shrink-0">
           <button onClick={() => setSidebarOpen(true)} className="w-10 h-10 flex items-center justify-center bg-gray-50 rounded-xl"><i className="fas fa-bars"></i></button>
           <span className="font-black text-primary">{settings?.name || 'Creativos Gift'}</span>

@@ -5,12 +5,12 @@ import { Card, Button } from '../components/UIComponents';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface DashboardProps {
-  products: Product[];
-  sales: Sale[];
-  credits: CreditAccount[];
-  customers: Customer[];
-  consumables: Consumable[]; // Prop nueva
-  onNavigate?: (page: string, params?: any) => void;
+    products: Product[];
+    sales: Sale[];
+    credits: CreditAccount[];
+    customers: Customer[];
+    consumables: Consumable[]; // Prop nueva
+    onNavigate?: (page: string, params?: any) => void;
 }
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -49,271 +49,271 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, customers, consumables, onNavigate }) => {
-  // Helper for Local Date (Fix UTC Bug)
-  const getLocalDate = (d: Date = new Date()) => {
-     const offset = d.getTimezoneOffset() * 60000;
-     return new Date(d.getTime() - offset).toISOString().split('T')[0];
-  };
-
-  const today = getLocalDate();
-  const currentMonthPrefix = today.substring(0, 7);
-
-  const stats = useMemo(() => {
-    // Sales Logic
-    const salesToday = sales.filter(s => getLocalDate(new Date(s.date)) === today && s.status === 'active');
-    const totalSalesToday = salesToday.reduce((acc, s) => acc + s.total, 0);
-    
-    // Inventory Logic
-    const lowStock = products.filter(p => (p.enableLowStockAlert !== false) && p.stock <= p.minStock).length;
-    const inventoryValue = products.reduce((acc, p) => acc + (p.cost * p.stock), 0);
-
-    // Consumables Logic
-    const lowStockConsumables = consumables.filter(c => c.stock <= c.minStock);
-
-    // Orders Logic
-    const pendingOrders = sales.filter(s => s.fulfillmentStatus === 'pending' && s.status === 'active').length;
-    const inProductionOrders = sales.filter(s => s.fulfillmentStatus === 'production' && s.status === 'active').length;
-    const readyOrders = sales.filter(s => s.fulfillmentStatus === 'ready' && s.status === 'active').length;
-
-    // Credits Logic
-    const totalReceivable = credits.filter(c => c.status !== 'cancelled' && c.status !== 'paid').reduce((acc, c) => acc + (c.totalAmount - c.paidAmount), 0);
-
-    return { 
-        totalSalesToday, 
-        lowStock, 
-        inventoryValue,
-        pendingOrders,
-        inProductionOrders,
-        readyOrders,
-        totalReceivable,
-        activeProducts: products.length,
-        lowStockConsumables
+    // Helper for Local Date (Fix UTC Bug)
+    const getLocalDate = (d: Date = new Date()) => {
+        const offset = d.getTimezoneOffset() * 60000;
+        return new Date(d.getTime() - offset).toISOString().split('T')[0];
     };
-  }, [products, sales, credits, consumables]);
 
-  // Chart Data: Last 7 Days Sales Trend
-  const salesData = useMemo(() => {
-    const last7Days = Array.from({length: 7}, (_, i) => {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      return getLocalDate(d);
-    }).reverse();
+    const today = getLocalDate();
+    const currentMonthPrefix = today.substring(0, 7);
 
-    return last7Days.map(dateStr => {
-      const daySales = sales.filter(s => getLocalDate(new Date(s.date)) === dateStr && s.status === 'active');
-      const dayName = new Date(dateStr + 'T00:00:00').toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric' });
-      
-      const total = daySales.reduce((acc, s) => acc + s.total, 0);
-      const tax = daySales.reduce((acc, s) => acc + (s.taxAmount || 0), 0);
-      
-      // Calculate Cost of Goods Sold (COGS) for the day
-      const cost = daySales.reduce((acc, s) => {
-          return acc + s.items.reduce((sumItem, item) => sumItem + ((item.cost || 0) * item.quantity), 0);
-      }, 0);
+    const stats = useMemo(() => {
+        // Sales Logic
+        const salesToday = sales.filter(s => getLocalDate(new Date(s.date)) === today && s.status === 'active');
+        const totalSalesToday = salesToday.reduce((acc, s) => acc + s.total, 0);
 
-      // Net Revenue = Total Sales - Tax
-      const netRevenue = total - tax;
-      
-      // Gross Profit = Net Revenue - COGS
-      const profit = netRevenue - cost;
+        // Inventory Logic
+        const lowStock = products.filter(p => (p.enableLowStockAlert !== false) && p.stock <= p.minStock).length;
+        const inventoryValue = products.reduce((acc, p) => acc + (p.cost * p.stock), 0);
 
-      return {
-        name: dayName,
-        total,
-        netRevenue,
-        profit
-      };
-    });
-  }, [sales]);
+        // Consumables Logic
+        const lowStockConsumables = consumables.filter(c => c.stock <= c.minStock);
 
-  // Top Products Data (Grouped by ID for consistency)
-  const topProducts = useMemo(() => {
-      const counts: Record<string, {name: string, qty: number}> = {};
-      sales.filter(s => s.status === 'active' && getLocalDate(new Date(s.date)).startsWith(currentMonthPrefix)).forEach(s => {
-          s.items.forEach(i => {
-              const id = i.id;
-              if (counts[id]) {
-                  counts[id].qty += i.quantity;
-              } else {
-                  // Try to find the current live product name to handle renames
-                  const liveProduct = products.find(p => p.id === id);
-                  counts[id] = { name: liveProduct ? liveProduct.name : i.name, qty: i.quantity };
-              }
-          });
-      });
-      return Object.values(counts).sort((a, b) => b.qty - a.qty).slice(0, 5);
-  }, [sales, currentMonthPrefix, products]);
+        // Orders Logic
+        const pendingOrders = sales.filter(s => s.fulfillmentStatus === 'pending' && s.status === 'active').length;
+        const inProductionOrders = sales.filter(s => s.fulfillmentStatus === 'production' && s.status === 'active').length;
+        const readyOrders = sales.filter(s => s.fulfillmentStatus === 'ready' && s.status === 'active').length;
 
-  // Recent Activity Feed
-  const recentActivity = useMemo(() => {
-      return sales.filter(s => s.status === 'active')
-          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-          .slice(0, 5);
-  }, [sales]);
+        // Credits Logic
+        const totalReceivable = credits.filter(c => c.status !== 'cancelled' && c.status !== 'paid').reduce((acc, c) => acc + (c.totalAmount - c.paidAmount), 0);
 
-  return (
-    <div className="space-y-6 pb-10">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-              <h1 className="text-2xl font-extrabold text-gray-800 tracking-tight">Panel de Control</h1>
-              <p className="text-sm text-gray-500">Resumen operativo de hoy, {new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}.</p>
-          </div>
-      </div>
+        return {
+            totalSalesToday,
+            lowStock,
+            inventoryValue,
+            pendingOrders,
+            inProductionOrders,
+            readyOrders,
+            totalReceivable,
+            activeProducts: products.length,
+            lowStockConsumables
+        };
+    }, [products, sales, credits, consumables]);
 
-      {/* ALERTAS CRÍTICAS DE INSUMOS */}
-      {stats.lowStockConsumables.length > 0 && (
-          <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl shadow-sm animate-fade-in flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-              <div className="flex items-start gap-3">
-                  <div className="bg-red-100 p-2 rounded-full text-red-600 mt-1">
-                      <i className="fas fa-exclamation-triangle"></i>
-                  </div>
-                  <div>
-                      <h3 className="font-bold text-red-800">Alerta de Insumos Críticos</h3>
-                      <p className="text-sm text-red-700">
-                          Hay <strong>{stats.lowStockConsumables.length}</strong> insumos con stock bajo o agotado.
-                          <span className="block text-xs mt-1 font-medium bg-red-100/50 p-1 rounded">
-                              {stats.lowStockConsumables.slice(0, 5).map(c => `${c.name} (${c.stock} ${c.unit})`).join(', ')}
-                              {stats.lowStockConsumables.length > 5 && '...'}
-                          </span>
-                      </p>
-                  </div>
-              </div>
-              <Button size="sm" variant="danger" onClick={() => onNavigate && onNavigate('products', { tab: 'consumables' })}>
-                  <i className="fas fa-tools mr-2"></i> Gestionar Insumos
-              </Button>
-          </div>
-      )}
-      
-      {/* BENTO GRID LAYOUT */}
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        
-        {/* 1. Ventas Hoy (Big Card) */}
-        <div className="md:col-span-2 bg-gradient-to-br from-indigo-600 to-blue-600 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden group">
-            <div className="absolute right-0 top-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-10 -mt-10 group-hover:bg-white/20 transition-all"></div>
-            <div className="relative z-10">
-                <p className="text-blue-100 font-medium mb-1">Ventas Totales (Hoy)</p>
-                <h2 className="text-4xl font-black mb-2">L {stats.totalSalesToday.toLocaleString('en-US', { minimumFractionDigits: 2 })}</h2>
-                <div className="flex gap-2 text-xs font-bold bg-white/10 w-fit px-3 py-1 rounded-full">
-                    <i className="fas fa-chart-line"></i> Ingresos Diarios
-                </div>
-            </div>
-        </div>
+    // Chart Data: Last 7 Days Sales Trend
+    const salesData = useMemo(() => {
+        const last7Days = Array.from({ length: 7 }, (_, i) => {
+            const d = new Date();
+            d.setDate(d.getDate() - i);
+            return getLocalDate(d);
+        }).reverse();
 
-        {/* 2. Order Status Summary */}
-        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex flex-col justify-between cursor-pointer hover:border-primary/30 transition-colors" onClick={() => onNavigate && onNavigate('orders')}>
-            <div className="flex items-center justify-between mb-2">
-                <h3 className="font-bold text-gray-700">Pedidos Activos</h3>
-                <div className="w-8 h-8 bg-orange-100 text-orange-600 rounded-lg flex items-center justify-center"><i className="fas fa-tasks"></i></div>
-            </div>
-            <div className="space-y-3">
-                <div className="flex justify-between items-center text-sm">
-                    <span className="flex items-center gap-2 text-gray-600"><span className="w-2 h-2 rounded-full bg-yellow-400"></span>Pendientes</span>
-                    <span className="font-bold">{stats.pendingOrders}</span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                    <span className="flex items-center gap-2 text-gray-600"><span className="w-2 h-2 rounded-full bg-blue-400"></span>En Taller</span>
-                    <span className="font-bold">{stats.inProductionOrders}</span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                    <span className="flex items-center gap-2 text-gray-600"><span className="w-2 h-2 rounded-full bg-green-400"></span>Listos</span>
-                    <span className="font-bold">{stats.readyOrders}</span>
-                </div>
-            </div>
-        </div>
+        return last7Days.map(dateStr => {
+            const daySales = sales.filter(s => getLocalDate(new Date(s.date)) === dateStr && s.status === 'active');
+            const dayName = new Date(dateStr + 'T00:00:00').toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric' });
 
-        {/* 3. Accounts Receivable (Money on the street) */}
-        <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm cursor-pointer hover:border-red-300 transition-colors" onClick={() => onNavigate && onNavigate('credits')}>
-            <div className="flex items-center justify-between mb-4">
-                <h3 className="font-bold text-gray-700">Cuentas x Cobrar</h3>
-                <div className="w-8 h-8 bg-red-100 text-red-600 rounded-lg flex items-center justify-center"><i className="fas fa-hand-holding-usd"></i></div>
-            </div>
-            <div>
-                <p className="text-2xl font-black text-gray-800">L {stats.totalReceivable.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
-                <p className="text-xs text-gray-400 mt-1">Crédito pendiente de clientes</p>
-                <div className="w-full bg-gray-100 h-1.5 rounded-full mt-3 overflow-hidden">
-                    <div className="bg-red-500 h-full rounded-full" style={{ width: '45%' }}></div>
-                </div>
-            </div>
-        </div>
+            const total = daySales.reduce((acc, s) => acc + s.total, 0);
+            const tax = daySales.reduce((acc, s) => acc + (s.taxAmount || 0), 0);
 
-        {/* 4. Chart Section */}
-        <div className="md:col-span-2 lg:col-span-3 bg-white rounded-2xl p-6 border border-gray-100 shadow-sm h-[320px]">
-            <h3 className="font-bold text-gray-800 mb-4">Tendencia de Ventas (7 Días)</h3>
-            <div className="w-full h-[240px]">
-                <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={salesData}>
-                        <defs>
-                            <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.3}/>
-                                <stop offset="95%" stopColor="#4F46E5" stopOpacity={0}/>
-                            </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#9CA3AF'}} dy={10} />
-                        <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#9CA3AF'}} />
-                        <Tooltip content={<CustomTooltip />} />
-                        <Area type="monotone" dataKey="total" stroke="#4F46E5" strokeWidth={3} fillOpacity={1} fill="url(#colorTotal)" />
-                    </AreaChart>
-                </ResponsiveContainer>
-            </div>
-        </div>
+            // Calculate Cost of Goods Sold (COGS) for the day
+            const cost = daySales.reduce((acc, s) => {
+                return acc + s.items.reduce((sumItem, item) => sumItem + ((item.cost || 0) * item.quantity), 0);
+            }, 0);
 
-        {/* 5. Inventory & Activity Column */}
-        <div className="lg:col-span-1 space-y-4">
-            {/* Inventory Status - Clickable for Low Stock */}
-            <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm transition-all hover:border-orange-300 cursor-pointer" onClick={() => onNavigate && onNavigate('products', { filter: 'lowStock' })}>
-                <h3 className="font-bold text-gray-700 mb-3 text-sm uppercase">Salud de Inventario</h3>
-                <div className="flex items-center gap-4 mb-3">
-                    <div className="flex-1">
-                        <p className="text-xs text-gray-500">Valor Total (Costo)</p>
-                        <p className="font-bold text-gray-800">L {stats.inventoryValue.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
-                    </div>
-                    <div className="flex-1 text-right">
-                        <p className="text-xs text-gray-500">Stock Bajo (Productos)</p>
-                        <p className={`font-bold ${stats.lowStock > 0 ? 'text-red-500' : 'text-green-500'}`}>{stats.lowStock} items</p>
-                    </div>
+            // Net Revenue = Total Sales - Tax
+            const netRevenue = total - tax;
+
+            // Gross Profit = Net Revenue - COGS
+            const profit = netRevenue - cost;
+
+            return {
+                name: dayName,
+                total,
+                netRevenue,
+                profit
+            };
+        });
+    }, [sales]);
+
+    // Top Products Data (Grouped by ID for consistency)
+    const topProducts = useMemo(() => {
+        const counts: Record<string, { name: string, qty: number }> = {};
+        sales.filter(s => s.status === 'active' && getLocalDate(new Date(s.date)).startsWith(currentMonthPrefix)).forEach(s => {
+            s.items.forEach(i => {
+                const id = i.id;
+                if (counts[id]) {
+                    counts[id].qty += i.quantity;
+                } else {
+                    // Try to find the current live product name to handle renames
+                    const liveProduct = products.find(p => p.id === id);
+                    counts[id] = { name: liveProduct ? liveProduct.name : i.name, qty: i.quantity };
+                }
+            });
+        });
+        return Object.values(counts).sort((a, b) => b.qty - a.qty).slice(0, 5);
+    }, [sales, currentMonthPrefix, products]);
+
+    // Recent Activity Feed
+    const recentActivity = useMemo(() => {
+        return sales.filter(s => s.status === 'active')
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+            .slice(0, 5);
+    }, [sales]);
+
+    return (
+        <div className="space-y-6 pb-10">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <h1 className="text-2xl font-extrabold text-gray-800 tracking-tight">Panel de Control</h1>
+                    <p className="text-sm text-gray-500">Resumen operativo de hoy, {new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })}.</p>
                 </div>
             </div>
 
-            {/* Recent Activity */}
-            <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex-1">
-                <h3 className="font-bold text-gray-700 mb-3 text-sm uppercase">Actividad Reciente</h3>
-                <div className="space-y-3">
-                    {recentActivity.map((s) => (
-                        <div key={s.id} className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 text-xs">
-                                <i className="fas fa-shopping-bag"></i>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <p className="text-xs font-bold text-gray-800 truncate">{customers.find(c => c.id === s.customerId)?.name || 'Cliente'}</p>
-                                <p className="text-[10px] text-gray-400">{new Date(s.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
-                            </div>
-                            <span className="text-xs font-bold text-green-600">+L{s.total.toFixed(0)}</span>
+            {/* ALERTAS CRÍTICAS DE INSUMOS */}
+            {stats.lowStockConsumables.length > 0 && (
+                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl shadow-sm animate-fade-in flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div className="flex items-start gap-3">
+                        <div className="bg-red-100 p-2 rounded-full text-red-600 mt-1">
+                            <i className="fas fa-exclamation-triangle"></i>
                         </div>
-                    ))}
-                    {recentActivity.length === 0 && <p className="text-xs text-gray-400 text-center py-2">Sin actividad hoy</p>}
-                </div>
-            </div>
-        </div>
-
-        {/* 6. Top Products (Horizontal Bars) */}
-        <div className="md:col-span-3 lg:col-span-4 bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
-            <h3 className="font-bold text-gray-800 mb-4">Top Productos del Mes</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                {topProducts.map((p, idx) => (
-                    <div key={idx} className="bg-gray-50 rounded-xl p-3 flex items-center gap-3">
-                        <div className="font-black text-2xl text-gray-200">#{idx + 1}</div>
                         <div>
-                            <p className="font-bold text-sm text-gray-700 line-clamp-1" title={p.name}>{p.name}</p>
-                            <p className="text-xs text-primary font-bold">{p.qty} vendidos</p>
+                            <h3 className="font-bold text-red-800">Alerta de Insumos Críticos</h3>
+                            <p className="text-sm text-red-700">
+                                Hay <strong>{stats.lowStockConsumables.length}</strong> insumos con stock bajo o agotado.
+                                <span className="block text-xs mt-1 font-medium bg-red-100/50 p-1 rounded">
+                                    {stats.lowStockConsumables.slice(0, 5).map(c => `${c.name} (${c.stock} ${c.unit})`).join(', ')}
+                                    {stats.lowStockConsumables.length > 5 && '...'}
+                                </span>
+                            </p>
                         </div>
                     </div>
-                ))}
-                {topProducts.length === 0 && <p className="text-gray-400 text-sm col-span-full text-center">No hay datos suficientes este mes.</p>}
+                    <Button size="sm" variant="danger" onClick={() => onNavigate && onNavigate('products', { tab: 'consumables' })}>
+                        <i className="fas fa-tools mr-2"></i> Gestionar Insumos
+                    </Button>
+                </div>
+            )}
+
+            {/* BENTO GRID LAYOUT */}
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+
+                {/* 1. Ventas Hoy (Big Card) */}
+                <div className="md:col-span-2 bg-gradient-to-br from-indigo-600 to-blue-600 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden group">
+                    <div className="absolute right-0 top-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-10 -mt-10 group-hover:bg-white/20 transition-all"></div>
+                    <div className="relative z-10">
+                        <p className="text-blue-100 font-medium mb-1">Ventas Totales (Hoy)</p>
+                        <h2 className="text-4xl font-black mb-2">L {stats.totalSalesToday.toLocaleString('en-US', { minimumFractionDigits: 2 })}</h2>
+                        <div className="flex gap-2 text-xs font-bold bg-white/10 w-fit px-3 py-1 rounded-full">
+                            <i className="fas fa-chart-line"></i> Ingresos Diarios
+                        </div>
+                    </div>
+                </div>
+
+                {/* 2. Order Status Summary */}
+                <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex flex-col justify-between cursor-pointer hover:border-primary/30 transition-colors" onClick={() => onNavigate && onNavigate('orders')}>
+                    <div className="flex items-center justify-between mb-2">
+                        <h3 className="font-bold text-gray-700">Pedidos Activos</h3>
+                        <div className="w-8 h-8 bg-orange-100 text-orange-600 rounded-lg flex items-center justify-center"><i className="fas fa-tasks"></i></div>
+                    </div>
+                    <div className="space-y-3">
+                        <div className="flex justify-between items-center text-sm">
+                            <span className="flex items-center gap-2 text-gray-600"><span className="w-2 h-2 rounded-full bg-yellow-400"></span>Pendientes</span>
+                            <span className="font-bold">{stats.pendingOrders}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-sm">
+                            <span className="flex items-center gap-2 text-gray-600"><span className="w-2 h-2 rounded-full bg-blue-400"></span>En Taller</span>
+                            <span className="font-bold">{stats.inProductionOrders}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-sm">
+                            <span className="flex items-center gap-2 text-gray-600"><span className="w-2 h-2 rounded-full bg-green-400"></span>Listos</span>
+                            <span className="font-bold">{stats.readyOrders}</span>
+                        </div>
+                    </div>
+                </div>
+
+                {/* 3. Accounts Receivable (Money on the street) */}
+                <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm cursor-pointer hover:border-red-300 transition-colors" onClick={() => onNavigate && onNavigate('credits')}>
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="font-bold text-gray-700">Cuentas x Cobrar</h3>
+                        <div className="w-8 h-8 bg-red-100 text-red-600 rounded-lg flex items-center justify-center"><i className="fas fa-hand-holding-usd"></i></div>
+                    </div>
+                    <div>
+                        <p className="text-2xl font-black text-gray-800">L {stats.totalReceivable.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
+                        <p className="text-xs text-gray-400 mt-1">Crédito pendiente de clientes</p>
+                        <div className="w-full bg-gray-100 h-1.5 rounded-full mt-3 overflow-hidden">
+                            <div className="bg-red-500 h-full rounded-full" style={{ width: '45%' }}></div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* 4. Chart Section */}
+                <div className="md:col-span-2 lg:col-span-3 bg-white rounded-2xl p-6 border border-gray-100 shadow-sm h-[320px]">
+                    <h3 className="font-bold text-gray-800 mb-4">Tendencia de Ventas (7 Días)</h3>
+                    <div className="w-full h-[240px]" style={{ height: 240, minHeight: 240 }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={salesData}>
+                                <defs>
+                                    <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.3} />
+                                        <stop offset="95%" stopColor="#4F46E5" stopOpacity={0} />
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#9CA3AF' }} dy={10} />
+                                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#9CA3AF' }} />
+                                <Tooltip content={<CustomTooltip />} />
+                                <Area type="monotone" dataKey="total" stroke="#4F46E5" strokeWidth={3} fillOpacity={1} fill="url(#colorTotal)" />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+
+                {/* 5. Inventory & Activity Column */}
+                <div className="lg:col-span-1 space-y-4">
+                    {/* Inventory Status - Clickable for Low Stock */}
+                    <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm transition-all hover:border-orange-300 cursor-pointer" onClick={() => onNavigate && onNavigate('products', { filter: 'lowStock' })}>
+                        <h3 className="font-bold text-gray-700 mb-3 text-sm uppercase">Salud de Inventario</h3>
+                        <div className="flex items-center gap-4 mb-3">
+                            <div className="flex-1">
+                                <p className="text-xs text-gray-500">Valor Total (Costo)</p>
+                                <p className="font-bold text-gray-800">L {stats.inventoryValue.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
+                            </div>
+                            <div className="flex-1 text-right">
+                                <p className="text-xs text-gray-500">Stock Bajo (Productos)</p>
+                                <p className={`font-bold ${stats.lowStock > 0 ? 'text-red-500' : 'text-green-500'}`}>{stats.lowStock} items</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Recent Activity */}
+                    <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex-1">
+                        <h3 className="font-bold text-gray-700 mb-3 text-sm uppercase">Actividad Reciente</h3>
+                        <div className="space-y-3">
+                            {recentActivity.map((s) => (
+                                <div key={s.id} className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 text-xs">
+                                        <i className="fas fa-shopping-bag"></i>
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-xs font-bold text-gray-800 truncate">{customers.find(c => c.id === s.customerId)?.name || 'Cliente'}</p>
+                                        <p className="text-[10px] text-gray-400">{new Date(s.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                                    </div>
+                                    <span className="text-xs font-bold text-green-600">+L{s.total.toFixed(0)}</span>
+                                </div>
+                            ))}
+                            {recentActivity.length === 0 && <p className="text-xs text-gray-400 text-center py-2">Sin actividad hoy</p>}
+                        </div>
+                    </div>
+                </div>
+
+                {/* 6. Top Products (Horizontal Bars) */}
+                <div className="md:col-span-3 lg:col-span-4 bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
+                    <h3 className="font-bold text-gray-800 mb-4">Top Productos del Mes</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                        {topProducts.map((p, idx) => (
+                            <div key={idx} className="bg-gray-50 rounded-xl p-3 flex items-center gap-3">
+                                <div className="font-black text-2xl text-gray-200">#{idx + 1}</div>
+                                <div>
+                                    <p className="font-bold text-sm text-gray-700 line-clamp-1" title={p.name}>{p.name}</p>
+                                    <p className="text-xs text-primary font-bold">{p.qty} vendidos</p>
+                                </div>
+                            </div>
+                        ))}
+                        {topProducts.length === 0 && <p className="text-gray-400 text-sm col-span-full text-center">No hay datos suficientes este mes.</p>}
+                    </div>
+                </div>
+
             </div>
         </div>
-
-      </div>
-    </div>
-  );
+    );
 };
