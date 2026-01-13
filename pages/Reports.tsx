@@ -55,7 +55,14 @@ export const Reports: React.FC<ReportsProps> = ({ sales: allSales, products: all
         });
 
         const netRevenue = totalSales - totalTax;
-        const totalProfit = netRevenue - totalCost;
+        let totalProfit = netRevenue - totalCost;
+
+        // Fix: If there are no sales, utility should be 0 (requested by user)
+        // This prevents showing negative values from test data or orphaned costs in a clean state
+        if (totalSales === 0) {
+            totalProfit = 0;
+        }
+
         const ticketAverage = filteredSales.length > 0 ? totalSales / filteredSales.length : 0;
 
         return { totalSales, totalProfit, ticketAverage, count: filteredSales.length, totalCost };

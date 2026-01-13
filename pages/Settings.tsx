@@ -31,6 +31,7 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
   const [showClearDataConfirm, setShowClearDataConfirm] = useState(false);
   const [purgeYears, setPurgeYears] = useState(1);
   const [showPurgeConfirm, setShowPurgeConfirm] = useState(false);
+  const [showFullResetConfirm, setShowFullResetConfirm] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -600,12 +601,20 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
               <Button type="button" variant="outline" onClick={() => setShowPurgeConfirm(true)}>Ejecutar Purga</Button>
             </div>
 
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between border-b border-red-100 pb-4">
               <div>
                 <h3 className="font-bold text-red-700">Borrar Datos de Prueba</h3>
-                <p className="text-xs text-red-600 font-medium">Elimina VENTAS, GASTOS, COTIZACIONES y MOVIMIENTOS. No elimina productos ni clientes.</p>
+                <p className="text-xs text-red-600 font-medium">Elimina VENTAS, GASTOS, COTIZACIONES y MOVIMIENTOS. Mantiene productos y clientes.</p>
               </div>
-              <Button type="button" variant="danger" onClick={() => setShowClearDataConfirm(true)}>⚠️ Eliminar Todo el Historial</Button>
+              <Button type="button" variant="warning" onClick={() => setShowClearDataConfirm(true)}>Limpiar Historial</Button>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-red-700">RESETEO TOTAL (PRODUCCIÓN)</h3>
+                <p className="text-xs text-red-600 font-bold">BORRA TODO: Productos, Clientes, Ventas, Gastos y Configuraciones de Inventario.</p>
+              </div>
+              <Button type="button" variant="danger" onClick={() => setShowFullResetConfirm(true)}>⚠️ BORRADO TOTAL</Button>
             </div>
           </div>
         </Card>
@@ -714,17 +723,33 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
       <ConfirmDialog
         isOpen={showClearDataConfirm}
         title="¿BORRAR TODO EL HISTORIAL?"
-        message="Esta acción es IRREVERSIBLE. Se eliminarán todas las ventas, reportes, cierres y movimientos de inventario. Úselo solo para limpiar datos de prueba antes de iniciar operaciones reales."
-        confirmText="SÍ, BORRAR TODO"
+        message="Esta acción es IRREVERSIBLE. Se eliminarán todas las ventas, reportes, cierres y movimientos de inventario. Mantiene productos y clientes."
+        confirmText="SÍ, BORRAR HISTORIAL"
         cancelText="Cancelar"
-        variant="danger"
+        variant="warning"
         onConfirm={async () => {
           setShowClearDataConfirm(false);
           await db.clearTransactionalData();
-          showToast('Datos transaccionales eliminados correctamente.', 'success');
+          showToast('Historial transaccional eliminado correctamente.', 'success');
           setTimeout(() => window.location.reload(), 1500);
         }}
         onCancel={() => setShowClearDataConfirm(false)}
+      />
+
+      <ConfirmDialog
+        isOpen={showFullResetConfirm}
+        title="¿RESETEO TOTAL DEL SISTEMA?"
+        message="Esta acción ELIMINARÁ ABSOLUTAMENTE TODO (Productos, Clientes, Inventario, Ventas, etc.). El sistema quedará vacío y listo para iniciar producción desde cero. ¡ESTA ACCIÓN ES IRREVERSIBLE!"
+        confirmText="SÍ, RESETEAR TODO"
+        cancelText="Cancelar"
+        variant="danger"
+        onConfirm={async () => {
+          setShowFullResetConfirm(false);
+          await db.fullSystemReset();
+          showToast('Sistema reseteado exitosamente para producción.', 'success');
+          setTimeout(() => window.location.reload(), 1500);
+        }}
+        onCancel={() => setShowFullResetConfirm(false)}
       />
     </div>
   );

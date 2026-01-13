@@ -1406,6 +1406,34 @@ class StorageService {
       history: oldHistory.length
     };
   }
+
+  async fullSystemReset(): Promise<void> {
+    const tables = [
+      db_engine.sales,
+      db_engine.products,
+      db_engine.categories,
+      db_engine.customers,
+      db_engine.expenses,
+      db_engine.fixedExpenses,
+      db_engine.credits,
+      db_engine.creditNotes,
+      db_engine.cashCuts,
+      db_engine.quotes,
+      db_engine.inventoryHistory,
+      db_engine.priceHistory,
+      db_engine.promotions,
+      db_engine.suppliers,
+      db_engine.consumables
+    ];
+
+    for (const table of tables) {
+      if (table) await table.clear();
+    }
+
+    // Reset some settings to default if necessary, but keep CAI/Branch info?
+    // User asked to clean products/customers/sales/orders.
+    // We keep settings and users to avoid lockout.
+  }
 }
 
 export const db = new StorageService();
