@@ -151,6 +151,14 @@ export class SupabaseService {
             settings: pulledData.settings?.find((s: any) => s.id === 'main')
         };
 
+        // Debug: Log what settings we got from cloud
+        console.log("☁️ [pullAll] Settings from cloud:", {
+            hasSettings: !!dexieData.settings,
+            hasLogo: !!dexieData.settings?.logo,
+            logoLength: dexieData.settings?.logo?.length || 0,
+            settingsKeys: dexieData.settings ? Object.keys(dexieData.settings) : []
+        });
+
         const hasAnyData = dexieData.products.length > 0 ||
             dexieData.sales.length > 0 ||
             dexieData.customers.length > 0 ||

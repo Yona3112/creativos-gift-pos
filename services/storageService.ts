@@ -861,14 +861,28 @@ class StorageService {
     // Settings: merge instead of replace, keeping local values for critical counters
     // But use remote values for non-counter fields like logo, theme, etc.
     if (data.settings) {
+      console.log("🔄 [restoreData] Remote settings received:", {
+        hasLogo: !!data.settings.logo,
+        logoLength: data.settings.logo?.length || 0,
+        name: data.settings.name,
+        themeColor: data.settings.themeColor
+      });
+
       const localSettings = await db_engine.settings.get('main');
+      console.log("🔄 [restoreData] Local settings:", {
+        hasLogo: !!localSettings?.logo,
+        logoLength: localSettings?.logo?.length || 0
+      });
+
       if (localSettings) {
-        // Merge: remote data as base, then overlay local counters (keep highest)
-        // Use remote logo/theme if local doesn't have one, or if remote is newer
+        // Merge: use remote data for visual settings (logo, theme, name)
+        // but keep local counters at highest value
         const merged = {
           ...localSettings,           // Start with local as base
           ...data.settings,           // Overlay all remote settings (including logo, theme, etc.)
           id: 'main',                 // Ensure ID is always 'main'
+          // Explicitly ensure logo comes from remote if it exists
+          logo: data.settings.logo || localSettings.logo || '',
           // Keep highest counter values to prevent duplicate folios
           currentInvoiceNumber: Math.max(localSettings.currentInvoiceNumber || 1, data.settings.currentInvoiceNumber || 1),
           currentTicketNumber: Math.max(localSettings.currentTicketNumber || 1, data.settings.currentTicketNumber || 1),
@@ -878,6 +892,12 @@ class StorageService {
           supabaseUrl: localSettings.supabaseUrl || data.settings.supabaseUrl,
           supabaseKey: localSettings.supabaseKey || data.settings.supabaseKey,
         };
+
+        console.log("🔄 [restoreData] Merged settings:", {
+          hasLogo: !!merged.logo,
+          logoLength: merged.logo?.length || 0
+        });
+
         await db_engine.settings.put(merged);
       } else {
         await db_engine.settings.put({ ...data.settings, id: 'main' });
