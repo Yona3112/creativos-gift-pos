@@ -166,7 +166,9 @@ class StorageService {
       showLogoOnBarcode: false,
       barcodeLogoSize: 10,
       legalOwnerName: '',
-      legalCity: 'Tegucigalpa'
+      legalCity: 'Tegucigalpa',
+      themeColor: '#e62e8a',
+      logo: 'https://i.imgur.com/K6mXQ0j.png' // New brand logo
     };
     return saved ? { ...defaults, ...saved } : defaults;
   }

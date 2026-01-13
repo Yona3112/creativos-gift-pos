@@ -134,28 +134,31 @@ export const Layout: React.FC<LayoutProps> = ({
       {sidebarOpen && <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-40 lg:hidden" onClick={() => setSidebarOpen(false)} />}
 
       <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 transition-transform duration-300 transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 flex flex-col shrink-0 font-sans`}>
-        <div className="h-24 flex flex-col items-center justify-center px-6 border-b border-gray-100 mb-2 shrink-0">
+        <div className="h-28 flex flex-col items-center justify-center px-6 border-b border-gray-100 mb-2 shrink-0 bg-gradient-to-b from-primary/5 to-transparent">
           <div className="flex items-center gap-3 w-full">
             <button
               onClick={() => setShowLogoModal(true)}
-              className="w-12 h-12 rounded-full bg-gradient-to-tr from-primary to-accent flex items-center justify-center text-white shadow-lg shrink-0 p-0.5 hover:scale-105 transition-transform cursor-zoom-in group relative"
+              className="w-14 h-14 rounded-2xl bg-white flex items-center justify-center shadow-xl shadow-primary/10 shrink-0 p-1.5 hover:scale-105 transition-all cursor-zoom-in group relative border border-gray-50"
             >
               {settings?.logo ? (
-                <img src={settings.logo} className={`w-full h-full object-${settings.logoObjectFit || 'cover'} rounded-full bg-white group-hover:brightness-90 transition-all`} alt="Logo" />
+                <img src={settings.logo} className="w-full h-full object-contain transition-all" alt="Logo" />
               ) : (
-                <i className="fas fa-store text-xl"></i>
+                <i className="fas fa-store text-xl text-primary"></i>
               )}
-              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-primary/20 rounded-2xl">
                 <i className="fas fa-search-plus text-white drop-shadow-md"></i>
               </div>
             </button>
             <div className="flex flex-col overflow-hidden">
-              <span className="text-lg font-black text-gray-900 leading-tight tracking-tight uppercase break-words line-clamp-2">
+              <span className="text-base font-black text-gray-900 leading-tight tracking-tight uppercase break-words line-clamp-2">
                 {settings?.name || 'Creativos Gift'}
               </span>
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                Punto de Venta
-              </span>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                  Punto de Venta
+                </span>
+              </div>
             </div>
           </div>
         </div>

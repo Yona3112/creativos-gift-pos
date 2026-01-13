@@ -149,6 +149,14 @@ function App() {
     };
   }, []);
 
+  // Dynamic Favicon Update
+  useEffect(() => {
+    if (settings?.logo) {
+      const link: any = document.getElementById('favicon');
+      if (link) link.href = settings.logo;
+    }
+  }, [settings?.logo]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError('');
@@ -202,24 +210,66 @@ function App() {
             }
           `}
         </style>
-        <Card className="w-full max-w-md animate-pop-in">
-          <div className="text-center mb-8">
-            <div className="w-20 h-20 bg-primary rounded-2xl flex items-center justify-center text-white text-4xl mx-auto mb-4 shadow-xl shadow-primary/30 overflow-hidden">
+        <Card className="w-full max-w-md animate-pop-in bg-white/80 backdrop-blur-xl border-none shadow-2xl relative overflow-hidden group">
+          {/* Decorative brand background element */}
+          <div className="absolute -top-24 -right-24 w-48 h-48 bg-primary/10 rounded-full blur-3xl group-hover:bg-primary/20 transition-all duration-700"></div>
+          <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-accent/10 rounded-full blur-3xl group-hover:bg-accent/20 transition-all duration-700"></div>
+
+          <div className="text-center mb-8 relative z-10">
+            <div className="w-24 h-24 bg-white rounded-3xl flex items-center justify-center p-3 mx-auto mb-6 shadow-2xl shadow-primary/20 scale-100 hover:scale-110 transition-transform duration-500 border border-gray-50">
               {settings?.logo ? (
                 <img src={settings.logo} alt="Logo" className="w-full h-full object-contain" />
               ) : (
-                <i className="fas fa-store"></i>
+                <i className="fas fa-store text-4xl text-primary"></i>
               )}
             </div>
-            <h1 className="text-2xl font-black text-gray-800">{settings?.name || 'Creativos Gift'}</h1>
-            <p className="text-gray-500 font-medium">Control de Inventario y Ventas</p>
+            <h1 className="text-3xl font-black text-gray-900 tracking-tight leading-none mb-2">
+              {settings?.name || 'Creativos Gift'}
+            </h1>
+            <div className="flex items-center justify-center gap-2 mb-2">
+              <span className="h-1 w-8 bg-primary rounded-full"></span>
+              <p className="text-gray-500 font-bold uppercase tracking-[0.2em] text-[10px]">Punto de Venta</p>
+              <span className="h-1 w-8 bg-primary rounded-full"></span>
+            </div>
+            <p className="text-gray-400 text-xs font-semibold">Bienvenido al control profesional de tu negocio</p>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-4">
-            <Input label="Correo Electrónico" type="email" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} required icon="envelope" />
-            <Input label="Contraseña" type="password" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} required icon="lock" />
-            {loginError && <p className="text-red-500 text-sm font-bold animate-shake">{loginError}</p>}
-            <Button type="submit" className="w-full py-4 text-lg">Iniciar Sesión</Button>
+          <form onSubmit={handleLogin} className="space-y-5 relative z-10">
+            <div className="space-y-4">
+              <Input
+                label="Usuario"
+                type="email"
+                value={loginEmail}
+                onChange={e => setLoginEmail(e.target.value)}
+                required
+                icon="user"
+                className="bg-gray-50/50 border-gray-200/50 focus:bg-white"
+              />
+              <Input
+                label="Contraseña"
+                type="password"
+                value={loginPassword}
+                onChange={e => setLoginPassword(e.target.value)}
+                required
+                icon="lock"
+                className="bg-gray-50/50 border-gray-200/50 focus:bg-white"
+              />
+            </div>
+
+            {loginError && (
+              <div className="bg-red-50 border border-red-100 text-red-600 px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 animate-shake">
+                <i className="fas fa-exclamation-circle"></i>
+                {loginError}
+              </div>
+            )}
+
+            <Button type="submit" className="w-full py-4 text-sm font-black shadow-xl shadow-primary/30 active:scale-95 transition-all">
+              ENTRAR AL PANEL
+            </Button>
+
+            <p className="text-center text-[10px] text-gray-400 font-medium">
+              &copy; {new Date().getFullYear()} Creativos Gift Shop • Versión 2.0
+            </p>
           </form>
         </Card>
       </div>
