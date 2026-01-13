@@ -31,7 +31,7 @@ class AppDatabase extends Dexie {
 
   constructor() {
     super('CreativosGiftDB');
-    (this as any).version(1).stores({
+    (this as any).version(2).stores({
       products: 'id, code, name, categoryId, active',
       categories: 'id, name',
       customers: 'id, name, phone, rtn, active',

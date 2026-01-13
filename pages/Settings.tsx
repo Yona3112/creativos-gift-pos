@@ -33,6 +33,11 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
   const [showPurgeConfirm, setShowPurgeConfirm] = useState(false);
   const [showFullResetConfirm, setShowFullResetConfirm] = useState(false);
 
+  // Password protection for danger zone
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [pendingAction, setPendingAction] = useState<'clear' | 'reset' | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const INVOICE_FORMAT_REGEX = /^\d{3}-\d{3}-\d{2}-\d{8}$/;
@@ -606,7 +611,16 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
                 <h3 className="font-bold text-red-700">Borrar Datos de Prueba</h3>
                 <p className="text-xs text-red-600 font-medium">Elimina VENTAS, GASTOS, COTIZACIONES y MOVIMIENTOS. Mantiene productos y clientes.</p>
               </div>
-              <Button type="button" variant="warning" onClick={() => setShowClearDataConfirm(true)}>Limpiar Historial</Button>
+              <Button
+                type="button"
+                variant="warning"
+                onClick={() => {
+                  setPendingAction('clear');
+                  setShowPasswordModal(true);
+                }}
+              >
+                Limpiar Historial
+              </Button>
             </div>
 
             <div className="flex items-center justify-between">
@@ -614,7 +628,16 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
                 <h3 className="font-bold text-red-700">RESETEO TOTAL (PRODUCCIÓN)</h3>
                 <p className="text-xs text-red-600 font-bold">BORRA TODO: Productos, Clientes, Ventas, Gastos y Configuraciones de Inventario.</p>
               </div>
-              <Button type="button" variant="danger" onClick={() => setShowFullResetConfirm(true)}>⚠️ BORRADO TOTAL</Button>
+              <Button
+                type="button"
+                variant="danger"
+                onClick={() => {
+                  setPendingAction('reset');
+                  setShowPasswordModal(true);
+                }}
+              >
+                ⚠️ BORRADO TOTAL
+              </Button>
             </div>
           </div>
         </Card>
@@ -645,6 +668,61 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
           <div className="pt-4 flex justify-end gap-2">
             <Button variant="secondary" onClick={() => setIsUserModalOpen(false)}>Cancelar</Button>
             <Button onClick={handleSaveUser}>Guardar Usuario</Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Admin Password Modal */}
+      <Modal
+        isOpen={showPasswordModal}
+        onClose={() => {
+          setShowPasswordModal(false);
+          setPasswordInput('');
+          setPendingAction(null);
+        }}
+        title="Confirmación de Seguridad"
+      >
+        <div className="space-y-4">
+          <Alert variant="warning">
+            <i className="fas fa-lock mr-2"></i>
+            Esta acción es destructiva. Ingrese la <strong>Contraseña Maestra</strong> para continuar.
+          </Alert>
+          <Input
+            label="Contraseña de Administrador"
+            type="password"
+            value={passwordInput}
+            onChange={e => setPasswordInput(e.target.value)}
+            placeholder="Ingrese la contraseña"
+            autoFocus
+          />
+          <div className="pt-4 flex justify-end gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setShowPasswordModal(false);
+                setPasswordInput('');
+                setPendingAction(null);
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => {
+                const masterPass = settings.masterPassword || 'admin123';
+                if (passwordInput === masterPass) {
+                  setShowPasswordModal(false);
+                  setPasswordInput('');
+                  if (pendingAction === 'clear') setShowClearDataConfirm(true);
+                  if (pendingAction === 'reset') setShowFullResetConfirm(true);
+                  setPendingAction(null);
+                } else {
+                  showToast("Contraseña incorrecta", "error");
+                }
+              }}
+            >
+              Verificar
+            </Button>
           </div>
         </div>
       </Modal>
