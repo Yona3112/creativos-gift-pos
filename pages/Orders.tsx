@@ -30,7 +30,11 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
     // Admin Password Modal State
     const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
     const [adminPassword, setAdminPassword] = useState('');
-    const [pendingRollback, setPendingRollback] = useState<{ order: Sale, newStatus: FulfillmentStatus } | null>(null);
+    const [pendingRollback, setPendingRollback] = useState<{
+        order: Sale,
+        newStatus: FulfillmentStatus,
+        details?: ShippingDetails
+    } | null>(null);
 
     // Payment Modal State
     const [isPayModalOpen, setIsPayModalOpen] = useState(false);
@@ -82,7 +86,7 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
         if (!pendingRollback || !settings) return;
 
         if (adminPassword === settings.masterPassword) {
-            await db.updateSaleStatus(pendingRollback.order.id, pendingRollback.newStatus);
+            await db.updateSaleStatus(pendingRollback.order.id, pendingRollback.newStatus, pendingRollback.details);
             setIsAdminModalOpen(false);
             setPendingRollback(null);
             setAdminPassword('');
@@ -109,13 +113,27 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
         if (!selectedOrder) return;
 
         const isShipping = !!(editForm.shippingCompany || editForm.tracking);
-
-        await db.updateSaleStatus(selectedOrder.id, editForm.status, {
+        const details: ShippingDetails = {
             company: editForm.shippingCompany,
             trackingNumber: editForm.tracking,
             notes: editForm.notes,
             method: isShipping ? 'shipping' : (selectedOrder.shippingDetails?.method || 'pickup')
-        });
+        };
+
+        // Check for rollback (from delivered or any previous state)
+        const workflow: FulfillmentStatus[] = ['pending', 'production', 'ready', 'shipped', 'delivered'];
+        const oldIndex = workflow.indexOf(selectedOrder.fulfillmentStatus || 'pending');
+        const newIndex = workflow.indexOf(editForm.status);
+
+        if (newIndex < oldIndex) {
+            setPendingRollback({ order: selectedOrder, newStatus: editForm.status, details });
+            setAdminPassword('');
+            setIsAdminModalOpen(true);
+            setIsEditModalOpen(false);
+            return;
+        }
+
+        await db.updateSaleStatus(selectedOrder.id, editForm.status, details);
 
         setIsEditModalOpen(false);
         refresh();
@@ -237,54 +255,53 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                         {columns.map(col => {
                             const colOrders = filteredOrders.filter(o => (o.fulfillmentStatus || 'pending') === col.id);
                             return (
-                                <div key={col.id} className="flex-1 flex flex-col min-w-[280px] h-full">
-                                    <div className={`p-3 rounded-t-xl border-t-4 ${col.color} flex justify-between items-center shadow-sm mb-2 shrink-0`}>
+                                <div key={col.id} className="flex-1 flex flex-col min-w-[260px] h-full">
+                                    <div className={`p-2 rounded-t-lg border-t-2 ${col.color} flex justify-between items-center shadow-sm mb-1.5 shrink-0`}>
                                         <div className="font-bold text-gray-700 flex items-center gap-2">
                                             <i className={`fas fa-${col.icon}`}></i> {col.label}
                                         </div>
                                         <span className="bg-white/50 px-2 py-0.5 rounded text-xs font-black">{colOrders.length}</span>
                                     </div>
-                                    <div className="flex-1 overflow-y-auto space-y-3 p-1 pb-10 scrollbar-thin">
+                                    <div className="flex-1 overflow-y-auto space-y-2 p-1 pb-10 scrollbar-thin">
                                         {colOrders.map(order => (
-                                            <div key={order.id} className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all group relative">
-                                                <div className="flex justify-between items-start mb-2">
-                                                    <span className="font-mono text-xs font-bold text-gray-500 bg-gray-100 px-1.5 rounded">{order.folio}</span>
+                                            <div key={order.id} className="bg-white p-2.5 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-all group relative">
+                                                <div className="flex justify-between items-start mb-1.5">
+                                                    <span className="font-mono text-[10px] font-bold text-gray-500 bg-gray-100 px-1 rounded">{order.folio}</span>
                                                     <span className="text-[10px] font-bold text-gray-400 flex items-center gap-1">
                                                         <i className="far fa-clock"></i> {timeAgo(order.date)}
                                                     </span>
                                                 </div>
-                                                <h4 className="font-bold text-gray-800 text-sm mb-1">{getCustomerName(order.customerId)}</h4>
-                                                <p className="text-xs text-gray-500 line-clamp-2 mb-3 bg-gray-50 p-1.5 rounded">
+                                                <h4 className="font-bold text-gray-800 text-[13px] mb-0.5 leading-tight">{getCustomerName(order.customerId)}</h4>
+                                                <p className="text-[11px] text-gray-500 line-clamp-2 mb-2 bg-gray-50 p-1.5 rounded-md">
                                                     {order.items.map(i => `${i.quantity} ${i.name}`).join(', ')}
                                                 </p>
                                                 {order.balance && order.balance > 0 ? (
-                                                    <div className="mb-2 text-[10px] font-bold text-red-500 bg-red-50 px-2 py-1 rounded border border-red-100 flex justify-between">
-                                                        <span>Pendiente:</span>
+                                                    <div className="mb-2 text-[10px] font-bold text-red-500 bg-red-50/50 px-1.5 py-0.5 rounded border border-red-100 flex justify-between">
+                                                        <span>Debe:</span>
                                                         <span>L {order.balance.toFixed(2)}</span>
                                                     </div>
                                                 ) : null}
 
-                                                {order.shippingDetails?.notes && (
-                                                    <div className="mb-3 text-[10px] bg-yellow-50 text-yellow-800 p-1.5 rounded border border-yellow-100 flex gap-1">
-                                                        <i className="fas fa-sticky-note mt-0.5"></i>
-                                                        <span className="line-clamp-2">{order.shippingDetails.notes}</span>
+                                                {order.shippingDetails?.notes ? (
+                                                    <div className="mb-2 text-[10px] bg-amber-50 text-amber-800 p-1 rounded border border-amber-100 flex gap-1">
+                                                        <i className="fas fa-sticky-note mt-0.5 scale-90"></i>
+                                                        <span className="line-clamp-2 leading-tight">{order.shippingDetails.notes}</span>
                                                     </div>
-                                                )}
+                                                ) : null}
 
-                                                <div className="flex items-center justify-between border-t pt-2 gap-2">
+                                                <div className="flex items-center justify-between border-t pt-1.5 mt-auto gap-2">
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); handleQuickStatusUpdate(order, 'prev'); }}
                                                         disabled={col.id === 'pending'}
-                                                        className="w-7 h-7 rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 disabled:opacity-30 flex items-center justify-center transition-colors"
+                                                        className="w-6 h-6 rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 disabled:opacity-30 flex items-center justify-center transition-colors shadow-sm"
                                                     >
-                                                        <i className="fas fa-chevron-left text-xs"></i>
+                                                        <i className="fas fa-chevron-left text-[10px]"></i>
                                                     </button>
-
                                                     <button
                                                         onClick={() => openEditModal(order)}
-                                                        className="flex-1 text-xs font-bold text-primary hover:bg-indigo-50 py-1.5 rounded transition-colors"
+                                                        className="flex-1 text-[11px] font-bold text-primary hover:bg-indigo-50 py-1 rounded transition-colors"
                                                     >
-                                                        Ver / Editar
+                                                        Gestionar
                                                     </button>
 
                                                     <button
@@ -341,6 +358,15 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                                                 checked={order.fulfillmentStatus === 'delivered'}
                                                 onChange={async () => {
                                                     const newStatus = order.fulfillmentStatus === 'delivered' ? 'shipped' : 'delivered';
+
+                                                    if (order.fulfillmentStatus === 'delivered') {
+                                                        // Require password to un-check delivered
+                                                        setPendingRollback({ order, newStatus });
+                                                        setAdminPassword('');
+                                                        setIsAdminModalOpen(true);
+                                                        return;
+                                                    }
+
                                                     await db.updateSaleStatus(order.id, newStatus);
                                                     refresh();
                                                     if (onUpdate) onUpdate();

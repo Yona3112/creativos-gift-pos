@@ -62,6 +62,15 @@ export interface Expense {
   userId: string;
 }
 
+export interface FixedExpense {
+  id: string;
+  description: string;
+  amount: number;
+  categoryId: Expense['categoryId'];
+  paymentMethod: Expense['paymentMethod'];
+  active: boolean;
+}
+
 // --- NUEVO: KARDEX (HISTORIAL INVENTARIO) ---
 export type MovementType = 'SALE' | 'PURCHASE' | 'ADJUSTMENT' | 'RETURN' | 'CANCELLATION';
 

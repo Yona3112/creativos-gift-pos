@@ -70,7 +70,7 @@ export class SupabaseService {
             { name: 'quotes', data: data.quotes },
             { name: 'cash_cuts', data: data.cash_cuts },
             { name: 'credit_notes', data: data.credit_notes },
-            { name: 'expenses', data: data.expenses },
+            { name: 'fixed_expenses', data: data.fixedExpenses },
             { name: 'inventory_history', data: data.inventoryHistory },
             { name: 'price_history', data: data.priceHistory }
         ];
@@ -120,7 +120,7 @@ export class SupabaseService {
             'products', 'categories', 'customers', 'sales', 'users',
             'branches', 'credits', 'promotions', 'suppliers',
             'consumables', 'quotes', 'cash_cuts', 'credit_notes',
-            'expenses', 'inventory_history', 'price_history', 'settings'
+            'expenses', 'inventory_history', 'price_history', 'settings', 'fixed_expenses'
         ];
 
         const pulledData: any = {};
@@ -152,6 +152,7 @@ export class SupabaseService {
             expenses: pulledData.expenses || [],
             inventoryHistory: pulledData.inventory_history || [],
             priceHistory: pulledData.price_history || [],
+            fixedExpenses: pulledData.fixed_expenses || [],
             settings: pulledData.settings?.find((s: any) => s.id === 'main')
         };
 

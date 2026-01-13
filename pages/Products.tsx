@@ -80,9 +80,19 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
         const userStr = localStorage.getItem('creativos_gift_currentUser');
         const user = userStr ? JSON.parse(userStr) : { id: 'admin' };
 
-        await db.saveProduct({ ...formData, id: editingProduct?.id || '' } as Product, user.id);
-        setIsModalOpen(false);
-        onUpdate();
+        try {
+            await db.saveProduct({ ...formData, id: editingProduct?.id || '' } as Product, user.id);
+            setIsModalOpen(false);
+            onUpdate();
+        } catch (error: any) {
+            if (error.message.startsWith('DuplicateCode:')) {
+                const productName = error.message.split(':')[1];
+                alert(`Error: El código "${formData.code}" ya está asignado al producto "${productName}". Por favor use un código único.`);
+            } else {
+                console.error('Error saving product:', error);
+                alert('Ocurrió un error al guardar el producto.');
+            }
+        }
     };
 
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {

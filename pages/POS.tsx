@@ -397,7 +397,15 @@ export const POS: React.FC<POSProps> = ({
                         <div key={p.id} onClick={() => addToCart(p)} className="bg-white p-3 rounded-2xl border border-gray-100 shadow-sm cursor-pointer hover:border-primary transition-all active:scale-95 flex flex-col h-full group">
                             <div className="aspect-square bg-gray-50 rounded-xl mb-2 overflow-hidden relative">
                                 {p.image ? <img src={p.image} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-gray-300"><i className="fas fa-box text-2xl"></i></div>}
-                                <div className={`absolute top-1 right-1 px-1.5 py-0.5 rounded-lg text-[10px] font-black ${p.stock <= p.minStock ? 'bg-red-500 text-white' : 'bg-white/80'}`}>{p.stock}</div>
+                                {(() => {
+                                    const inCart = cart.find(item => item.id === p.id)?.quantity || 0;
+                                    const effectiveStock = p.stock - inCart;
+                                    return (
+                                        <div className={`absolute top-1 right-1 px-1.5 py-0.5 rounded-lg text-[10px] font-black ${effectiveStock <= p.minStock ? 'bg-red-500 text-white' : 'bg-white/80'}`}>
+                                            {effectiveStock}
+                                        </div>
+                                    );
+                                })()}
                             </div>
                             <h3 className="font-bold text-gray-800 text-xs line-clamp-2 mb-1 flex-1">{p.name}</h3>
                             <div className="flex justify-between items-center mt-auto">

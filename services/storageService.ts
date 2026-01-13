@@ -4,7 +4,7 @@ import {
   Product, Category, User, Sale, Customer, CompanySettings,
   Branch, CreditAccount, Promotion, Supplier, Consumable,
   CashCut, Quote, CreditNote, CreditPayment,
-  Expense, InventoryMovement, MovementType, FulfillmentStatus, ShippingDetails, UserRole,
+  Expense, FixedExpense, InventoryMovement, MovementType, FulfillmentStatus, ShippingDetails, UserRole,
   PriceHistoryEntry, PaymentDetails
 } from '../types';
 
@@ -25,6 +25,7 @@ class AppDatabase extends Dexie {
   cashCuts!: Table<CashCut>;
   creditNotes!: Table<CreditNote>;
   expenses!: Table<Expense>;
+  fixedExpenses!: Table<FixedExpense>;
   inventoryHistory!: Table<InventoryMovement>;
   priceHistory!: Table<PriceHistoryEntry>;
 
@@ -46,6 +47,7 @@ class AppDatabase extends Dexie {
       cashCuts: 'id, date',
       creditNotes: 'id, folio, status',
       expenses: 'id, date, categoryId',
+      fixedExpenses: 'id, active',
       inventoryHistory: '++id, productId, date, type',
       priceHistory: '++id, productId, date'
     });
@@ -246,6 +248,17 @@ class StorageService {
   async saveProduct(product: Product, userId: string = 'system') {
     if (!product.id) product.id = Date.now().toString();
     if (product.active === undefined) product.active = true;
+
+    // Check for duplicate codes (excluding the product itself if editing)
+    const duplicate = await db_engine.products
+      .where('code')
+      .equalsIgnoreCase(product.code)
+      .first();
+
+    if (duplicate && duplicate.id !== product.id && duplicate.active) {
+      throw new Error(`DuplicateCode:${duplicate.name}`);
+    }
+
     const existing = await db_engine.products.get(product.id);
 
     // Tracking de Stock
@@ -610,11 +623,27 @@ class StorageService {
     await db_engine.expenses.put(e);
     const settings = await this.getSettings();
     if (settings.autoSync) this.triggerAutoSync();
+    return e.id;
   }
   async deleteExpense(id: string) {
     await db_engine.expenses.delete(id);
     const settings = await this.getSettings();
     if (settings.autoSync) this.triggerAutoSync();
+  }
+
+  // --- GASTOS FIJOS (RECURRENTES) ---
+  async getFixedExpenses(): Promise<FixedExpense[]> {
+    return db_engine.fixedExpenses.toArray();
+  }
+  async saveFixedExpense(fe: FixedExpense): Promise<string> {
+    if (!fe.id) fe.id = Date.now().toString();
+    await db_engine.fixedExpenses.put(fe);
+    this.triggerAutoSync();
+    return fe.id;
+  }
+  async deleteFixedExpense(id: string): Promise<void> {
+    await db_engine.fixedExpenses.delete(id);
+    this.triggerAutoSync();
   }
 
   // --- CREDITS ---
@@ -789,6 +818,7 @@ class StorageService {
       cash_cuts: await db_engine.cashCuts.toArray(),
       credit_notes: await db_engine.creditNotes.toArray(),
       expenses: await db_engine.expenses.toArray(),
+      fixedExpenses: await db_engine.fixedExpenses.toArray(),
       inventoryHistory: await db_engine.inventoryHistory.toArray(),
       priceHistory: await db_engine.priceHistory.toArray(),
       settings: await db_engine.settings.get('main')
@@ -891,6 +921,7 @@ class StorageService {
     if (data.cash_cuts) await mergeTable(db_engine.cashCuts, data.cash_cuts);
     if (data.credit_notes) await mergeTable(db_engine.creditNotes, data.credit_notes);
     if (data.expenses) await mergeTable(db_engine.expenses, data.expenses);
+    if (data.fixedExpenses) await mergeTable(db_engine.fixedExpenses, data.fixedExpenses);
     if (data.inventoryHistory) await mergeTable(db_engine.inventoryHistory, data.inventoryHistory);
     if (data.priceHistory) await mergeTable(db_engine.priceHistory, data.priceHistory);
 
