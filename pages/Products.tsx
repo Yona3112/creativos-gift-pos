@@ -139,44 +139,79 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
 
     const printBarcode = (product: Product) => {
         const storeName = settings?.name || 'Mi Tienda';
-        const win = window.open('', '', 'width=300,height=200');
+        const w = settings?.barcodeWidth || 50;
+        const h = settings?.barcodeHeight || 25;
+        const showLogo = settings?.showLogoOnBarcode || false;
+        const logoSize = settings?.barcodeLogoSize || 10;
+
+        const win = window.open('', '', 'width=400,height=300');
         if (win) {
             win.document.write(`
                 <html>
                 <head>
-                    <title>Print</title>
+                    <title>Imprimir Código - ${product.code}</title>
                     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
                     <style>
-                        @page { size: 50mm 25mm; margin: 0; }
+                        @page { size: ${w}mm ${h}mm; margin: 0; }
                         body { 
-                            width: 50mm; 
-                            height: 25mm; 
+                            width: ${w}mm; 
+                            height: ${h}mm; 
                             margin: 0; 
-                            padding: 2px;
+                            padding: 2mm;
                             display: flex; 
                             flex-direction: column; 
                             align-items: center; 
                             justify-content: center; 
                             font-family: sans-serif;
                             overflow: hidden;
+                            box-sizing: border-box;
                         }
-                        .ticket { width: 100%; text-align: center; }
-                        .store-name { font-size: 7px; font-weight: bold; margin: 0; text-transform: uppercase; letter-spacing: 1px; color: #333; }
-                        h2 { font-size: 9px; margin: 1px 0; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; width: 100%; }
-                        #barcode { width: 90% !important; height: 10mm !important; }
-                        .price { font-size: 10px; font-weight: bold; margin-top: 1px; }
+                        .ticket { 
+                            width: 100%; 
+                            height: 100%;
+                            display: flex;
+                            flex-direction: column;
+                            justify-content: space-between;
+                            align-items: center;
+                            text-align: center; 
+                        }
+                        .header-row {
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            gap: 2mm;
+                            width: 100%;
+                        }
+                        .store-logo {
+                            width: ${logoSize}mm;
+                            height: ${logoSize}mm;
+                            object-fit: contain;
+                        }
+                        .store-info {
+                            display: flex;
+                            flex-direction: column;
+                            align-items: center;
+                        }
+                        .store-name { font-size: 6px; font-weight: bold; margin: 0; text-transform: uppercase; color: #000; }
+                        h2 { font-size: 8px; margin: 1px 0; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; width: 100%; font-weight: bold; color: #000; }
+                        #barcode { width: 100% !important; height: ${h * 0.4}mm !important; }
+                        .price { font-size: 9px; font-weight: bold; margin-top: 1px; color: #000; }
                         
-                        /* Screen Preview Style */
                         @media screen {
                             body { background: #f0f0f0; padding: 20px; width: auto; height: auto; }
-                            .ticket { background: white; width: 50mm; height: 25mm; padding: 2px; margin: 0 auto; display: flex; flex-direction: column; justify-content: center; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+                            .ticket { background: white; width: ${w}mm; height: ${h}mm; padding: 2mm; margin: 0 auto; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
                         }
                     </style>
                 </head>
                 <body>
                     <div class="ticket">
-                        <p class="store-name">${storeName}</p>
-                        <h2>${product.name}</h2>
+                        <div class="header-row">
+                            ${(showLogo && settings?.logo) ? `<img src="${settings.logo}" class="store-logo" />` : ''}
+                            <div class="store-info">
+                                <p class="store-name">${storeName}</p>
+                                <h2>${product.name}</h2>
+                            </div>
+                        </div>
                         <svg id="barcode"></svg>
                         <div class="price">L ${product.price.toFixed(2)}</div>
                     </div>
@@ -184,13 +219,16 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
                         try {
                             JsBarcode("#barcode", "${product.code}", {
                                 format: "CODE128",
-                                width: 1.5,
-                                height: 25,
+                                width: 2,
+                                height: 40,
                                 displayValue: true,
-                                fontSize: 8,
+                                fontSize: 10,
                                 margin: 0
                             });
-                            window.print();
+                            setTimeout(() => {
+                                window.print();
+                                window.close();
+                            }, 500);
                         } catch(e) {
                             document.body.innerHTML = "Error generating barcode: " + e.message;
                         }

@@ -320,6 +320,80 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
           </div>
         </Card>
 
+        <Card title="Información Legal (Contratos/Pagarés)">
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Input
+                label="Nombre del Propietario / Representante"
+                name="legalOwnerName"
+                value={settings.legalOwnerName || ''}
+                onChange={handleChange}
+                placeholder="Persona que firma los contratos"
+              />
+              <Input
+                label="Ciudad para Documentos"
+                name="legalCity"
+                value={settings.legalCity || ''}
+                onChange={handleChange}
+                placeholder="Ej: Tegucigalpa, MDC"
+              />
+            </div>
+            <p className="text-[10px] text-gray-400 font-bold uppercase">Esta información se utilizará para generar los contratos y pagarés de ventas al crédito.</p>
+          </div>
+        </Card>
+
+        <Card title="Configuración de Etiquetas (Códigos de Barra)">
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-500 uppercase">Ancho (mm)</label>
+                <input
+                  type="number"
+                  className="w-full p-2 border rounded-lg"
+                  value={settings.barcodeWidth || 50}
+                  onChange={e => handleNumChange('barcodeWidth', e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-500 uppercase">Alto (mm)</label>
+                <input
+                  type="number"
+                  className="w-full p-2 border rounded-lg"
+                  value={settings.barcodeHeight || 25}
+                  onChange={e => handleNumChange('barcodeHeight', e.target.value)}
+                />
+              </div>
+              <div className="flex items-center gap-2 pt-6">
+                <input
+                  type="checkbox"
+                  id="showLogoOnBarcode"
+                  className="w-4 h-4 text-primary"
+                  checked={settings.showLogoOnBarcode || false}
+                  onChange={e => setSettings(s => s ? ({ ...s, showLogoOnBarcode: e.target.checked }) : null)}
+                />
+                <label htmlFor="showLogoOnBarcode" className="text-sm font-bold text-gray-700">Mostrar Logo</label>
+              </div>
+              {settings.showLogoOnBarcode && (
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-500 uppercase">Tamaño Logo (mm)</label>
+                  <input
+                    type="number"
+                    className="w-full p-2 border rounded-lg"
+                    value={settings.barcodeLogoSize || 10}
+                    onChange={e => handleNumChange('barcodeLogoSize', e.target.value)}
+                  />
+                </div>
+              )}
+            </div>
+            <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex items-center gap-3">
+              <i className="fas fa-info-circle text-blue-500 text-xl"></i>
+              <div className="text-xs text-blue-700">
+                Ajuste el tamaño según su rollo de etiquetas. Si activa el logo, asegúrese de tener uno subido en la sección de "Apariencia".
+              </div>
+            </div>
+          </div>
+        </Card>
+
         <Card title="Respaldo y Almacenamiento">
           <div className="flex flex-col gap-4">
             <div className="bg-gray-50 p-4 rounded-xl">

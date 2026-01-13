@@ -809,6 +809,35 @@ export const POS: React.FC<POSProps> = ({
                             }
                         }}>Imprimir (2 Copias)</Button>
 
+                        {lastSale?.paymentMethod === 'Crédito' && (
+                            <div className="pt-2 border-t mt-2 space-y-2">
+                                <p className="text-[10px] font-bold text-gray-400 uppercase text-left ml-1">Documentación de Crédito</p>
+                                <div className="flex gap-2">
+                                    <Button variant="outline" size="sm" className="flex-1 text-[10px] py-2" icon="file-contract" onClick={async () => {
+                                        if (lastSale && selectedCustomer && settings) {
+                                            const htmlContrato = await db.generateCreditContractHTML(lastSale, selectedCustomer, settings);
+                                            const htmlPagare = await db.generateCreditPagareHTML(lastSale, selectedCustomer, settings);
+                                            const win = window.open('', '', 'width=800,height=600');
+                                            if (win) {
+                                                win.document.write(htmlContrato);
+                                                win.document.write('<div style="page-break-after: always;"></div>');
+                                                win.document.write(htmlPagare);
+                                                win.document.close();
+                                                setTimeout(() => win.print(), 500);
+                                            }
+                                        }
+                                    }}>Contrato y Pagaré</Button>
+                                    <Button variant="outline" size="sm" className="flex-1 text-[10px] py-2" icon="list-ol" onClick={async () => {
+                                        if (lastSale) {
+                                            const html = await db.generatePaymentPlanHTML(lastSale);
+                                            const win = window.open('', '', 'width=600,height=800');
+                                            if (win) { win.document.write(html); win.document.close(); win.print(); }
+                                        }
+                                    }}>Plan de Pago</Button>
+                                </div>
+                            </div>
+                        )}
+
                         <div className="flex gap-2">
                             <Button variant="secondary" className="flex-1" onClick={() => setIsSuccessModalOpen(false)}>Nueva Venta</Button>
                             {lastSale?.documentType === 'FACTURA' && (

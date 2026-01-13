@@ -223,6 +223,12 @@ export interface CompanySettings {
   thanksMessage?: string;
   warrantyPolicy?: string;
   returnPolicy?: string;
+  barcodeWidth?: number;
+  barcodeHeight?: number;
+  showLogoOnBarcode?: boolean;
+  barcodeLogoSize?: number;
+  legalOwnerName?: string;
+  legalCity?: string;
 }
 
 export interface CashCut {

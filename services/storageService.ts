@@ -158,7 +158,13 @@ class StorageService {
       lastBackupDate: null,
       thanksMessage: '¡Gracias por su compra!',
       warrantyPolicy: 'Garantía por defectos de fábrica (30 días).',
-      returnPolicy: 'No se aceptan devoluciones en productos personalizados.'
+      returnPolicy: 'No se aceptan devoluciones en productos personalizados.',
+      barcodeWidth: 50,
+      barcodeHeight: 25,
+      showLogoOnBarcode: false,
+      barcodeLogoSize: 10,
+      legalOwnerName: '',
+      legalCity: 'Tegucigalpa'
     };
     return saved ? { ...defaults, ...saved } : defaults;
   }
@@ -1165,6 +1171,180 @@ class StorageService {
           <p style="font-size: 8px; margin-top: 5px;">"La factura es beneficio de todos, ¡exíjala!"</p>
           <p style="font-size: 8px;">SAR-HONDURAS VIGENTE 2026</p>
         </div>
+      </body>
+      </html>
+    `;
+  }
+
+  async generateCreditContractHTML(sale: Sale, customer: Customer, settings: CompanySettings): Promise<string> {
+    const today = new Date().toLocaleDateString('es-HN', { day: 'numeric', month: 'long', year: 'numeric' });
+    const amount = sale.total - (sale.paymentDetails?.credit || 0);
+    const monthlyPayment = sale.paymentDetails?.credit ? (sale.total - (sale.paymentDetails.credit)) : 0; // Simplified for template
+
+    return `
+      <html>
+      <head>
+          <style>
+              body { font-family: 'Arial', sans-serif; line-height: 1.5; padding: 40px; color: #333; font-size: 12px; }
+              .header { text-align: center; margin-bottom: 30px; }
+              .logo { max-width: 100px; margin-bottom: 10px; }
+              h1 { text-size: 18px; margin-bottom: 5px; }
+              .section { margin-top: 20px; }
+              .bold { font-weight: bold; }
+              .signature-box { margin-top: 60px; display: flex; justify-content: space-between; }
+              .signature { border-top: 1px solid #000; width: 200px; text-align: center; padding-top: 5px; }
+              @page { size: letter; margin: 20mm; }
+          </style>
+      </head>
+      <body>
+          <div class="header">
+              ${settings.logo ? `<img src="${settings.logo}" class="logo" />` : ''}
+              <h1>CONTRATO DE VENTA AL CRÉDITO</h1>
+              <p>${settings.name} / RTN: ${settings.rtn}</p>
+          </div>
+
+          <p>En la ciudad de ${settings.legalCity || '________'}, a los ${today}, entre <strong>${settings.legalOwnerName || settings.name}</strong>, en adelante designado como EL VENDEDOR, y el Sr(a). <strong>${customer.name}</strong>, identificado con Identidad/RTN <strong>${customer.dni || customer.rtn || '________'}</strong>, en adelante designado como EL COMPRADOR, se conviene lo siguiente:</p>
+
+          <div class="section">
+              <p class="bold text-lg">CLÁUSULAS:</p>
+              <p><strong>PRIMERA (Objeto):</strong> EL VENDEDOR vende a EL COMPRADOR los productos detallados en la factura/ticket No. <strong>${sale.folio}</strong> por un valor total de <strong>L ${sale.total.toFixed(2)}</strong>.</p>
+              
+              <p><strong>SEGUNDA (Condiciones de Pago):</strong> EL COMPRADOR se obliga a pagar el monto financiado de <strong>L ${(sale.total - (sale.deposit || 0)).toFixed(2)}</strong> en ${sale.paymentDetails?.credit ? 'cuotas mensuales' : 'el plazo estipulado'} según el plan de pagos adjunto.</p>
+
+              <p><strong>TERCERA (Intereses):</strong> EL COMPRADOR acepta una tasa de interés mensual del <strong>${settings.defaultCreditRate}%</strong> sobre saldos pendientes.</p>
+
+              <p><strong>CUARTA (Incumplimiento):</strong> El atraso en el pago de una o más cuotas dará derecho a EL VENDEDOR a dar por vencido el plazo y exigir el pago total, además de aplicar los recargos por mora correspondientes.</p>
+
+              <p><strong>QUINTA (Dominio):</strong> EL VENDEDOR se reserva el dominio de los artículos vendidos hasta que el pago total de la deuda sea cancelado.</p>
+          </div>
+
+          <div class="signature-box">
+              <div class="signature">
+                  <p class="bold">EL VENDEDOR</p>
+                  <p>${settings.name}</p>
+              </div>
+              <div class="signature">
+                  <p class="bold">EL COMPRADOR</p>
+                  <p>${customer.name}</p>
+              </div>
+          </div>
+          
+          <div style="margin-top: 40px; font-size: 10px; color: #666; text-align: center;">
+              Documento generado el ${new Date().toLocaleString()} por Creativos Gift POS.
+          </div>
+      </body>
+      </html>
+    `;
+  }
+
+  async generateCreditPagareHTML(sale: Sale, customer: Customer, settings: CompanySettings): Promise<string> {
+    const today = new Date().toLocaleDateString('es-HN', { day: 'numeric', month: 'long', year: 'numeric' });
+    const amountFinanced = sale.total - (sale.deposit || 0);
+
+    return `
+      <html>
+      <head>
+          <style>
+              body { font-family: 'Times New Roman', serif; line-height: 1.6; padding: 60px; color: #000; font-size: 14px; }
+              .container { border: 2px solid #000; padding: 40px; position: relative; }
+              h1 { text-align: center; text-decoration: underline; margin-bottom: 30px; font-size: 24px; }
+              .amount-box { position: absolute; top: 20px; right: 20px; font-weight: bold; border: 1px solid #000; padding: 5px 15px; }
+              .text { text-align: justify; }
+              .footer { margin-top: 100px; display: flex; flex-direction: column; align-items: center; }
+              .line { border-top: 1px solid #000; width: 300px; margin-bottom: 5px; }
+              @page { size: letter; margin: 30mm; }
+          </style>
+      </head>
+      <body>
+          <div class="container">
+              <div class="amount-box">POR L ${amountFinanced.toFixed(2)}</div>
+              <h1>PAGARÉ</h1>
+              
+              <div class="text">
+                  <p>Yo, <strong>${customer.name}</strong>, mayor de edad, con número de Identidad/RTN <strong>${customer.dni || customer.rtn || '________'}</strong>, por medio del presente documento, me obligo a pagar de forma incondicional a la orden de <strong>${settings.legalOwnerName || settings.name}</strong>, la suma de <strong>${amountFinanced.toFixed(2)} LEMPIRAS (L ${amountFinanced.toFixed(2)})</strong>.</p>
+
+                  <p>Dicho pago se realizará en la ciudad de ${settings.legalCity || '________'}, según el plan de amortización estipulado en la Factura No. <strong>${sale.folio}</strong>. El incumplimiento de cualquier pago facultará al acreedor a exigir el total de la deuda restante.</p>
+
+                  <p>Acepto que cualquier saldo en mora devengará un interés adicional del <strong>${settings.defaultCreditRate}%</strong> mensual. En caso de acción judicial, renuncio expresamente a mi domicilio y me someto a los tribunales competentes que el acreedor elija.</p>
+              </div>
+
+              <div class="footer">
+                  <p>En fe de lo cual, firmo el presente en ${settings.legalCity || '________'}, a los ${today}.</p>
+                  <div style="margin-top: 60px;">
+                      <div class="line"></div>
+                      <p><strong>HUELLA Y FIRMA DEL DEUDOR</strong></p>
+                      <p>${customer.name}</p>
+                  </div>
+              </div>
+          </div>
+      </body>
+      </html>
+    `;
+  }
+
+  async generatePaymentPlanHTML(sale: Sale): Promise<string> {
+    if (!sale.isOrder && sale.paymentMethod !== 'Crédito') return "Este documento solo aplica para ventas al crédito.";
+
+    // Simple logic to calculate installments if they aren't pre-calculated
+    const installments = [];
+    const principal = sale.total - (sale.deposit || 0);
+    const months = (sale as any).creditData?.term || 1;
+    const monthlyAmt = (sale as any).creditData?.monthlyPayment || (principal / months);
+
+    for (let i = 1; i <= months; i++) {
+      const dueDate = new Date(sale.date);
+      dueDate.setMonth(dueDate.getMonth() + i);
+      installments.push({
+        num: i,
+        date: dueDate.toLocaleDateString(),
+        amount: monthlyAmt
+      });
+    }
+
+    return `
+      <html>
+      <head>
+          <style>
+              body { font-family: sans-serif; padding: 30px; }
+              table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+              th, td { border: 1px solid #ddd; padding: 12px; text-align: center; }
+              th { background-color: #f2f2f2; }
+              .header { text-align: center; margin-bottom: 20px; }
+              .folio { font-weight: bold; color: #4F46E5; }
+              @page { size: portrait; }
+          </style>
+      </head>
+      <body>
+          <div class="header">
+              <h1>Plan de Pagos</h1>
+              <p>Referencia Venta: <span class="folio">${sale.folio}</span></p>
+              <p>Fecha de Venta: ${new Date(sale.date).toLocaleDateString()}</p>
+          </div>
+
+          <table>
+              <thead>
+                  <tr>
+                      <th>Cuota #</th>
+                      <th>Fecha de Vencimiento</th>
+                      <th>Monto a Pagar</th>
+                      <th>Estado</th>
+                  </tr>
+              </thead>
+              <tbody>
+                  ${installments.map(ins => `
+                      <tr>
+                          <td>${ins.num}</td>
+                          <td>${ins.date}</td>
+                          <td>L ${ins.amount.toFixed(2)}</td>
+                          <td>Pendiente</td>
+                      </tr>
+                  `).join('')}
+              </tbody>
+          </table>
+          
+          <div style="margin-top: 30px; border-top: 1px dashed #ccc; padding-top: 10px; font-size: 12px;">
+              <p><strong>Nota:</strong> Los pagos deben realizarse en la fecha estipulada para evitar cargos por mora.</p>
+          </div>
       </body>
       </html>
     `;
