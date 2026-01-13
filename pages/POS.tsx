@@ -101,7 +101,18 @@ export const POS: React.FC<POSProps> = ({
 
     const totalDiscount = (parseFloat(globalDiscount) || 0) + pointsDiscount;
     const total = Math.max(0, totalWithTax - totalDiscount);
-    const change = paymentMethod === 'Efectivo' ? Math.max(0, (parseFloat(receivedAmount) || 0) - total) : 0;
+
+    // Lo que el cliente debe entregar en efectivo/tarjeta/etc hoy
+    const cashRequiredToday = useMemo(() => {
+        let amt = total;
+        if (!isImmediateDelivery && depositAmount) {
+            amt = parseFloat(depositAmount) || 0;
+        }
+        // Las notas de crédito reducen el monto a pagar en otros medios
+        return Math.max(0, amt - creditNoteAmount);
+    }, [total, isImmediateDelivery, depositAmount, creditNoteAmount]);
+
+    const change = paymentMethod === 'Efectivo' ? Math.max(0, (parseFloat(receivedAmount) || 0) - cashRequiredToday) : 0;
     const totalItems = cart.reduce((acc, item) => acc + item.quantity, 0);
 
     useEffect(() => {
@@ -221,8 +232,9 @@ export const POS: React.FC<POSProps> = ({
         setIsProcessing(true);
         try {
             const isOrder = !isImmediateDelivery;
-            const payAmount = (isOrder && depositAmount) ? parseFloat(depositAmount) : total;
-            const balance = Math.max(0, total - payAmount);
+            // El abono bruto hoy es el depósito manual o el total si es entrega inmediata
+            const grossPayToday = (isOrder && depositAmount) ? parseFloat(depositAmount) : total;
+            const balance = Math.max(0, total - grossPayToday);
 
             const saleData = {
                 items: cart,
@@ -230,9 +242,9 @@ export const POS: React.FC<POSProps> = ({
                 taxAmount,
                 discount: totalDiscount,
                 paymentMethod,
-                paymentDetails: paymentMethod === 'Efectivo' ? { cash: payAmount } :
-                    paymentMethod === 'Tarjeta' ? { card: payAmount, cardRef: paymentDetails.cardRef } :
-                        paymentMethod === 'Transferencia' ? { transfer: payAmount, transferRef: paymentDetails.transferRef, bank: paymentDetails.bank } :
+                paymentDetails: paymentMethod === 'Efectivo' ? { cash: grossPayToday - (creditNoteValid ? creditNoteAmount : 0), creditNote: creditNoteValid ? creditNoteAmount : 0, creditNoteReference: creditNoteFolio } :
+                    paymentMethod === 'Tarjeta' ? { card: grossPayToday - (creditNoteValid ? creditNoteAmount : 0), cardRef: paymentDetails.cardRef, creditNote: creditNoteValid ? creditNoteAmount : 0, creditNoteReference: creditNoteFolio } :
+                        paymentMethod === 'Transferencia' ? { transfer: grossPayToday - (creditNoteValid ? creditNoteAmount : 0), transferRef: paymentDetails.transferRef, bank: paymentDetails.bank, creditNote: creditNoteValid ? creditNoteAmount : 0, creditNoteReference: creditNoteFolio } :
                             paymentDetails, // For Mixed and Credit
                 customerId: selectedCustomer?.id,
                 userId: user?.id || 'admin',
@@ -241,7 +253,7 @@ export const POS: React.FC<POSProps> = ({
                 fulfillmentStatus: (isImmediateDelivery ? 'delivered' : 'pending') as FulfillmentStatus,
                 pointsUsed: pointsUsed > 0 ? pointsUsed : undefined,
                 isOrder,
-                deposit: payAmount,
+                deposit: grossPayToday,
                 balance,
                 creditData: paymentMethod === 'Crédito' ? {
                     principal: total - (parseFloat(creditDownPayment) || 0),
@@ -721,7 +733,7 @@ export const POS: React.FC<POSProps> = ({
                     <div className="bg-primary text-white p-6 rounded-2xl flex justify-between items-center shadow-lg shadow-primary/20">
                         <div>
                             <p className="text-xs font-bold opacity-70 uppercase tracking-widest">{!isImmediateDelivery && depositAmount ? 'A Pagar Hoy' : 'Monto Total a Pagar'}</p>
-                            <h3 className="text-4xl font-black">L {(!isImmediateDelivery && depositAmount ? parseFloat(depositAmount) : total).toFixed(2)}</h3>
+                            <h3 className="text-4xl font-black">L {cashRequiredToday.toFixed(2)}</h3>
                         </div>
                         <Button variant="secondary" className="bg-white text-primary border-none hover:bg-gray-100 h-14 px-8" onClick={handleCheckout} disabled={isProcessing}>
                             {isProcessing ? <i className="fas fa-spinner fa-spin"></i> : 'Confirmar Pago'}
