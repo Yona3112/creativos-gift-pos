@@ -90,6 +90,7 @@ function App() {
 
   useEffect(() => {
     let intervalId: any;
+    let backupIntervalId: any;
 
     const initApp = async () => {
       try {
@@ -98,6 +99,11 @@ function App() {
         await refreshData(false);
         // Sync en background (solo una vez al inicio)
         refreshData(true);
+
+        // Setup background check for 3-hour backup
+        backupIntervalId = setInterval(() => {
+          db.checkAndAutoSync();
+        }, 15 * 60 * 1000); // Check every 15 minutes
 
         // IMPORTANTE: El intervalo solo hace PUSH, no PULL
         // Esto evita que datos viejos de la nube sobrescriban cambios locales

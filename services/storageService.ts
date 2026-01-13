@@ -170,14 +170,41 @@ class StorageService {
   triggerAutoSync() {
     if (this.syncTimeout) clearTimeout(this.syncTimeout);
     this.syncTimeout = setTimeout(async () => {
+      const s = await this.getSettings();
+      if (s.autoSync && s.supabaseUrl && s.supabaseKey) {
+        try {
+          const { SupabaseService } = await import('./supabaseService');
+          await SupabaseService.syncAll();
+          // Update last backup date
+          s.lastBackupDate = new Date().toISOString();
+          await this.saveSettings(s);
+          console.log("🔄 Auto-sync completado con éxito");
+        } catch (e) {
+          console.error("❌ Error en auto-sync:", e);
+        }
+      }
+    }, 5000); // Wait 5s after last change before syncing
+  }
+
+  async checkAndAutoSync() {
+    const s = await this.getSettings();
+    if (!s.autoSync || !s.supabaseUrl || !s.supabaseKey) return;
+
+    const lastSync = s.lastBackupDate ? new Date(s.lastBackupDate).getTime() : 0;
+    const now = new Date().getTime();
+    const threeHours = 3 * 60 * 60 * 1000;
+
+    if (now - lastSync > threeHours) {
+      console.log("🕒 Han pasado más de 3 horas. Iniciando backup automático...");
       try {
         const { SupabaseService } = await import('./supabaseService');
         await SupabaseService.syncAll();
-        console.log("Sincronización automática completada.");
+        s.lastBackupDate = new Date().toISOString();
+        await this.saveSettings(s);
       } catch (e) {
-        console.warn("Fallo en sincronización automática:", e);
+        console.error("❌ Error en backup automático programado:", e);
       }
-    }, 500); // Sync quickly (500ms debounce) to prevent race conditions
+    }
   }
 
   // --- SEQUENTIAL CODE GENERATORS ---

@@ -367,16 +367,26 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
               </div>
             </div>
 
-            <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-xl">
-              <input
-                type="checkbox"
-                id="autoSync"
-                checked={!!settings.autoSync}
-                onChange={(e) => setSettings(s => s ? ({ ...s, autoSync: e.target.checked }) : null)}
-                className="w-5 h-5 accent-primary"
-              />
-              <label htmlFor="autoSync" className="text-sm font-bold text-gray-700 cursor-pointer">
-                Sincronización Automática (Respaldo en la nube después de cada cambio)
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-dashed border-gray-300">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                  <i className="fas fa-history"></i>
+                </div>
+                <div>
+                  <div className="text-sm font-bold text-gray-700">Sincronización Automática</div>
+                  <div className="text-xs text-gray-500">
+                    Último respaldo: {settings.lastBackupDate ? new Date(settings.lastBackupDate).toLocaleString() : 'Nunca'}
+                  </div>
+                </div>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="sr-only peer"
+                  checked={settings.autoSync || false}
+                  onChange={e => setSettings(s => s ? ({ ...s, autoSync: e.target.checked }) : null)}
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
               </label>
             </div>
 
