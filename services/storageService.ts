@@ -858,50 +858,43 @@ class StorageService {
     if (data.inventoryHistory) await mergeTable(db_engine.inventoryHistory, data.inventoryHistory);
     if (data.priceHistory) await mergeTable(db_engine.priceHistory, data.priceHistory);
 
-    // Settings: merge instead of replace, keeping local values for critical counters
-    // But use remote values for non-counter fields like logo, theme, etc.
+    // Settings: USE REMOTE as primary, only keep local counters and credentials
     if (data.settings) {
-      console.log("🔄 [restoreData] Remote settings received:", {
+      console.log("🔄 [restoreData] Remote settings:", JSON.stringify({
+        name: data.settings.name,
         hasLogo: !!data.settings.logo,
         logoLength: data.settings.logo?.length || 0,
-        name: data.settings.name,
-        themeColor: data.settings.themeColor
-      });
+      }));
 
       const localSettings = await db_engine.settings.get('main');
-      console.log("🔄 [restoreData] Local settings:", {
-        hasLogo: !!localSettings?.logo,
-        logoLength: localSettings?.logo?.length || 0
-      });
 
+      // START with remote settings as the BASE (this is what we want)
+      const merged: any = {
+        ...data.settings,  // Remote settings as BASE - all remote values come first
+        id: 'main',
+      };
+
+      // Only preserve LOCAL values for these critical fields:
       if (localSettings) {
-        // Merge: use remote data for visual settings (logo, theme, name)
-        // but keep local counters at highest value
-        const merged = {
-          ...localSettings,           // Start with local as base
-          ...data.settings,           // Overlay all remote settings (including logo, theme, etc.)
-          id: 'main',                 // Ensure ID is always 'main'
-          // Explicitly ensure logo comes from remote if it exists
-          logo: data.settings.logo || localSettings.logo || '',
-          // Keep highest counter values to prevent duplicate folios
-          currentInvoiceNumber: Math.max(localSettings.currentInvoiceNumber || 1, data.settings.currentInvoiceNumber || 1),
-          currentTicketNumber: Math.max(localSettings.currentTicketNumber || 1, data.settings.currentTicketNumber || 1),
-          currentProductCode: Math.max(localSettings.currentProductCode || 1, data.settings.currentProductCode || 1),
-          currentQuoteNumber: Math.max(localSettings.currentQuoteNumber || 1, data.settings.currentQuoteNumber || 1),
-          // Keep local Supabase credentials (don't overwrite from cloud)
-          supabaseUrl: localSettings.supabaseUrl || data.settings.supabaseUrl,
-          supabaseKey: localSettings.supabaseKey || data.settings.supabaseKey,
-        };
+        // Keep highest counter values to prevent duplicate folios
+        merged.currentInvoiceNumber = Math.max(localSettings.currentInvoiceNumber || 1, data.settings.currentInvoiceNumber || 1);
+        merged.currentTicketNumber = Math.max(localSettings.currentTicketNumber || 1, data.settings.currentTicketNumber || 1);
+        merged.currentProductCode = Math.max(localSettings.currentProductCode || 1, data.settings.currentProductCode || 1);
+        merged.currentQuoteNumber = Math.max(localSettings.currentQuoteNumber || 1, data.settings.currentQuoteNumber || 1);
 
-        console.log("🔄 [restoreData] Merged settings:", {
-          hasLogo: !!merged.logo,
-          logoLength: merged.logo?.length || 0
-        });
-
-        await db_engine.settings.put(merged);
-      } else {
-        await db_engine.settings.put({ ...data.settings, id: 'main' });
+        // Keep local Supabase credentials (each device has its own)
+        if (localSettings.supabaseUrl) merged.supabaseUrl = localSettings.supabaseUrl;
+        if (localSettings.supabaseKey) merged.supabaseKey = localSettings.supabaseKey;
       }
+
+      console.log("🔄 [restoreData] Final merged:", JSON.stringify({
+        name: merged.name,
+        hasLogo: !!merged.logo,
+        logoLength: merged.logo?.length || 0,
+      }));
+
+      await db_engine.settings.put(merged);
+      console.log("✅ [restoreData] Settings saved");
     }
   }
 
