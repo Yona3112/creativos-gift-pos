@@ -1358,6 +1358,23 @@ class StorageService {
     await db_engine.quotes.clear();
     await db_engine.inventoryHistory.clear();
   }
+
+  async purgeOldData(years: number): Promise<{ sales: number, history: number }> {
+    const cutoffDate = new Date();
+    cutoffDate.setFullYear(cutoffDate.getFullYear() - years);
+    const cutoffStr = cutoffDate.toISOString();
+
+    const oldSales = await db_engine.sales.where('date').below(cutoffStr).toArray();
+    const oldHistory = await db_engine.inventoryHistory.where('date').below(cutoffStr).toArray();
+
+    await db_engine.sales.bulkDelete(oldSales.map(s => s.id));
+    await db_engine.inventoryHistory.bulkDelete(oldHistory.map(h => h.id));
+
+    return {
+      sales: oldSales.length,
+      history: oldHistory.length
+    };
+  }
 }
 
 export const db = new StorageService();

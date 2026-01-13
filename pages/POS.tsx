@@ -114,6 +114,37 @@ export const POS: React.FC<POSProps> = ({
         }
     }, [loadedQuote]);
 
+    // Keyboard Shortcuts
+    useEffect(() => {
+        const handleKeys = (e: KeyboardEvent) => {
+            if (e.key === 'F1') {
+                e.preventDefault();
+                searchInputRef.current?.focus();
+            }
+            if (e.key === 'F2') {
+                e.preventDefault();
+                setIsNewCustomerModalOpen(true);
+            }
+            if (e.key === 'F4') {
+                e.preventDefault();
+                if (cart.length > 0) setIsPaymentModalOpen(true);
+            }
+            if (e.key === 'F9') {
+                e.preventDefault();
+                setIsManualModalOpen(true);
+            }
+            if (e.key === 'Escape') {
+                setIsCartOpen(false);
+                setIsPaymentModalOpen(false);
+                setIsManualModalOpen(false);
+                setIsNewCustomerModalOpen(false);
+            }
+        };
+
+        window.addEventListener('keydown', handleKeys);
+        return () => window.removeEventListener('keydown', handleKeys);
+    }, [cart.length]);
+
     const filteredProducts = useMemo(() => {
         return products.filter(p => {
             if (p.active === false) return false;

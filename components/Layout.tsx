@@ -80,7 +80,15 @@ const BackupReminderBell: React.FC<{ settings: CompanySettings; onNavigate: (pag
             <div className="flex items-center gap-3 mb-3">
               <i className={`fas ${statusInfo.icon} text-2xl ${statusInfo.color}`}></i>
               <div>
-                <p className="font-bold text-gray-800">Nube / Respaldo</p>
+                <div className="flex items-center gap-2">
+                  <p className="font-bold text-gray-800">Nube / Respaldo</p>
+                  {settings.autoSync && (
+                    <div className="flex items-center gap-1 bg-green-50 px-1.5 py-0.5 rounded-full border border-green-100">
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                      <span className="text-[8px] text-green-700 font-bold uppercase tracking-tighter">Auto</span>
+                    </div>
+                  )}
+                </div>
                 <p className="text-xs text-gray-500">{statusInfo.status}</p>
               </div>
             </div>

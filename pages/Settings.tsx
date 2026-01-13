@@ -29,6 +29,8 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
   const [deleteUserConfirm, setDeleteUserConfirm] = useState<{ open: boolean; id: string }>({ open: false, id: '' });
   const [downloadConfirm, setDownloadConfirm] = useState(false);
   const [showClearDataConfirm, setShowClearDataConfirm] = useState(false);
+  const [purgeYears, setPurgeYears] = useState(1);
+  const [showPurgeConfirm, setShowPurgeConfirm] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -577,12 +579,34 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
         </Card>
 
         <Card title="Zona de Peligro" className="border-red-200 bg-red-50">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-bold text-red-700">Borrar Datos de Prueba</h3>
-              <p className="text-xs text-red-600 font-medium">Elimina VENTAS, GASTOS, COTIZACIONES y MOVIMIENTOS. No elimina productos ni clientes.</p>
+          <div className="space-y-6">
+            <div className="flex items-center justify-between border-b border-red-100 pb-4">
+              <div>
+                <h3 className="font-bold text-red-700">Purga de Datos Históricos</h3>
+                <p className="text-xs text-red-600 font-medium italic">Optimiza la base de datos eliminando registros muy antiguos.</p>
+                <div className="mt-2 flex items-center gap-2">
+                  <label className="text-[10px] font-bold text-gray-500 uppercase">Eliminar anteriores a:</label>
+                  <select
+                    className="text-xs p-1 border rounded bg-white font-bold"
+                    value={purgeYears}
+                    onChange={e => setPurgeYears(parseInt(e.target.value))}
+                  >
+                    <option value={1}>1 Año</option>
+                    <option value={2}>2 Años</option>
+                    <option value={3}>3 Años</option>
+                  </select>
+                </div>
+              </div>
+              <Button type="button" variant="outline" onClick={() => setShowPurgeConfirm(true)}>Ejecutar Purga</Button>
             </div>
-            <Button type="button" variant="danger" onClick={() => setShowClearDataConfirm(true)}>⚠️ Eliminar Historial</Button>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-red-700">Borrar Datos de Prueba</h3>
+                <p className="text-xs text-red-600 font-medium">Elimina VENTAS, GASTOS, COTIZACIONES y MOVIMIENTOS. No elimina productos ni clientes.</p>
+              </div>
+              <Button type="button" variant="danger" onClick={() => setShowClearDataConfirm(true)}>⚠️ Eliminar Todo el Historial</Button>
+            </div>
           </div>
         </Card>
 
@@ -669,6 +693,22 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
           }
         }}
         onCancel={() => setDownloadConfirm(false)}
+      />
+
+      <ConfirmDialog
+        isOpen={showPurgeConfirm}
+        title="Confirmar Purga de Datos"
+        message={`¿Está seguro? Se eliminarán permanentemente las ventas y movimientos de hace más de ${purgeYears} año(s). Esta acción no se puede deshacer.`}
+        confirmText="Purgar Ahora"
+        cancelText="Cancelar"
+        variant="danger"
+        onConfirm={async () => {
+          const results = await db.purgeOldData(purgeYears);
+          showToast(`Purga completada. Se eliminaron ${results.sales} ventas y ${results.history} movimientos viejos.`, "success");
+          setShowPurgeConfirm(false);
+          if (onUpdate) onUpdate();
+        }}
+        onCancel={() => setShowPurgeConfirm(false)}
       />
 
       <ConfirmDialog
