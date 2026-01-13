@@ -130,7 +130,7 @@ export const Layout: React.FC<LayoutProps> = ({
   const [showLogoModal, setShowLogoModal] = useState(false);
 
   const filteredMenu = MENU_ITEMS.filter(item => {
-    const restrictedForVendor = ['settings', 'reports', 'branches', 'users'];
+    const restrictedForVendor = ['settings', 'reports', 'branches', 'users', 'sarBooks'];
     // FIX: Added optional chaining to prevent crash if user is null
     if (user?.role === UserRole.VENDEDOR && restrictedForVendor.includes(item.id)) return false;
     return true;

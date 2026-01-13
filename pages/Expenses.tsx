@@ -1,15 +1,16 @@
 
 import React, { useState, useEffect } from 'react';
-import { Expense, User } from '../types';
-import { Card, Button, Input, Modal, Badge, ConfirmDialog, showToast } from '../components/UIComponents';
+import { Expense, User, UserRole, CompanySettings } from '../types';
+import { Card, Button, Input, Modal, Badge, PasswordConfirmDialog, showToast } from '../components/UIComponents';
 import { db } from '../services/storageService';
 
 interface ExpensesProps {
     user: User | null;
     onUpdate: () => void;
+    settings?: CompanySettings;
 }
 
-export const Expenses: React.FC<ExpensesProps> = ({ user, onUpdate }) => {
+export const Expenses: React.FC<ExpensesProps> = ({ user, onUpdate, settings }) => {
     const [expenses, setExpenses] = useState<Expense[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [formData, setFormData] = useState<Partial<Expense>>({
@@ -112,13 +113,15 @@ export const Expenses: React.FC<ExpensesProps> = ({ user, onUpdate }) => {
                 </form>
             </Modal>
 
-            <ConfirmDialog
+            <PasswordConfirmDialog
                 isOpen={deleteConfirm.open}
                 title="Eliminar Gasto"
                 message="¿Estás seguro de eliminar este registro de gasto? Esta acción no se puede deshacer."
                 confirmText="Eliminar"
                 cancelText="Cancelar"
                 variant="danger"
+                masterPassword={settings?.masterPassword || ''}
+                isAdmin={user?.role === UserRole.ADMIN}
                 onConfirm={async () => {
                     await db.deleteExpense(deleteConfirm.id);
                     setDeleteConfirm({ open: false, id: '' });

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { Product, Customer, Quote, User, CompanySettings } from '../types';
-import { Card, Button, Badge, ConfirmDialog, Modal } from '../components/UIComponents';
+import { Product, Customer, Quote, User, CompanySettings, UserRole } from '../types';
+import { Card, Button, Badge, PasswordConfirmDialog, Modal } from '../components/UIComponents';
 import { db } from '../services/storageService';
 
 interface QuotesProps {
@@ -219,13 +219,15 @@ export const Quotes: React.FC<QuotesProps> = ({ products, customers, user, branc
                 </div>
             </Card>
 
-            <ConfirmDialog
+            <PasswordConfirmDialog
                 isOpen={deleteConfirm.open}
                 title="Eliminar Cotización"
                 message={`¿Estás seguro de eliminar la cotización ${deleteConfirm.folio}?`}
                 confirmText="Eliminar"
                 cancelText="Cancelar"
                 variant="danger"
+                masterPassword={settings?.masterPassword || ''}
+                isAdmin={user?.role === UserRole.ADMIN}
                 onConfirm={async () => {
                     await db.deleteQuote(deleteConfirm.id);
                     setDeleteConfirm({ open: false, id: '', folio: '' });

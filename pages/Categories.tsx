@@ -1,16 +1,17 @@
 
 import React, { useState } from 'react';
-import { Category, ICONS, CompanySettings } from '../types';
-import { Card, Button, Input, Modal, ConfirmDialog, showToast } from '../components/UIComponents';
+import { Category, ICONS, CompanySettings, User, UserRole } from '../types';
+import { Card, Button, Input, Modal, ConfirmDialog, PasswordConfirmDialog, showToast } from '../components/UIComponents';
 import { db } from '../services/storageService';
 
 interface CategoriesProps {
     categories: Category[];
     onUpdate: () => void;
-    settings: CompanySettings; // Added settings prop
+    settings: CompanySettings;
+    user?: User;
 }
 
-export const Categories: React.FC<CategoriesProps> = ({ categories, onUpdate, settings }) => {
+export const Categories: React.FC<CategoriesProps> = ({ categories, onUpdate, settings, user }) => {
     // Modal States
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -466,12 +467,9 @@ export const Categories: React.FC<CategoriesProps> = ({ categories, onUpdate, se
 
                     <div className="flex justify-between gap-3 pt-4 border-t border-gray-100">
                         {formData.id && (
-                            <Button type="button" variant="danger" onClick={async () => {
-                                if (confirm('¿Seguro que deseas eliminar esta categoría?')) {
-                                    await db.deleteCategory(formData.id!);
-                                    setIsModalOpen(false);
-                                    onUpdate();
-                                }
+                            <Button type="button" variant="danger" onClick={() => {
+                                setDeleteCatConfirm({ open: true, id: formData.id!, name: formData.name || '' });
+                                setIsModalOpen(false);
                             }} icon="trash">Eliminar</Button>
                         )}
                         <div className="flex gap-2 ml-auto">
@@ -500,13 +498,15 @@ export const Categories: React.FC<CategoriesProps> = ({ categories, onUpdate, se
                 onCancel={() => setStockConfirm(false)}
             />
 
-            <ConfirmDialog
+            <PasswordConfirmDialog
                 isOpen={deleteCatConfirm.open}
                 title="Eliminar Categoría"
                 message={`¿Eliminar categoría "${deleteCatConfirm.name}"? Esto no eliminará los productos, pero se quedarán sin categoría.`}
                 confirmText="Eliminar"
                 cancelText="Cancelar"
                 variant="danger"
+                masterPassword={settings?.masterPassword || ''}
+                isAdmin={user?.role === UserRole.ADMIN}
                 onConfirm={async () => {
                     await db.deleteCategory(deleteCatConfirm.id);
                     setDeleteCatConfirm({ open: false, id: '', name: '' });

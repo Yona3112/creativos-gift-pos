@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Consumable, UserRole } from '../types';
-import { Card, Button, Input, Badge, Modal, ConfirmDialog } from '../components/UIComponents';
+import { Card, Button, Input, Badge, Modal, PasswordConfirmDialog } from '../components/UIComponents';
 import { db } from '../services/storageService';
 
 interface ConsumablesProps {
@@ -13,21 +13,21 @@ export const Consumables: React.FC<ConsumablesProps> = ({ onUpdate }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [formData, setFormData] = useState<Partial<Consumable>>({});
     const [isAdmin, setIsAdmin] = useState(false);
+    const [masterPassword, setMasterPassword] = useState('');
     const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; id: string; name: string }>({ open: false, id: '', name: '' });
 
     useEffect(() => {
         const checkRole = async () => {
-            const user = await db.getCurrentUser(); // We need a way to get current user. Usually from session or local storage if not passed as prop. 
-            // Wait, storageService doesn't have getCurrentUser easily accessible if not logged in context. 
-            // Checking App.tsx, the user is usually passed down or stored in localStorage 'active_user'.
             const stored = localStorage.getItem('active_user') || localStorage.getItem('creativos_gift_currentUser');
             if (stored) {
                 const u = JSON.parse(stored);
-                // Verificación robusta de permisos
                 if (u.role === 'admin' || u.role === 'ADMIN' || u.email === 'admin@creativosgift.com') {
                     setIsAdmin(true);
                 }
             }
+            // Load master password from settings
+            const settings = await db.getSettings();
+            setMasterPassword(settings?.masterPassword || '');
         };
         checkRole();
         loadData();
@@ -119,13 +119,15 @@ export const Consumables: React.FC<ConsumablesProps> = ({ onUpdate }) => {
                 </form>
             </Modal>
 
-            <ConfirmDialog
+            <PasswordConfirmDialog
                 isOpen={deleteConfirm.open}
                 title="Eliminar Insumo"
                 message={`¿Estás seguro de eliminar "${deleteConfirm.name}"? Esta acción no se puede deshacer.`}
                 confirmText="Eliminar"
                 cancelText="Cancelar"
                 variant="danger"
+                masterPassword={masterPassword}
+                isAdmin={isAdmin}
                 onConfirm={async () => {
                     await db.deleteConsumable(deleteConfirm.id);
                     setDeleteConfirm({ open: false, id: '', name: '' });

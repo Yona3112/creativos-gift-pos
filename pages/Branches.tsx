@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { Branch } from '../types';
-import { Card, Button, Input, Modal, Badge, ConfirmDialog } from '../components/UIComponents';
+import { Branch, UserRole } from '../types';
+import { Card, Button, Input, Modal, Badge, PasswordConfirmDialog } from '../components/UIComponents';
 import { db } from '../services/storageService';
 
 export const Branches: React.FC = () => {
@@ -9,10 +9,22 @@ export const Branches: React.FC = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [formData, setFormData] = useState<Partial<Branch>>({});
     const [deleteConfirm, setDeleteConfirm] = useState(false);
+    const [isAdmin, setIsAdmin] = useState(false);
+    const [masterPassword, setMasterPassword] = useState('');
 
     useEffect(() => {
-        const load = async () => setBranches(await db.getBranches());
-        load();
+        const loadData = async () => {
+            setBranches(await db.getBranches());
+            // Load master password and check admin
+            const settings = await db.getSettings();
+            setMasterPassword(settings?.masterPassword || '');
+            const stored = localStorage.getItem('active_user');
+            if (stored) {
+                const u = JSON.parse(stored);
+                setIsAdmin(u.role === 'admin' || u.role === 'ADMIN' || u.role === UserRole.ADMIN);
+            }
+        };
+        loadData();
     }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -91,13 +103,15 @@ export const Branches: React.FC = () => {
                 </form>
             </Modal>
 
-            <ConfirmDialog
+            <PasswordConfirmDialog
                 isOpen={deleteConfirm}
                 title="Eliminar Sucursal"
                 message={`¿Estás seguro de eliminar la sucursal "${formData.name}"? Esta acción no se puede deshacer.`}
                 confirmText="Eliminar"
                 cancelText="Cancelar"
                 variant="danger"
+                masterPassword={masterPassword}
+                isAdmin={isAdmin}
                 onConfirm={async () => {
                     if (formData.id) {
                         await db.deleteBranch(formData.id);

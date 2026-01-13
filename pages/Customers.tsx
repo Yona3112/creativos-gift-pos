@@ -1,17 +1,19 @@
 
 import React, { useState, useMemo } from 'react';
-import { Customer, LoyaltyLevel } from '../types';
-import { Button, Input, Card, Modal, Badge, Pagination, useDebounce, Alert, ConfirmDialog } from '../components/UIComponents';
+import { Customer, LoyaltyLevel, User, UserRole, CompanySettings } from '../types';
+import { Button, Input, Card, Modal, Badge, Pagination, useDebounce, Alert, PasswordConfirmDialog } from '../components/UIComponents';
 import { db } from '../services/storageService';
 
 interface CustomersProps {
   customers: Customer[];
   onUpdate: () => void;
+  user?: User;
+  settings?: CompanySettings;
 }
 
 const ITEMS_PER_PAGE = 9;
 
-export const Customers: React.FC<CustomersProps> = ({ customers, onUpdate }) => {
+export const Customers: React.FC<CustomersProps> = ({ customers, onUpdate, user, settings }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState<Partial<Customer>>({ type: 'Natural' });
   const [error, setError] = useState<string | null>(null);
@@ -301,13 +303,15 @@ export const Customers: React.FC<CustomersProps> = ({ customers, onUpdate }) => 
         </form>
       </Modal>
 
-      <ConfirmDialog
+      <PasswordConfirmDialog
         isOpen={archiveConfirm.open}
         title="Archivar Cliente"
         message={`¿Estás seguro de archivar al cliente "${archiveConfirm.name}"? El cliente no aparecerá en las listas pero sus datos se conservarán.`}
         confirmText="Archivar"
         cancelText="Cancelar"
         variant="warning"
+        masterPassword={settings?.masterPassword || ''}
+        isAdmin={user?.role === UserRole.ADMIN}
         onConfirm={async () => {
           await db.deleteCustomer(archiveConfirm.id);
           setArchiveConfirm({ open: false, id: '', name: '' });

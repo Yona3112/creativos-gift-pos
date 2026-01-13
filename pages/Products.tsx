@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { Product, Category, User } from '../types';
-import { Button, Input, Card, Modal, useDebounce, Pagination, ConfirmDialog, showToast } from '../components/UIComponents';
+import { Product, Category, User, UserRole, CompanySettings } from '../types';
+import { Button, Input, Card, Modal, useDebounce, Pagination, PasswordConfirmDialog, showToast } from '../components/UIComponents';
 import { db } from '../services/storageService';
 import { GoogleGenAI } from "@google/genai";
 
@@ -18,12 +18,13 @@ interface ProductsProps {
     onUpdate: () => void;
     initialFilter?: string;
     initialTab?: string;
-    settings?: { name?: string; branchName?: string };
+    settings?: CompanySettings;
+    user?: User;
 }
 
 const ITEMS_PER_PAGE = 8;
 
-export const Products: React.FC<ProductsProps> = ({ products, categories, users, onUpdate, initialFilter, initialTab, settings }) => {
+export const Products: React.FC<ProductsProps> = ({ products, categories, users, onUpdate, initialFilter, initialTab, settings, user }) => {
     const [activeTab, setActiveTab] = useState<'products' | 'categories' | 'consumables' | 'suppliers' | 'kardex' | 'prices'>('products');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -385,13 +386,15 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
                 </div>
             </Modal>
 
-            <ConfirmDialog
+            <PasswordConfirmDialog
                 isOpen={deleteConfirm.open}
                 title="Eliminar Producto"
                 message={`¿Estás seguro de eliminar "${deleteConfirm.name}"? Esta acción no se puede deshacer.`}
                 confirmText="Eliminar"
                 cancelText="Cancelar"
                 variant="danger"
+                masterPassword={settings?.masterPassword || ''}
+                isAdmin={user?.role === UserRole.ADMIN}
                 onConfirm={async () => {
                     await db.deleteProduct(deleteConfirm.id);
                     setDeleteConfirm({ open: false, id: '', name: '' });

@@ -226,11 +226,11 @@ function App() {
     switch (page) {
       case 'dashboard': return <Dashboard products={products} sales={sales} credits={credits} customers={customers} consumables={consumables} onNavigate={navigateTo} />;
       case 'pos': return <POS products={products} customers={customers} categories={categories} user={user} branchId={currentBranch?.id || ''} onSaleComplete={refreshData} loadedQuote={quoteToLoad} onQuoteProcessed={() => setQuoteToLoad(null)} onRefreshData={refreshData} settings={safeSettings} />;
-      case 'expenses': return <Expenses user={user} onUpdate={refreshData} />;
+      case 'expenses': return <Expenses user={user} onUpdate={refreshData} settings={safeSettings} />;
       case 'inventoryHistory': return <InventoryHistory products={products} users={users} />;
-      case 'products': return <Products products={products} categories={categories} users={users} onUpdate={refreshData} initialFilter={pageParams?.filter} initialTab={pageParams?.tab} settings={safeSettings} />;
+      case 'products': return <Products products={products} categories={categories} users={users} onUpdate={refreshData} initialFilter={pageParams?.filter} initialTab={pageParams?.tab} settings={safeSettings} user={user} />;
       case 'salesHistory': return <SalesHistory sales={sales} customers={customers} users={users} onUpdate={refreshData} user={user} branchId={currentBranch?.id} onLoadQuote={(quote) => { setQuoteToLoad(quote); setPage('pos'); }} settings={safeSettings} />;
-      case 'customers': return <Customers customers={customers} onUpdate={refreshData} />;
+      case 'customers': return <Customers customers={customers} onUpdate={refreshData} user={user} settings={safeSettings} />;
       case 'credits': return <Credits settings={safeSettings} />;
       case 'reports': return <Reports sales={sales} products={products} customers={customers} categories={categories} />;
       case 'sarBooks': return <SARBooks />;

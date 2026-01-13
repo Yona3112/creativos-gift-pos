@@ -253,6 +253,126 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   );
 };
 
+// --- PASSWORD CONFIRM DIALOG (For delete actions - requires master password for non-admin users) ---
+interface PasswordConfirmDialogProps {
+  isOpen: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+  title?: string;
+  message: string;
+  confirmText?: string;
+  cancelText?: string;
+  variant?: 'danger' | 'warning' | 'info';
+  masterPassword: string;
+  isAdmin: boolean;
+}
+
+export const PasswordConfirmDialog: React.FC<PasswordConfirmDialogProps> = ({
+  isOpen, onConfirm, onCancel, title = 'Confirmar Eliminación', message,
+  confirmText = 'Eliminar', cancelText = 'Cancelar', variant = 'danger',
+  masterPassword, isAdmin
+}) => {
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+
+  // Reset state when dialog opens/closes
+  useEffect(() => {
+    if (isOpen) {
+      setPassword('');
+      setError('');
+    }
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  // If user is admin, show regular confirm dialog (no password needed)
+  if (isAdmin) {
+    return (
+      <ConfirmDialog
+        isOpen={isOpen}
+        onConfirm={onConfirm}
+        onCancel={onCancel}
+        title={title}
+        message={message}
+        confirmText={confirmText}
+        cancelText={cancelText}
+        variant={variant}
+      />
+    );
+  }
+
+  const handleConfirm = () => {
+    if (!masterPassword) {
+      setError('No hay contraseña maestra configurada. Contacte al administrador.');
+      return;
+    }
+    if (password !== masterPassword) {
+      setError('Contraseña incorrecta');
+      setPassword('');
+      return;
+    }
+    onConfirm();
+  };
+
+  const variantStyles = {
+    danger: { icon: 'lock', color: 'text-red-500', bg: 'bg-red-100', btn: 'bg-red-600 hover:bg-red-700' },
+    warning: { icon: 'lock', color: 'text-yellow-500', bg: 'bg-yellow-100', btn: 'bg-yellow-600 hover:bg-yellow-700' },
+    info: { icon: 'lock', color: 'text-blue-500', bg: 'bg-blue-100', btn: 'bg-blue-600 hover:bg-blue-700' }
+  };
+
+  const style = variantStyles[variant];
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-gray-900/70 backdrop-blur-sm" onClick={onCancel}></div>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm relative z-10 animate-pop-in overflow-hidden">
+        <div className="p-6 text-center">
+          <div className={`w-16 h-16 ${style.bg} rounded-full flex items-center justify-center mx-auto mb-4`}>
+            <i className={`fas fa-${style.icon} text-3xl ${style.color}`}></i>
+          </div>
+          <h3 className="text-xl font-extrabold text-gray-900 mb-2">{title}</h3>
+          <p className="text-gray-600 mb-4">{message}</p>
+
+          <div className="mb-4">
+            <label className="block text-sm font-bold text-gray-700 mb-2 text-left">
+              <i className="fas fa-key mr-2"></i>Contraseña del Administrador
+            </label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => { setPassword(e.target.value); setError(''); }}
+              placeholder="Ingrese contraseña maestra"
+              className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-primary outline-none font-bold"
+              autoFocus
+              onKeyDown={(e) => e.key === 'Enter' && handleConfirm()}
+            />
+            {error && (
+              <p className="text-red-500 text-sm font-bold mt-2 text-left">
+                <i className="fas fa-exclamation-circle mr-1"></i>{error}
+              </p>
+            )}
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              onClick={onCancel}
+              className="flex-1 px-4 py-3 rounded-xl font-bold bg-gray-100 text-gray-700 hover:bg-gray-200 transition-all"
+            >
+              {cancelText}
+            </button>
+            <button
+              onClick={handleConfirm}
+              className={`flex-1 px-4 py-3 rounded-xl font-bold text-white ${style.btn} transition-all`}
+            >
+              {confirmText}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 interface PaginationProps {
   currentPage: number;
   totalPages: number;

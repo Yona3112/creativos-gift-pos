@@ -858,21 +858,29 @@ class StorageService {
     if (data.inventoryHistory) await mergeTable(db_engine.inventoryHistory, data.inventoryHistory);
     if (data.priceHistory) await mergeTable(db_engine.priceHistory, data.priceHistory);
 
-    // Settings: merge instead of replace, keeping local values for critical fields
+    // Settings: merge instead of replace, keeping local values for critical counters
+    // But use remote values for non-counter fields like logo, theme, etc.
     if (data.settings) {
       const localSettings = await db_engine.settings.get('main');
       if (localSettings) {
-        // Keep local counters which are critical for sequence
+        // Merge: remote data as base, then overlay local counters (keep highest)
+        // Use remote logo/theme if local doesn't have one, or if remote is newer
         const merged = {
-          ...data.settings,
+          ...localSettings,           // Start with local as base
+          ...data.settings,           // Overlay all remote settings (including logo, theme, etc.)
+          id: 'main',                 // Ensure ID is always 'main'
+          // Keep highest counter values to prevent duplicate folios
           currentInvoiceNumber: Math.max(localSettings.currentInvoiceNumber || 1, data.settings.currentInvoiceNumber || 1),
           currentTicketNumber: Math.max(localSettings.currentTicketNumber || 1, data.settings.currentTicketNumber || 1),
           currentProductCode: Math.max(localSettings.currentProductCode || 1, data.settings.currentProductCode || 1),
           currentQuoteNumber: Math.max(localSettings.currentQuoteNumber || 1, data.settings.currentQuoteNumber || 1),
+          // Keep local Supabase credentials (don't overwrite from cloud)
+          supabaseUrl: localSettings.supabaseUrl || data.settings.supabaseUrl,
+          supabaseKey: localSettings.supabaseKey || data.settings.supabaseKey,
         };
         await db_engine.settings.put(merged);
       } else {
-        await db_engine.settings.put(data.settings);
+        await db_engine.settings.put({ ...data.settings, id: 'main' });
       }
     }
   }
