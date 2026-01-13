@@ -674,8 +674,9 @@ export const POS: React.FC<POSProps> = ({
                                         <p className="text-md font-bold">L {Math.max(0, total - (parseFloat(creditDownPayment) || 0)).toFixed(2)}</p>
                                     </div>
                                     <div>
-                                        <p className="text-[10px] text-gray-400 font-bold uppercase">Tasa: {settings.defaultCreditRate}%</p>
-                                        <p className="text-md font-bold">L {((Math.max(0, total - (parseFloat(creditDownPayment) || 0))) * (settings.defaultCreditRate / 100) * parseInt(creditTerm || '1')).toFixed(2)}</p>
+                                        <p className="text-[10px] text-gray-400 font-bold uppercase">Tasa Mensual: {settings.defaultCreditRate}%</p>
+                                        <p className="text-[9px] text-primary font-bold">Anual: {(settings.defaultCreditRate * 12).toFixed(2)}%</p>
+                                        <p className="text-md font-bold text-gray-800">L {((Math.max(0, total - (parseFloat(creditDownPayment) || 0))) * (settings.defaultCreditRate / 100) * parseInt(creditTerm || '1')).toFixed(2)}</p>
                                     </div>
                                     <div>
                                         <p className="text-[10px] text-gray-400 font-bold uppercase">Cuota Mensual</p>

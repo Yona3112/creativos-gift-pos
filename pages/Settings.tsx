@@ -260,16 +260,21 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
             <div className="md:col-span-2">
               <Alert variant="info">
                 <i className="fas fa-info-circle mr-2"></i>
-                La <strong>Tasa de Interés</strong> configurada aquí se aplicará automáticamente a todas las nuevas ventas al crédito.
+                La <strong>Tasa de Interés</strong> configurada aquí es <strong>MENSUAL</strong>. Se aplicará automáticamente a todas las nuevas ventas al crédito.
               </Alert>
             </div>
-            <Input
-              label="Tasa de Interés Crédito (%)"
-              type="number"
-              value={settings.defaultCreditRate}
-              onChange={(e) => handleNumChange('defaultCreditRate', e.target.value)}
-              className="font-bold text-lg"
-            />
+            <div>
+              <Input
+                label="Tasa de Interés Mensual (%)"
+                type="number"
+                value={settings.defaultCreditRate}
+                onChange={(e) => handleNumChange('defaultCreditRate', e.target.value)}
+                className="font-bold text-lg"
+              />
+              <p className="text-xs text-blue-600 font-bold mt-1">
+                Equivalente Anual: {(settings.defaultCreditRate * 12).toFixed(2)}%
+              </p>
+            </div>
             <div className="flex items-center gap-4">
               <label className="text-sm font-bold text-gray-700">Tamaño Impresora:</label>
               <select name="printerSize" value={settings.printerSize} onChange={handleChange} className="p-2 border rounded-lg">
@@ -277,6 +282,41 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
                 <option value="80mm">80mm</option>
               </select>
             </div>
+          </div>
+        </Card>
+
+        <Card title="Mensajes en Factura / Tickets">
+          <div className="space-y-4">
+            <Input
+              label="Mensaje de Agradecimiento"
+              name="thanksMessage"
+              value={settings.thanksMessage || ''}
+              onChange={handleChange}
+              placeholder="Ej: ¡Gracias por preferir Creativos Gift!"
+            />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-sm font-bold text-gray-700">Política de Garantía</label>
+                <textarea
+                  name="warrantyPolicy"
+                  className="w-full p-2 border rounded-lg text-sm h-20"
+                  value={settings.warrantyPolicy || ''}
+                  onChange={handleChange}
+                  placeholder="Describa los términos de garantía..."
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-bold text-gray-700">Política de Devoluciones</label>
+                <textarea
+                  name="returnPolicy"
+                  className="w-full p-2 border rounded-lg text-sm h-20"
+                  value={settings.returnPolicy || ''}
+                  onChange={handleChange}
+                  placeholder="Describa los términos de devoluciones..."
+                />
+              </div>
+            </div>
+            <p className="text-[10px] text-gray-400">Estos mensajes aparecerán en la parte inferior de sus tickets impresos.</p>
           </div>
         </Card>
 

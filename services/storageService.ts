@@ -155,7 +155,10 @@ class StorageService {
       whatsappTemplate: "👋 Hola *{CLIENT_NAME}*, me interesa hacer el siguiente pedido personalizado:\n\n{ITEMS_LIST}\n\n💰 *TOTAL: {TOTAL}*\n\n📍 Quedo pendiente de los detalles de personalización.",
       supabaseUrl: import.meta.env.VITE_SUPABASE_URL || '',
       supabaseKey: import.meta.env.VITE_SUPABASE_ANON_KEY || '',
-      lastBackupDate: null
+      lastBackupDate: null,
+      thanksMessage: '¡Gracias por su compra!',
+      warrantyPolicy: 'Garantía por defectos de fábrica (30 días).',
+      returnPolicy: 'No se aceptan devoluciones en productos personalizados.'
     };
     return saved ? { ...defaults, ...saved } : defaults;
   }
@@ -1152,8 +1155,15 @@ class StorageService {
         ` : ''}
 
         <div class="footer center">
-          <p>¡Gracias por su compra!</p>
+          <p class="bold">${settings.thanksMessage || '¡Gracias por su compra!'}</p>
+          <div style="font-size: 8px; margin-top: 5px; text-align: left;">
+            ${settings.warrantyPolicy ? `<p><strong>Garantía:</strong> ${settings.warrantyPolicy}</p>` : ''}
+            ${settings.returnPolicy ? `<p><strong>Devoluciones:</strong> ${settings.returnPolicy}</p>` : ''}
+          </div>
+          <div class="hr"></div>
           <p>${isFiscal ? 'ORIGINAL: CLIENTE / COPIA: EMISOR' : 'ESTE NO ES UN DOCUMENTO FISCAL'}</p>
+          <p style="font-size: 8px; margin-top: 5px;">"La factura es beneficio de todos, ¡exíjala!"</p>
+          <p style="font-size: 8px;">SAR-HONDURAS VIGENTE 2026</p>
         </div>
       </body>
       </html>

@@ -220,6 +220,9 @@ export interface CompanySettings {
   autoSync?: boolean;
   lastBackupDate?: string | null;
   logoObjectFit?: 'cover' | 'contain';
+  thanksMessage?: string;
+  warrantyPolicy?: string;
+  returnPolicy?: string;
 }
 
 export interface CashCut {

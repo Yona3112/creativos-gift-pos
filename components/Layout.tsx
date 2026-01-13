@@ -32,43 +32,28 @@ const MENU_ITEMS = [
 const BackupReminderBell: React.FC<{ settings: CompanySettings; onNavigate: (page: string) => void }> = ({ settings, onNavigate }) => {
   const [showDropdown, setShowDropdown] = useState(false);
 
-  const getDaysSinceBackup = () => {
-    if (!settings.lastBackupDate) return 999; // Never uploaded
+  const getBackupStatus = () => {
+    if (!settings.lastBackupDate) return { color: 'text-red-600 animate-pulse', bg: 'bg-red-100', status: 'Nunca subido', urgency: '¡URGENTE!', badge: '!', icon: 'fa-cloud-upload-alt' };
+
     const lastBackup = new Date(settings.lastBackupDate);
     const now = new Date();
-    const diffTime = Math.abs(now.getTime() - lastBackup.getTime());
-    return Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    const diffMs = now.getTime() - lastBackup.getTime();
+    const diffHours = diffMs / (1000 * 60 * 60);
+
+    if (diffHours < 4) {
+      return { color: 'text-green-500', bg: 'bg-green-100', status: 'Nube al día', urgency: 'Respaldo Automático OK', badge: null, icon: 'fa-cloud' };
+    } else if (diffHours < 24) {
+      return { color: 'text-yellow-500', bg: 'bg-yellow-100', status: 'Hace unas horas', urgency: '', badge: 'H', icon: 'fa-cloud' };
+    } else if (diffHours < 72) {
+      const days = Math.floor(diffHours / 24);
+      return { color: 'text-orange-500', bg: 'bg-orange-100', status: `Hace ${days} día${days > 1 ? 's' : ''}`, urgency: 'Se recomienda subir', badge: days.toString(), icon: 'fa-cloud' };
+    } else {
+      const days = Math.floor(diffHours / 24);
+      return { color: 'text-red-600 animate-pulse', bg: 'bg-red-100', status: `Hace ${days} días`, urgency: '¡Subir a Nube ahora!', badge: days.toString(), icon: 'fa-cloud-upload-alt' };
+    }
   };
 
-  const days = getDaysSinceBackup();
-
-  // Color coding based on days
-  let bellColor = 'text-green-500'; // Good
-  let bgColor = 'bg-green-100';
-  let status = 'Sincronizado';
-  let urgency = '';
-
-  if (days === 999) {
-    bellColor = 'text-red-600 animate-pulse';
-    bgColor = 'bg-red-100';
-    status = 'Nunca subido';
-    urgency = '¡URGENTE!';
-  } else if (days >= 3) {
-    bellColor = 'text-red-600 animate-pulse';
-    bgColor = 'bg-red-100';
-    status = `Hace ${days} días`;
-    urgency = '¡Subir a Nube ahora!';
-  } else if (days >= 2) {
-    bellColor = 'text-orange-500';
-    bgColor = 'bg-orange-100';
-    status = `Hace ${days} días`;
-    urgency = 'Se recomienda subir';
-  } else if (days >= 1) {
-    bellColor = 'text-yellow-500';
-    bgColor = 'bg-yellow-100';
-    status = 'Hace 1 día';
-    urgency = '';
-  }
+  const statusInfo = getBackupStatus();
 
   // Only show if supabase is configured
   if (!settings.supabaseUrl || !settings.supabaseKey) return null;
@@ -77,13 +62,13 @@ const BackupReminderBell: React.FC<{ settings: CompanySettings; onNavigate: (pag
     <div className="relative">
       <button
         onClick={() => setShowDropdown(!showDropdown)}
-        className={`w-10 h-10 flex items-center justify-center ${bgColor} rounded-xl relative`}
+        className={`w-10 h-10 flex items-center justify-center ${statusInfo.bg} rounded-xl relative transition-all hover:scale-105`}
         title="Estado de Nube"
       >
-        <i className={`fas fa-cloud ${bellColor} text-lg`}></i>
-        {days >= 1 && (
-          <span className={`absolute -top-1 -right-1 w-4 h-4 ${days >= 3 ? 'bg-red-600' : days >= 2 ? 'bg-orange-500' : 'bg-yellow-500'} rounded-full text-white text-[10px] flex items-center justify-center font-bold`}>
-            {days >= 999 ? '!' : days}
+        <i className={`fas ${statusInfo.icon} ${statusInfo.color} text-lg`}></i>
+        {statusInfo.badge && (
+          <span className={`absolute -top-1 -right-1 w-4 h-4 ${statusInfo.color.includes('red') ? 'bg-red-600' : statusInfo.color.includes('orange') ? 'bg-orange-500' : 'bg-yellow-500'} rounded-full text-white text-[10px] flex items-center justify-center font-bold`}>
+            {statusInfo.badge}
           </span>
         )}
       </button>
@@ -91,17 +76,17 @@ const BackupReminderBell: React.FC<{ settings: CompanySettings; onNavigate: (pag
       {showDropdown && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setShowDropdown(false)}></div>
-          <div className="absolute right-0 top-12 w-64 bg-white rounded-xl shadow-xl border border-gray-100 z-50 p-4">
+          <div className="absolute right-0 top-12 w-64 bg-white rounded-xl shadow-xl border border-gray-100 z-50 p-4 animate-scale-in origin-top-right">
             <div className="flex items-center gap-3 mb-3">
-              <i className={`fas fa-cloud-upload-alt text-2xl ${bellColor}`}></i>
+              <i className={`fas ${statusInfo.icon} text-2xl ${statusInfo.color}`}></i>
               <div>
                 <p className="font-bold text-gray-800">Nube / Respaldo</p>
-                <p className="text-xs text-gray-500">{status}</p>
+                <p className="text-xs text-gray-500">{statusInfo.status}</p>
               </div>
             </div>
-            {urgency && (
-              <div className={`${bgColor} ${bellColor} text-sm font-bold p-2 rounded-lg mb-3 text-center`}>
-                {urgency}
+            {statusInfo.urgency && (
+              <div className={`${statusInfo.bg} ${statusInfo.color} text-[10px] font-bold p-2 rounded-lg mb-3 text-center uppercase tracking-wider`}>
+                {statusInfo.urgency}
               </div>
             )}
             <button
