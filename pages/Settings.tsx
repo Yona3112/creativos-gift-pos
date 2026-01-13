@@ -16,7 +16,7 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
   const [error, setError] = useState<string | null>(null);
   const [storageUsage, setStorageUsage] = useState({ used: 0, total: 1, percent: 0 });
 
-  const [syncStatus, setSyncStatus] = useState<{ type: 'success' | 'danger' | 'info', message: string } | null>(null);
+  const [syncStatus, setSyncStatus] = useState<{ type: 'success' | 'danger' | 'info', message: string, results?: any } | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
 
   // User Management State
@@ -391,13 +391,13 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
                       setIsSyncing(true);
                       setSyncStatus({ type: 'info', message: 'Subiendo datos a la nube...' });
                       try {
-                        await SupabaseService.syncAll();
+                        const results = await SupabaseService.syncAll();
                         // Save last backup date
                         const now = new Date().toISOString();
                         const updatedSettings = { ...settings, lastBackupDate: now };
                         await db.saveSettings(updatedSettings);
                         setSettings(updatedSettings);
-                        setSyncStatus({ type: 'success', message: '¡Datos subidos con éxito!' });
+                        setSyncStatus({ type: 'success', message: '¡Datos subidos con éxito!', results });
                         if (onUpdate) onUpdate();
                       } catch (err: any) {
                         setSyncStatus({ type: 'danger', message: `Error al subir: ${err.message}` });
@@ -423,7 +423,29 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
                   </Button>
                 </div>
                 {syncStatus && (
-                  <Alert variant={syncStatus.type}>{syncStatus.message}</Alert>
+                  <div className={`p-4 rounded-xl border ${syncStatus.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' :
+                    syncStatus.type === 'danger' ? 'bg-red-50 border-red-200 text-red-800' :
+                      'bg-blue-50 border-blue-200 text-blue-800'
+                    }`}>
+                    <div className="flex items-center gap-2 font-bold mb-2">
+                      <i className={`fas ${syncStatus.type === 'success' ? 'fa-check-circle' :
+                        syncStatus.type === 'danger' ? 'fa-exclamation-circle' :
+                          'fa-info-circle'
+                        }`}></i>
+                      {syncStatus.message}
+                    </div>
+                    {syncStatus.results && (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs mt-2">
+                        {Object.entries(syncStatus.results).map(([table, status]: [string, any]) => (
+                          <div key={table} className="flex items-center gap-1">
+                            <span className={`w-2 h-2 rounded-full ${status === 'Sincronizado' ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                            <span className="font-medium">{table}:</span>
+                            <span className="opacity-75 truncate">{status}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             )}

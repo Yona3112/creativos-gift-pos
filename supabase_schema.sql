@@ -94,7 +94,10 @@ CREATE TABLE IF NOT EXISTS sales (
   "pointsMonetaryValue" NUMERIC,
   "fulfillmentStatus" TEXT,
   "shippingDetails" JSONB,
-  "originalQuoteId" TEXT
+  "originalQuoteId" TEXT,
+  "isOrder" BOOLEAN DEFAULT false,
+  "deposit" NUMERIC DEFAULT 0,
+  "balance" NUMERIC DEFAULT 0
 );
 
 -- Credits
@@ -263,7 +266,9 @@ CREATE TABLE IF NOT EXISTS settings (
   "masterPassword" TEXT,
   "supabaseUrl" TEXT,
   "supabaseKey" TEXT,
-  "autoSync" BOOLEAN DEFAULT false
+  "autoSync" BOOLEAN DEFAULT false,
+  "lastBackupDate" TEXT,
+  "logoObjectFit" TEXT
 );
 
 -- ================================================
@@ -272,3 +277,9 @@ CREATE TABLE IF NOT EXISTS settings (
 -- ================================================
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS "currentProductCode" INTEGER DEFAULT 1;
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS "currentQuoteNumber" INTEGER DEFAULT 1;
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS "lastBackupDate" TEXT;
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS "logoObjectFit" TEXT;
+
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS "isOrder" BOOLEAN DEFAULT false;
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS "deposit" NUMERIC DEFAULT 0;
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS "balance" NUMERIC DEFAULT 0;

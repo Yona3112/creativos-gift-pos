@@ -94,7 +94,11 @@ export class SupabaseService {
         // Settings is a special case (single row)
         if (data.settings) {
             console.log("📤 Sincronizando settings...");
-            const { error } = await client.from('settings').upsert({ id: 'main', ...data.settings });
+            // Filter settings to only include columns that exist in Supabase
+            // This prevents errors if local settings has extra UI-only properties
+            const { lastBackupDate, ...settingsToSync } = data.settings;
+
+            const { error } = await client.from('settings').upsert({ id: 'main', ...settingsToSync });
             if (error) {
                 console.error("❌ Error en settings:", error);
                 results['settings'] = `Error: ${error.message}`;
