@@ -822,7 +822,7 @@ class StorageService {
           // Item doesn't exist locally, add it
           await table.put(remoteItem);
         } else {
-          // Item exists locally - compare by date if available, otherwise keep local
+          // Item exists locally - compare by date if available
           const remoteDate = remoteItem.date || remoteItem.createdAt || remoteItem.updatedAt;
           const localDate = localItem.date || localItem.createdAt || localItem.updatedAt;
 
@@ -832,8 +832,10 @@ class StorageService {
               await table.put(remoteItem);
             }
             // If local is newer, keep local (do nothing)
+          } else {
+            // If no dates available, remote data wins (user chose to restore/download)
+            await table.put(remoteItem);
           }
-          // If no dates, keep local version (safer)
         }
       }
     };

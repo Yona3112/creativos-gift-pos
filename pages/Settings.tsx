@@ -120,7 +120,9 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
 
   // User Management Handlers
   const handleSaveUser = async () => {
-    if (!userFormData.name || !userFormData.email || !userFormData.password) {
+    // Password only required for new users (no id means new user)
+    const isNewUser = !userFormData.id;
+    if (!userFormData.name || !userFormData.email || (isNewUser && !userFormData.password)) {
       showToast("Complete todos los campos obligatorios", "warning");
       return;
     }
@@ -296,6 +298,7 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Button type="button" variant="secondary" onClick={handleBackup} icon="download">Descargar Respaldo</Button>
               <Button type="button" variant="outline" onClick={handleRestoreClick} icon="upload">Restaurar Respaldo</Button>
+              <input type="file" ref={fileInputRef} className="hidden" accept=".json,application/json" onChange={handleFileChange} />
             </div>
           </div>
         </Card>
