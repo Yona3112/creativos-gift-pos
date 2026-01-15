@@ -8,11 +8,13 @@ interface LayoutProps {
   user: User | null;
   currentBranch: Branch | null;
   branches: Branch[];
-  settings: CompanySettings;
+  settings: CompanySettings | null;
   onLogout: () => void;
   onChangeBranch: (id: string) => void;
-  currentPage: string;
+  activePage: string;
   onNavigate: (page: string) => void;
+  onManualUpload: () => void;
+  onManualDownload: () => void;
 }
 
 const MENU_ITEMS = [
@@ -29,7 +31,13 @@ const MENU_ITEMS = [
 ];
 
 // Cloud Upload Reminder Bell Component
-const BackupReminderBell: React.FC<{ settings: CompanySettings; onNavigate: (page: string) => void }> = ({ settings, onNavigate }) => {
+const BackupReminderBell: React.FC<{
+  settings: CompanySettings;
+  onNavigate: (page: string) => void;
+  onManualUpload: () => void;
+  onManualDownload: () => void;
+  userRole?: string;
+}> = ({ settings, onNavigate, onManualUpload, onManualDownload, userRole }) => {
   const [showDropdown, setShowDropdown] = useState(false);
 
   const getBackupStatus = () => {
@@ -97,13 +105,35 @@ const BackupReminderBell: React.FC<{ settings: CompanySettings; onNavigate: (pag
                 {statusInfo.urgency}
               </div>
             )}
-            <button
-              onClick={() => { setShowDropdown(false); onNavigate('settings'); }}
-              className="w-full py-2 bg-primary text-white rounded-lg text-sm font-bold hover:bg-opacity-90 transition-colors flex items-center justify-center gap-2"
-            >
-              <i className="fas fa-cloud-upload-alt"></i>
-              Ir a Configuración
-            </button>
+            <div className="grid grid-cols-2 gap-2 mb-4">
+              <button
+                onClick={() => { setShowDropdown(false); onManualUpload(); }}
+                className="flex flex-col items-center justify-center p-3 bg-indigo-50 text-indigo-700 rounded-xl hover:bg-indigo-100 transition-colors gap-2 group"
+                title="Subir datos a la nube"
+              >
+                <i className="fas fa-cloud-upload-alt text-xl group-hover:scale-110 transition-transform"></i>
+                <span className="text-[10px] font-black uppercase">Subir</span>
+              </button>
+
+              <button
+                onClick={() => { setShowDropdown(false); onManualDownload(); }}
+                className="flex flex-col items-center justify-center p-3 bg-amber-50 text-amber-700 rounded-xl hover:bg-amber-100 transition-colors gap-2 group"
+                title="Descargar datos de la nube"
+              >
+                <i className="fas fa-cloud-download-alt text-xl group-hover:scale-110 transition-transform"></i>
+                <span className="text-[10px] font-black uppercase">Bajar</span>
+              </button>
+            </div>
+
+            {userRole !== 'vendedor' && (
+              <button
+                onClick={() => { setShowDropdown(false); onNavigate('settings'); }}
+                className="w-full py-2 bg-gray-100 text-gray-600 rounded-lg text-[11px] font-bold hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
+              >
+                <i className="fas fa-cog"></i>
+                Ir a Configuración
+              </button>
+            )}
             {settings.lastBackupDate && (
               <p className="text-xs text-gray-400 mt-2 text-center">
                 Última subida: {new Date(settings.lastBackupDate).toLocaleString()}
@@ -117,7 +147,7 @@ const BackupReminderBell: React.FC<{ settings: CompanySettings; onNavigate: (pag
 };
 
 export const Layout: React.FC<LayoutProps> = ({
-  children, user, currentBranch, branches, settings, onLogout, onChangeBranch, currentPage, onNavigate
+  children, user, settings, onLogout, activePage, onNavigate, onManualUpload, onManualDownload
 }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showLogoModal, setShowLogoModal] = useState(false);
@@ -168,7 +198,7 @@ export const Layout: React.FC<LayoutProps> = ({
             <button
               key={item.id}
               onClick={() => { onNavigate(item.id); setSidebarOpen(false); }}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${currentPage === item.id ? 'bg-primary text-white shadow-lg' : 'text-gray-500 hover:bg-gray-50'}`}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${activePage === item.id ? 'bg-primary text-white shadow-lg' : 'text-gray-500 hover:bg-gray-50'}`}
             >
               <i className={`fas fa-${item.icon} w-5`}></i> {item.label}
             </button>
@@ -185,11 +215,19 @@ export const Layout: React.FC<LayoutProps> = ({
           <div className="font-bold text-gray-500 text-sm flex items-center gap-2">
             <span className="opacity-50">Menú</span>
             <i className="fas fa-chevron-right text-[10px]"></i>
-            <span className="text-primary">{MENU_ITEMS.find(i => i.id === currentPage)?.label || 'Panel Principal'}</span>
+            <span className="text-primary">{MENU_ITEMS.find(i => i.id === activePage)?.label || 'Panel Principal'}</span>
           </div>
 
           <div className="flex items-center gap-4">
-            <BackupReminderBell settings={settings} onNavigate={onNavigate} />
+            {settings && (
+              <BackupReminderBell
+                settings={settings}
+                onNavigate={onNavigate}
+                onManualUpload={onManualUpload}
+                onManualDownload={onManualDownload}
+                userRole={user?.role}
+              />
+            )}
 
             <div className="h-8 w-px bg-gray-200 mx-2"></div>
 
@@ -208,7 +246,15 @@ export const Layout: React.FC<LayoutProps> = ({
           <button onClick={() => setSidebarOpen(true)} className="w-10 h-10 flex items-center justify-center bg-gray-50 rounded-xl"><i className="fas fa-bars"></i></button>
           <span className="font-black text-primary">{settings?.name || 'Creativos Gift'}</span>
           <div className="flex items-center gap-2">
-            <BackupReminderBell settings={settings} onNavigate={onNavigate} />
+            {settings && (
+              <BackupReminderBell
+                settings={settings}
+                onNavigate={onNavigate}
+                onManualUpload={onManualUpload}
+                onManualDownload={onManualDownload}
+                userRole={user?.role}
+              />
+            )}
             <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-white font-bold text-xs">{user?.name?.charAt(0) || '?'}</div>
           </div>
         </header>

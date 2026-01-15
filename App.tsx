@@ -20,7 +20,7 @@ import { InventoryHistory } from './pages/InventoryHistory';
 import { Credits } from './pages/Credits';
 import { SARBooks } from './pages/SARBooks';
 // Fix: Added Card to the imported components from UIComponents
-import { Button, Input, Card, useNotifications, ToastContainer } from './components/UIComponents';
+import { Button, Input, Card, useNotifications, ToastContainer, showToast } from './components/UIComponents';
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -48,19 +48,27 @@ function App() {
   const [quoteToLoad, setQuoteToLoad] = useState<Quote | null>(null);
   const { sendNotification } = useNotifications();
 
-  const refreshData = async (shouldPushToCloud = false) => {
+  const refreshData = async (shouldPushToCloud = false, isManual = false) => {
     try {
       if (shouldPushToCloud) {
         const sett = await db.getSettings();
         // SOLO PUSH: Subir cambios locales a la nube, NUNCA descargar automáticamente
         // El pull solo debe hacerse manualmente desde Settings para evitar pérdida de datos
-        if (sett.supabaseUrl && sett.supabaseKey && sett.autoSync) {
+        if (sett.supabaseUrl && sett.supabaseKey && (sett.autoSync || isManual)) {
           const { SupabaseService } = await import('./services/supabaseService');
           try {
+            if (isManual) showToast("Sincronizando con la nube...", "info");
             await SupabaseService.syncAll(); // Solo PUSH
             console.log("☁️ Push a la nube completado.");
+            if (isManual) showToast("Nube actualizada con éxito", "success");
+
+            // Actualizar fecha de último backup
+            const now = new Date().toISOString();
+            await db.saveSettings({ ...sett, lastBackupDate: now });
+            setSettings(s => s ? ({ ...s, lastBackupDate: now }) : s);
           } catch (pushErr) {
             console.warn("⚠️ No se pudo subir a la nube:", pushErr);
+            if (isManual) showToast("Error al sincronizar con la nube", "error");
           }
         }
       }
@@ -182,6 +190,35 @@ function App() {
     localStorage.removeItem('creativos_gift_currentUser');
     localStorage.removeItem('active_user');
     setPage('dashboard');
+  };
+
+  // Sync on Entry: Trigger push sync when user is set
+  useEffect(() => {
+    if (user) {
+      console.log("🚀 Usuario ingresó al sistema. Iniciando push sync...");
+      refreshData(true);
+    }
+  }, [user?.id]);
+
+  const handleManualUpload = async () => {
+    await refreshData(true, true);
+  };
+
+  const handleManualDownload = async () => {
+    try {
+      showToast("Descargando datos de la nube...", "info");
+      const { SupabaseService } = await import('./services/supabaseService');
+      const data = await SupabaseService.pullAll();
+      if (data) {
+        showToast("Datos descargados y restaurados", "success");
+        // Forzar recarga de todos los estados locales
+        await refreshData(false);
+      } else {
+        showToast("No se encontró información en la nube", "warning");
+      }
+    } catch (e: any) {
+      showToast(`Error al descargar: ${e.message}`, "error");
+    }
   };
 
   const navigateTo = (p: string, params?: any) => {
@@ -311,13 +348,12 @@ function App() {
       </style>
       <Layout
         user={user}
-        currentBranch={currentBranch}
-        branches={branches}
-        settings={settings || ({} as CompanySettings)}
-        onLogout={handleLogout}
-        onChangeBranch={(id) => setCurrentBranch(branches.find(b => b.id === id) || null)}
-        currentPage={page}
+        activePage={page}
         onNavigate={navigateTo}
+        onLogout={() => setUser(null)}
+        settings={settings}
+        onManualUpload={handleManualUpload}
+        onManualDownload={handleManualDownload}
       >
         {renderPage()}
       </Layout>
