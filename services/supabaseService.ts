@@ -71,6 +71,7 @@ export class SupabaseService {
             { name: 'cash_cuts', data: data.cash_cuts },
             { name: 'credit_notes', data: data.credit_notes },
             { name: 'fixed_expenses', data: data.fixedExpenses },
+            { name: 'expenses', data: data.expenses },
             { name: 'inventory_history', data: data.inventoryHistory },
             { name: 'price_history', data: data.priceHistory }
         ];
@@ -94,11 +95,28 @@ export class SupabaseService {
         // Settings is a special case (single row)
         if (data.settings) {
             console.log("📤 Sincronizando settings...");
-            // Filter settings to only include columns that exist in Supabase
-            // This prevents errors if local settings has extra UI-only properties
-            const { lastBackupDate, ...settingsToSync } = data.settings;
 
-            const { error } = await client.from('settings').upsert({ id: 'main', ...settingsToSync });
+            // List of columns that we know exist in the cloud table
+            // This prevents errors if local settings has new UI-only or transient properties
+            const cloudColumns = [
+                'id', 'name', 'rtn', 'address', 'phone', 'email', 'cai',
+                'billingRangeStart', 'billingRangeEnd', 'billingDeadline',
+                'currentInvoiceNumber', 'currentTicketNumber', 'currentProductCode', 'currentQuoteNumber',
+                'printerSize', 'moneyPerPoint', 'pointValue', 'defaultCreditRate', 'defaultCreditTerm',
+                'creditDueDateAlertDays', 'enableCreditAlerts', 'showFloatingWhatsapp', 'whatsappTemplate',
+                'logo', 'themeColor', 'whatsappNumber', 'masterPassword', 'supabaseUrl', 'supabaseKey',
+                'autoSync', 'lastBackupDate', 'logoObjectFit', 'thanksMessage', 'warrantyPolicy', 'returnPolicy',
+                'barcodeWidth', 'barcodeHeight', 'showLogoOnBarcode', 'barcodeLogoSize'
+            ];
+
+            const settingsToSync: any = { id: 'main' };
+            cloudColumns.forEach(col => {
+                if (data.settings[col] !== undefined) {
+                    settingsToSync[col] = data.settings[col];
+                }
+            });
+
+            const { error } = await client.from('settings').upsert(settingsToSync);
             if (error) {
                 console.error("❌ Error en settings:", error);
                 results['settings'] = `Error: ${error.message}`;

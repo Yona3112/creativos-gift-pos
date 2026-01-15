@@ -192,12 +192,27 @@ function App() {
     setPage('dashboard');
   };
 
-  // Sync on Entry: Trigger push sync when user is set
+  // Sync on Entry: Trigger pull then push sync when user is set
   useEffect(() => {
-    if (user) {
-      console.log("🚀 Usuario ingresó al sistema. Iniciando push sync...");
-      refreshData(true);
-    }
+    const initSync = async () => {
+      if (user) {
+        console.log("🚀 Usuario ingresó al sistema. Iniciando pull then push sync...");
+        // 1. Siempre intentar bajar primero para no sobreescribir lo de otros dispositivos
+        try {
+          // Usamos handleManualDownload pero sin los toasts invasivos iniciales si es posible, 
+          // pero para simplicidad y feedback reusamos la lógica
+          await handleManualDownload();
+          console.log("✅ Pull inicial completado");
+        } catch (e) {
+          console.warn("⚠️ Falló el pull inicial:", e);
+        }
+
+        // 2. Luego subir lo local (que ahora incluye lo bajado + cambios locales)
+        await refreshData(true);
+        console.log("✅ Push inicial completado");
+      }
+    };
+    initSync();
   }, [user?.id]);
 
   const handleManualUpload = async () => {
