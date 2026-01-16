@@ -511,46 +511,37 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
 
             {(settings.supabaseUrl && settings.supabaseKey) && (
               <div className="flex flex-col gap-3 pt-4 border-t">
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant="primary"
-                    className="flex-1"
-                    onClick={async () => {
-                      setIsSyncing(true);
-                      setSyncStatus({ type: 'info', message: 'Subiendo datos a la nube...' });
-                      try {
-                        const results = await SupabaseService.syncAll();
-                        // Save last backup date
-                        const now = new Date().toISOString();
-                        const updatedSettings = { ...settings, lastBackupDate: now };
-                        await db.saveSettings(updatedSettings);
-                        setSettings(updatedSettings);
-                        setSyncStatus({ type: 'success', message: '¡Datos subidos con éxito!', results });
-                        if (onUpdate) onUpdate();
-                      } catch (err: any) {
-                        setSyncStatus({ type: 'danger', message: `Error al subir: ${err.message}` });
-                      } finally {
-                        setIsSyncing(false);
-                      }
-                    }}
-                    disabled={isSyncing}
-                    icon={isSyncing ? 'spinner fa-spin' : 'cloud-upload-alt'}
-                  >
-                    Subir a la Nube (Backup)
-                  </Button>
-
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="flex-1"
-                    onClick={() => setDownloadConfirm(true)}
-                    disabled={isSyncing}
-                    icon={isSyncing ? 'spinner fa-spin' : 'cloud-download-alt'}
-                  >
-                    Descargar de la Nube
-                  </Button>
-                </div>
+                <Button
+                  type="button"
+                  variant="primary"
+                  className="w-full"
+                  onClick={async () => {
+                    setIsSyncing(true);
+                    setSyncStatus({ type: 'info', message: 'Subiendo datos a la nube...' });
+                    try {
+                      const results = await SupabaseService.syncAll();
+                      // Save last backup date
+                      const now = new Date().toISOString();
+                      const updatedSettings = { ...settings, lastBackupDate: now };
+                      await db.saveSettings(updatedSettings);
+                      setSettings(updatedSettings);
+                      setSyncStatus({ type: 'success', message: '¡Datos subidos con éxito!', results });
+                      if (onUpdate) onUpdate();
+                    } catch (err: any) {
+                      setSyncStatus({ type: 'danger', message: `Error al subir: ${err.message}` });
+                    } finally {
+                      setIsSyncing(false);
+                    }
+                  }}
+                  disabled={isSyncing}
+                  icon={isSyncing ? 'spinner fa-spin' : 'cloud-upload-alt'}
+                >
+                  Subir a la Nube (Backup Manual)
+                </Button>
+                <p className="text-xs text-gray-500 text-center">
+                  <i className="fas fa-info-circle mr-1"></i>
+                  La descarga de datos es automática al iniciar sesión
+                </p>
                 {syncStatus && (
                   <div className={`p-4 rounded-xl border ${syncStatus.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' :
                     syncStatus.type === 'danger' ? 'bg-red-50 border-red-200 text-red-800' :
