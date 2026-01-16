@@ -113,8 +113,10 @@ function App() {
           db.checkAndAutoSync();
         }, 15 * 60 * 1000); // Check every 15 minutes
 
-        // IMPORTANTE: El intervalo solo hace PUSH, no PULL
-        // Esto evita que datos viejos de la nube sobrescriban cambios locales
+        // DESACTIVADO: Intervalo de sync automático cada 30s
+        // Problema: El push constante impedía guardar configuraciones correctamente
+        // Reactivar cuando el sistema esté limpio y estable
+        /*
         intervalId = setInterval(async () => {
           try {
             const sett = await db.getSettings();
@@ -127,6 +129,7 @@ function App() {
             console.warn("⚠️ Error en auto-sync:", e);
           }
         }, 30000); // Cada 30 segundos
+        */
 
         const storedUser = localStorage.getItem('creativos_gift_currentUser');
         if (storedUser) {
@@ -192,24 +195,18 @@ function App() {
     setPage('dashboard');
   };
 
-  // Sync on Entry: Trigger pull then push sync when user is set
+  // Sync on Entry: DESACTIVADO TEMPORALMENTE
+  // Problema: El pull automático restauraba datos de la nube y deshacía cambios locales
+  // Si necesitas sincronizar, hazlo manualmente desde Configuración > "Descargar de la Nube"
   useEffect(() => {
     const initSync = async () => {
       if (user) {
-        console.log("🚀 Usuario ingresó al sistema. Iniciando pull then push sync...");
-        // 1. Siempre intentar bajar primero para no sobreescribir lo de otros dispositivos
-        try {
-          // Usamos handleManualDownload pero sin los toasts invasivos iniciales si es posible, 
-          // pero para simplicidad y feedback reusamos la lógica
-          await handleManualDownload();
-          console.log("✅ Pull inicial completado");
-        } catch (e) {
-          console.warn("⚠️ Falló el pull inicial:", e);
-        }
-
-        // 2. Luego subir lo local (que ahora incluye lo bajado + cambios locales)
+        console.log("🚀 Usuario ingresó al sistema.");
+        // DESACTIVADO: El pull automático causaba bucle de sincronización
+        // Para sincronizar manualmente, usa Configuración > Descargar de la Nube
+        // Solo hacemos push de datos locales si autoSync está activado
         await refreshData(true);
-        console.log("✅ Push inicial completado");
+        console.log("✅ Push inicial completado (sin pull automático)");
       }
     };
     initSync();
