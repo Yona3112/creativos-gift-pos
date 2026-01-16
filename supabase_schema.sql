@@ -268,7 +268,17 @@ CREATE TABLE IF NOT EXISTS settings (
   "supabaseKey" TEXT,
   "autoSync" BOOLEAN DEFAULT false,
   "lastBackupDate" TEXT,
-  "logoObjectFit" TEXT
+  "logoObjectFit" TEXT,
+  -- NEW COLUMNS FOR FULL SYNC SUPPORT
+  "thanksMessage" TEXT,
+  "warrantyPolicy" TEXT,
+  "returnPolicy" TEXT,
+  "barcodeWidth" INTEGER DEFAULT 50,
+  "barcodeHeight" INTEGER DEFAULT 25,
+  "showLogoOnBarcode" BOOLEAN DEFAULT false,
+  "barcodeLogoSize" INTEGER DEFAULT 10,
+  "legalOwnerName" TEXT,
+  "legalCity" TEXT
 );
 
 -- ================================================
@@ -279,7 +289,17 @@ ALTER TABLE settings ADD COLUMN IF NOT EXISTS "currentProductCode" INTEGER DEFAU
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS "currentQuoteNumber" INTEGER DEFAULT 1;
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS "lastBackupDate" TEXT;
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS "logoObjectFit" TEXT;
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS "thanksMessage" TEXT;
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS "warrantyPolicy" TEXT;
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS "returnPolicy" TEXT;
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS "barcodeWidth" INTEGER DEFAULT 50;
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS "barcodeHeight" INTEGER DEFAULT 25;
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS "showLogoOnBarcode" BOOLEAN DEFAULT false;
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS "barcodeLogoSize" INTEGER DEFAULT 10;
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS "legalOwnerName" TEXT;
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS "legalCity" TEXT;
 
 ALTER TABLE sales ADD COLUMN IF NOT EXISTS "isOrder" BOOLEAN DEFAULT false;
 ALTER TABLE sales ADD COLUMN IF NOT EXISTS "deposit" NUMERIC DEFAULT 0;
 ALTER TABLE sales ADD COLUMN IF NOT EXISTS "balance" NUMERIC DEFAULT 0;
+
