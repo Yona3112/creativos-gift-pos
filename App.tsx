@@ -113,19 +113,23 @@ function App() {
           db.checkAndAutoSync();
         }, 15 * 60 * 1000); // Check every 15 minutes
 
-        // Auto-sync: Push cambios locales a la nube cada 30 segundos
+        // Auto-sync DESACTIVADO: El push automático cada 30s puede subir datos viejos
+        // El push ahora solo ocurre cuando el usuario hace un cambio real (guardar producto, venta, etc.)
+        // Esto se maneja en storageService.triggerAutoSync() que se llama después de cada operación
+        /*
         intervalId = setInterval(async () => {
           try {
             const sett = await db.getSettings();
             if (sett.supabaseUrl && sett.supabaseKey && sett.autoSync) {
               const { SupabaseService } = await import('./services/supabaseService');
-              await SupabaseService.syncAll(); // Solo PUSH, no pull
+              await SupabaseService.syncAll();
               console.log("🔄 Auto-sync push completado.");
             }
           } catch (e) {
             console.warn("⚠️ Error en auto-sync:", e);
           }
-        }, 30000); // Cada 30 segundos
+        }, 30000);
+        */
 
         const storedUser = localStorage.getItem('creativos_gift_currentUser');
         if (storedUser) {
@@ -191,19 +195,20 @@ function App() {
     setPage('dashboard');
   };
 
-  // Sync on Entry: Sincronización automática al ingresar
-  // 1. Primero baja datos de la nube para tener lo más reciente
-  // 2. Luego sube los datos locales para no perder nada
+  // Sync on Entry: Solo PULL al ingresar
+  // IMPORTANTE: NO hacer push automático al inicio porque puede subir datos viejos del dispositivo
+  // El push solo debe ocurrir cuando el usuario hace cambios reales (al guardar productos, ventas, etc.)
   useEffect(() => {
     const initSync = async () => {
       if (user) {
-        console.log("🚀 Usuario ingresó al sistema. Iniciando sincronización...");
+        console.log("🚀 Usuario ingresó al sistema. Descargando datos de la nube...");
         const sett = await db.getSettings();
 
         // Solo sincronizar si Supabase está configurado
         if (sett.supabaseUrl && sett.supabaseKey) {
           try {
-            // 1. Primero PULL para tener datos más recientes de otros dispositivos
+            // SOLO PULL - Descargar datos de la nube
+            // NO hacer push para evitar que datos viejos locales sobrescriban la nube
             console.log("⬇️ Descargando datos de la nube...");
             const { SupabaseService } = await import('./services/supabaseService');
             await SupabaseService.pullAll();
@@ -213,11 +218,9 @@ function App() {
             await refreshData(false);
           } catch (pullErr) {
             console.warn("⚠️ Error al descargar de la nube (continuando...):", pullErr);
+            // Si falla el pull, cargar datos locales
+            await refreshData(false);
           }
-
-          // 2. Luego PUSH para subir cualquier cambio local
-          await refreshData(true);
-          console.log("✅ Sincronización completa");
         } else {
           // Sin Supabase configurado, solo cargar datos locales
           await refreshData(false);
