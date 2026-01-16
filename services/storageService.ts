@@ -398,6 +398,10 @@ class StorageService {
     return customers.filter(c => c.active !== false);
   }
   async saveCustomer(c: Customer) {
+    // Auto-generate ID if not provided (new customer)
+    if (!c.id) {
+      c.id = Date.now().toString() + Math.random().toString(36).substring(2, 7);
+    }
     await db_engine.customers.put(c);
     const settings = await this.getSettings();
     if (settings.autoSync) this.triggerAutoSync();
