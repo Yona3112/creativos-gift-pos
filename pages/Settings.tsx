@@ -28,15 +28,12 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
   const [restoreConfirm, setRestoreConfirm] = useState<{ open: boolean; data: any }>({ open: false, data: null });
   const [deleteUserConfirm, setDeleteUserConfirm] = useState<{ open: boolean; id: string }>({ open: false, id: '' });
   const [downloadConfirm, setDownloadConfirm] = useState(false);
-  const [showClearDataConfirm, setShowClearDataConfirm] = useState(false);
+
   const [purgeYears, setPurgeYears] = useState(1);
   const [showPurgeConfirm, setShowPurgeConfirm] = useState(false);
-  const [showFullResetConfirm, setShowFullResetConfirm] = useState(false);
 
-  // Password protection for danger zone
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [passwordInput, setPasswordInput] = useState('');
-  const [pendingAction, setPendingAction] = useState<'clear' | 'reset' | null>(null);
+
+
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -584,12 +581,12 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
           </div>
         </Card>
 
-        <Card title="Zona de Peligro" className="border-red-200 bg-red-50">
-          <div className="space-y-6">
-            <div className="flex items-center justify-between border-b border-red-100 pb-4">
+        <Card title="Mantenimiento de Base de Datos" className="border-amber-200 bg-amber-50">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
               <div>
-                <h3 className="font-bold text-red-700">Purga de Datos Históricos</h3>
-                <p className="text-xs text-red-600 font-medium italic">Optimiza la base de datos eliminando registros muy antiguos.</p>
+                <h3 className="font-bold text-amber-700">Purga de Datos Históricos</h3>
+                <p className="text-xs text-amber-600 font-medium italic">Optimiza la base de datos eliminando registros muy antiguos.</p>
                 <div className="mt-2 flex items-center gap-2">
                   <label className="text-[10px] font-bold text-gray-500 uppercase">Eliminar anteriores a:</label>
                   <select
@@ -604,40 +601,6 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
                 </div>
               </div>
               <Button type="button" variant="outline" onClick={() => setShowPurgeConfirm(true)}>Ejecutar Purga</Button>
-            </div>
-
-            <div className="flex items-center justify-between border-b border-red-100 pb-4">
-              <div>
-                <h3 className="font-bold text-red-700">Borrar Datos de Prueba</h3>
-                <p className="text-xs text-red-600 font-medium">Elimina VENTAS, GASTOS, COTIZACIONES y MOVIMIENTOS. Mantiene productos y clientes.</p>
-              </div>
-              <Button
-                type="button"
-                variant="warning"
-                onClick={() => {
-                  setPendingAction('clear');
-                  setShowPasswordModal(true);
-                }}
-              >
-                Limpiar Historial
-              </Button>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-bold text-red-700">RESETEO TOTAL (PRODUCCIÓN)</h3>
-                <p className="text-xs text-red-600 font-bold">BORRA TODO: Productos, Clientes, Ventas, Gastos y Configuraciones de Inventario.</p>
-              </div>
-              <Button
-                type="button"
-                variant="danger"
-                onClick={() => {
-                  setPendingAction('reset');
-                  setShowPasswordModal(true);
-                }}
-              >
-                ⚠️ BORRADO TOTAL
-              </Button>
             </div>
           </div>
         </Card>
@@ -672,60 +635,6 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
         </div>
       </Modal>
 
-      {/* Admin Password Modal */}
-      <Modal
-        isOpen={showPasswordModal}
-        onClose={() => {
-          setShowPasswordModal(false);
-          setPasswordInput('');
-          setPendingAction(null);
-        }}
-        title="Confirmación de Seguridad"
-      >
-        <div className="space-y-4">
-          <Alert variant="warning">
-            <i className="fas fa-lock mr-2"></i>
-            Esta acción es destructiva. Ingrese la <strong>Contraseña Maestra</strong> para continuar.
-          </Alert>
-          <Input
-            label="Contraseña de Administrador"
-            type="password"
-            value={passwordInput}
-            onChange={e => setPasswordInput(e.target.value)}
-            placeholder="Ingrese la contraseña"
-            autoFocus
-          />
-          <div className="pt-4 flex justify-end gap-2">
-            <Button
-              variant="secondary"
-              onClick={() => {
-                setShowPasswordModal(false);
-                setPasswordInput('');
-                setPendingAction(null);
-              }}
-            >
-              Cancelar
-            </Button>
-            <Button
-              variant="danger"
-              onClick={() => {
-                const masterPass = settings.masterPassword || 'admin123';
-                if (passwordInput === masterPass) {
-                  setShowPasswordModal(false);
-                  setPasswordInput('');
-                  if (pendingAction === 'clear') setShowClearDataConfirm(true);
-                  if (pendingAction === 'reset') setShowFullResetConfirm(true);
-                  setPendingAction(null);
-                } else {
-                  showToast("Contraseña incorrecta", "error");
-                }
-              }}
-            >
-              Verificar
-            </Button>
-          </div>
-        </div>
-      </Modal>
 
       {/* ConfirmDialogs */}
       <ConfirmDialog
@@ -798,37 +707,6 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
         onCancel={() => setShowPurgeConfirm(false)}
       />
 
-      <ConfirmDialog
-        isOpen={showClearDataConfirm}
-        title="¿BORRAR TODO EL HISTORIAL?"
-        message="Esta acción es IRREVERSIBLE. Se eliminarán todas las ventas, reportes, cierres y movimientos de inventario. Mantiene productos y clientes."
-        confirmText="SÍ, BORRAR HISTORIAL"
-        cancelText="Cancelar"
-        variant="warning"
-        onConfirm={async () => {
-          setShowClearDataConfirm(false);
-          await db.clearTransactionalData();
-          showToast('Historial transaccional eliminado correctamente.', 'success');
-          setTimeout(() => window.location.reload(), 1500);
-        }}
-        onCancel={() => setShowClearDataConfirm(false)}
-      />
-
-      <ConfirmDialog
-        isOpen={showFullResetConfirm}
-        title="¿RESETEO TOTAL DEL SISTEMA?"
-        message="Esta acción ELIMINARÁ ABSOLUTAMENTE TODO (Productos, Clientes, Inventario, Ventas, etc.). El sistema quedará vacío y listo para iniciar producción desde cero. ¡ESTA ACCIÓN ES IRREVERSIBLE!"
-        confirmText="SÍ, RESETEAR TODO"
-        cancelText="Cancelar"
-        variant="danger"
-        onConfirm={async () => {
-          setShowFullResetConfirm(false);
-          await db.fullSystemReset();
-          showToast('Sistema reseteado exitosamente para producción.', 'success');
-          setTimeout(() => window.location.reload(), 1500);
-        }}
-        onCancel={() => setShowFullResetConfirm(false)}
-      />
     </div>
   );
 };
