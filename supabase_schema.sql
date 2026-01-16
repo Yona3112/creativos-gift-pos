@@ -209,6 +209,16 @@ CREATE TABLE IF NOT EXISTS expenses (
   "branchId" TEXT
 );
 
+-- Fixed Expenses (Recurring)
+CREATE TABLE IF NOT EXISTS fixed_expenses (
+  id TEXT PRIMARY KEY,
+  description TEXT NOT NULL,
+  amount NUMERIC NOT NULL,
+  "categoryId" TEXT,
+  "paymentMethod" TEXT,
+  active BOOLEAN DEFAULT true
+);
+
 -- Inventory History
 CREATE TABLE IF NOT EXISTS inventory_history (
   id TEXT PRIMARY KEY,
