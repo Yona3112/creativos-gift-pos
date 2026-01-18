@@ -21,10 +21,12 @@ const MENU_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: 'chart-pie' },
   { id: 'pos', label: 'Vender (F1)', icon: 'cash-register' },
   { id: 'orders', label: 'Pedidos / Taller', icon: 'tasks' },
+  { id: 'cashCut', label: 'Corte de Caja', icon: 'calculator' },
   { id: 'expenses', label: 'Gastos / Egresos', icon: 'money-bill-wave' },
   { id: 'products', label: 'Inventario / Kardex', icon: 'boxes' },
   { id: 'salesHistory', label: 'Facturación / Caja', icon: 'file-invoice-dollar' },
   { id: 'customers', label: 'Clientes / Puntos', icon: 'users' },
+  { id: 'credits', label: 'Créditos / Abonos', icon: 'hand-holding-usd' },
   { id: 'reports', label: 'Inteligencia Negocio', icon: 'chart-bar' },
   { id: 'sarBooks', label: 'Libros SAR', icon: 'book' },
   { id: 'settings', label: 'Configuración', icon: 'cog' },
@@ -153,7 +155,7 @@ export const Layout: React.FC<LayoutProps> = ({
   const [showLogoModal, setShowLogoModal] = useState(false);
 
   const filteredMenu = MENU_ITEMS.filter(item => {
-    const restrictedForVendor = ['settings', 'reports', 'branches', 'users', 'sarBooks'];
+    const restrictedForVendor = ['settings', 'reports', 'branches', 'users', 'sarBooks', 'expenses', 'dashboard'];
     // FIX: Added optional chaining to prevent crash if user is null
     if (user?.role === UserRole.VENDEDOR && restrictedForVendor.includes(item.id)) return false;
     return true;

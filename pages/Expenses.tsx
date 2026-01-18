@@ -57,6 +57,7 @@ export const Expenses: React.FC<ExpensesProps> = ({ user, onUpdate, settings }) 
         await load();
         onUpdate();
         setIsModalOpen(false);
+        setFormData({ categoryId: 'Otros', paymentMethod: 'Efectivo', amount: 0, description: '', date: new Date().toISOString().split('T')[0] });
     };
 
     const handleFixedSubmit = async (e: React.FormEvent) => {
@@ -181,7 +182,11 @@ export const Expenses: React.FC<ExpensesProps> = ({ user, onUpdate, settings }) 
                                             <td className="p-4 text-gray-600">{exp.description}</td>
                                             <td className="p-4 text-xs font-bold">{exp.paymentMethod}</td>
                                             <td className="p-4 text-right font-black text-red-600">L {exp.amount.toFixed(2)}</td>
-                                            <td className="p-4 text-right">
+                                            <td className="p-4 text-right space-x-3">
+                                                <button onClick={() => {
+                                                    setFormData(exp);
+                                                    setIsModalOpen(true);
+                                                }} className="text-blue-500 hover:text-blue-700"><i className="fas fa-edit"></i></button>
                                                 <button onClick={() => handleDelete(exp.id, 'expense')} className="text-red-400 hover:text-red-600"><i className="fas fa-trash"></i></button>
                                             </td>
                                         </tr>
@@ -239,7 +244,7 @@ export const Expenses: React.FC<ExpensesProps> = ({ user, onUpdate, settings }) 
                 </Card>
             )}
 
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Registrar Egreso">
+            <Modal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setFormData({ categoryId: 'Otros', paymentMethod: 'Efectivo', amount: 0, description: '', date: new Date().toISOString().split('T')[0] }); }} title={formData.id ? "Editar Gasto" : "Registrar Egreso"}>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <Input label="Fecha" type="date" value={formData.date} onChange={e => setFormData({ ...formData, date: e.target.value })} required />
                     <Input label="Descripción del Gasto" value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} required placeholder="Ej: Pago de Luz local 2" />

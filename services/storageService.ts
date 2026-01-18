@@ -1028,6 +1028,61 @@ class StorageService {
     if (settings.autoSync) this.triggerAutoSync();
   }
 
+  async getCashCuts(): Promise<CashCut[]> {
+    return await db_engine.cashCuts.toArray();
+  }
+
+  async getLastCashCut(): Promise<CashCut | null> {
+    const cuts = await db_engine.cashCuts.toArray();
+    if (cuts.length === 0) return null;
+    // Sort by date descending and return the most recent
+    cuts.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    return cuts[0];
+  }
+
+  // Check if there are sales from previous day(s) without a corresponding cash cut
+  async hasPendingCashCut(): Promise<{ pending: boolean; lastCutDate: string | null; salesWithoutCut: number }> {
+    const getLocalDate = (d: Date) => {
+      const offset = d.getTimezoneOffset() * 60000;
+      return new Date(d.getTime() - offset).toISOString().split('T')[0];
+    };
+
+    const today = getLocalDate(new Date());
+    const yesterday = getLocalDate(new Date(Date.now() - 86400000));
+
+    const lastCut = await this.getLastCashCut();
+    const lastCutDate = lastCut ? getLocalDate(new Date(lastCut.date)) : null;
+
+    // If last cut is from today, we're good
+    if (lastCutDate === today) {
+      return { pending: false, lastCutDate, salesWithoutCut: 0 };
+    }
+
+    // Check if there were sales yesterday (or before) that weren't covered by a cash cut
+    const allSales = await db_engine.sales.toArray();
+    const salesBeforeToday = allSales.filter(s => {
+      const saleDate = getLocalDate(new Date(s.date));
+      return saleDate < today && saleDate !== lastCutDate && s.status === 'active';
+    });
+
+    // If no last cut exists but there are old sales, they need a cut
+    if (!lastCutDate && salesBeforeToday.length > 0) {
+      return { pending: true, lastCutDate: null, salesWithoutCut: salesBeforeToday.length };
+    }
+
+    // If sales exist from after the last cut but before today, cut is required
+    const salesAfterLastCut = allSales.filter(s => {
+      const saleDate = getLocalDate(new Date(s.date));
+      return saleDate < today && (!lastCutDate || saleDate > lastCutDate) && s.status === 'active';
+    });
+
+    if (salesAfterLastCut.length > 0) {
+      return { pending: true, lastCutDate, salesWithoutCut: salesAfterLastCut.length };
+    }
+
+    return { pending: false, lastCutDate, salesWithoutCut: 0 };
+  }
+
   async refundCreditNote(id: string) {
     const nc = await db_engine.creditNotes.get(id);
     if (nc) {

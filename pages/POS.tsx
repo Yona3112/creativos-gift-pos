@@ -15,15 +15,20 @@ interface POSProps {
     onQuoteProcessed?: () => void;
     onRefreshData?: () => void;
     settings: CompanySettings;
+    onNavigate?: (page: string) => void;
 }
 
 export const POS: React.FC<POSProps> = ({
-    products, customers, categories, user, branchId, onSaleComplete, loadedQuote, onQuoteProcessed, onRefreshData, settings
+    products, customers, categories, user, branchId, onSaleComplete, loadedQuote, onQuoteProcessed, onRefreshData, settings, onNavigate
 }) => {
     const [cart, setCart] = useState<CartItem[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState<string>('all');
     const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+
+    // Cash Cut Blocking State
+    const [cashCutBlocked, setCashCutBlocked] = useState(false);
+    const [pendingCutInfo, setPendingCutInfo] = useState<{ lastCutDate: string | null; salesCount: number }>({ lastCutDate: null, salesCount: 0 });
 
     const [isCartOpen, setIsCartOpen] = useState(false);
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -124,6 +129,18 @@ export const POS: React.FC<POSProps> = ({
             if (onQuoteProcessed) onQuoteProcessed();
         }
     }, [loadedQuote]);
+
+    // Check for pending cash cut on mount
+    useEffect(() => {
+        const checkCashCut = async () => {
+            const result = await db.hasPendingCashCut();
+            if (result.pending) {
+                setCashCutBlocked(true);
+                setPendingCutInfo({ lastCutDate: result.lastCutDate, salesCount: result.salesWithoutCut });
+            }
+        };
+        checkCashCut();
+    }, []);
 
     // Keyboard Shortcuts
     useEffect(() => {
@@ -370,6 +387,39 @@ export const POS: React.FC<POSProps> = ({
 
     return (
         <div className="h-[calc(100vh-100px)] flex flex-col lg:flex-row gap-4 relative overflow-hidden">
+            {/* MODAL DE BLOQUEO POR CORTE DE CAJA PENDIENTE */}
+            {cashCutBlocked && (
+                <div className="fixed inset-0 z-[100] bg-gray-900/80 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl p-8 max-w-md w-full text-center shadow-2xl animate-scale-in">
+                        <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <i className="fas fa-exclamation-triangle text-4xl text-red-500"></i>
+                        </div>
+                        <h2 className="text-2xl font-black text-gray-800 mb-3">Corte de Caja Pendiente</h2>
+                        <p className="text-gray-600 mb-2">
+                            No puedes realizar ventas hasta completar el corte de caja del turno anterior.
+                        </p>
+                        <div className="bg-red-50 p-4 rounded-xl mb-6 text-sm">
+                            <p className="text-red-700 font-bold">
+                                <i className="fas fa-info-circle mr-2"></i>
+                                {pendingCutInfo.salesCount} venta(s) sin cierre de caja
+                            </p>
+                            {pendingCutInfo.lastCutDate && (
+                                <p className="text-red-600 text-xs mt-1">
+                                    Último corte: {pendingCutInfo.lastCutDate}
+                                </p>
+                            )}
+                        </div>
+                        <Button
+                            className="w-full py-4"
+                            onClick={() => onNavigate && onNavigate('cashCut')}
+                            icon="calculator"
+                        >
+                            Ir a Corte de Caja
+                        </Button>
+                    </div>
+                </div>
+            )}
+
             {/* SECCIÓN IZQUIERDA: PRODUCTOS */}
             <div className="flex-1 flex flex-col gap-4 min-h-0 pb-20 lg:pb-0">
                 <div className="flex gap-2 shrink-0">
