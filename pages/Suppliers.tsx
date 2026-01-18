@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Supplier } from '../types';
-import { Card, Button, Input, Modal } from '../components/UIComponents';
+import { Card, Button, Input, Modal, showToast } from '../components/UIComponents';
 import { db } from '../services/storageService';
 
 export const Suppliers: React.FC = () => {
@@ -16,6 +16,7 @@ export const Suppliers: React.FC = () => {
         db.saveSupplier(formData as Supplier);
         setItems(db.getSuppliers());
         setIsModalOpen(false);
+        showToast("Proveedor guardado exitosamente.", "success");
     };
 
     return (
@@ -24,7 +25,7 @@ export const Suppliers: React.FC = () => {
                 <h1 className="text-2xl font-bold text-gray-800">Proveedores</h1>
                 <Button onClick={() => { setFormData({}); setIsModalOpen(true); }} icon="plus">Nuevo Proveedor</Button>
             </div>
-            
+
             <Card noPadding>
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">
@@ -66,18 +67,18 @@ export const Suppliers: React.FC = () => {
 
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Gestionar Proveedor">
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    <Input label="Nombre Empresa" value={formData.companyName || ''} onChange={e => setFormData({...formData, companyName: e.target.value})} required />
-                    
+                    <Input label="Nombre Empresa" value={formData.companyName || ''} onChange={e => setFormData({ ...formData, companyName: e.target.value })} required />
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <Input label="Responsable de Contacto" value={formData.contactName || ''} onChange={e => setFormData({...formData, contactName: e.target.value})} required />
-                        <Input label="RTN" value={formData.rtn || ''} onChange={e => setFormData({...formData, rtn: e.target.value})} placeholder="Ej: 08011999123456" />
+                        <Input label="Responsable de Contacto" value={formData.contactName || ''} onChange={e => setFormData({ ...formData, contactName: e.target.value })} required />
+                        <Input label="RTN" value={formData.rtn || ''} onChange={e => setFormData({ ...formData, rtn: e.target.value })} placeholder="Ej: 08011999123456" />
                     </div>
 
-                    <Input label="Dirección Física" value={formData.address || ''} onChange={e => setFormData({...formData, address: e.target.value})} placeholder="Colonia, Calle, Local..." />
+                    <Input label="Dirección Física" value={formData.address || ''} onChange={e => setFormData({ ...formData, address: e.target.value })} placeholder="Colonia, Calle, Local..." />
 
                     <div className="grid grid-cols-2 gap-4">
-                        <Input label="Teléfono" value={formData.phone || ''} onChange={e => setFormData({...formData, phone: e.target.value})} required />
-                        <Input label="Email" type="email" value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} required />
+                        <Input label="Teléfono" value={formData.phone || ''} onChange={e => setFormData({ ...formData, phone: e.target.value })} required />
+                        <Input label="Email" type="email" value={formData.email || ''} onChange={e => setFormData({ ...formData, email: e.target.value })} required />
                     </div>
                     <Button type="submit" className="w-full">Guardar</Button>
                 </form>

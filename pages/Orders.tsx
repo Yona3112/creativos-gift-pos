@@ -184,8 +184,8 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
 
             const customerName = getCustomerName(s.customerId);
             const matchSearch =
-                s.folio.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (s.folio || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (customerName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (s.shippingDetails?.trackingNumber || '').toLowerCase().includes(searchTerm.toLowerCase());
 
             return matchStatus && matchSearch && matchDate;

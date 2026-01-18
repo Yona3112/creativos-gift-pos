@@ -21,12 +21,26 @@ export const InventoryHistory: React.FC<Props> = ({ products, users }) => {
         return history.filter(h => {
             const p = products.find(prod => prod.id === h.productId);
             const search = searchTerm.toLowerCase();
-            return p?.name.toLowerCase().includes(search) || p?.code.toLowerCase().includes(search) || h.reason.toLowerCase().includes(search);
+            return (p?.name || '').toLowerCase().includes(search) || (p?.code || '').toLowerCase().includes(search) || (h.reason || '').toLowerCase().includes(search);
         });
     }, [history, searchTerm, products]);
 
+    // Helper para fechas locales
+    const getLocalDate = (dateStr: string) => {
+        if (!dateStr) return '';
+        const date = new Date(dateStr);
+        const offset = date.getTimezoneOffset() * 60000;
+        return new Date(date.getTime() - offset).toLocaleString('es-HN', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    };
+
     const getMovementBadge = (type: string) => {
-        switch(type) {
+        switch (type) {
             case 'SALE': return <Badge variant="danger">Venta</Badge>;
             case 'PURCHASE': return <Badge variant="success">Compra/Entrada</Badge>;
             case 'RETURN': return <Badge variant="info">Devolución</Badge>;
@@ -62,13 +76,13 @@ export const InventoryHistory: React.FC<Props> = ({ products, users }) => {
                                 const u = users.find(user => user.id === m.userId);
                                 return (
                                     <tr key={m.id} className="hover:bg-gray-50">
-                                        <td className="p-4 text-gray-500">{new Date(m.date).toLocaleString()}</td>
-                                        <td className="p-4 font-bold">{p?.name || 'Desconocido'}</td>
+                                        <td className="p-4 text-gray-500">{getLocalDate(m.date)}</td>
+                                        <td className="p-4 font-bold">{p?.name || 'Producto Desconocido'}</td>
                                         <td className="p-4 text-center">{getMovementBadge(m.type)}</td>
-                                        <td className={`p-4 text-center font-black ${m.quantity > 0 ? 'text-green-600' : 'text-red-600'}`}>{m.quantity > 0 ? '+' : ''}{m.quantity}</td>
-                                        <td className="p-4 text-center text-gray-400">{m.previousStock}</td>
-                                        <td className="p-4 text-center font-bold">{m.newStock}</td>
-                                        <td className="p-4 text-gray-600 italic">{m.reason}</td>
+                                        <td className={`p-4 text-center font-black ${(m.quantity || 0) > 0 ? 'text-green-600' : 'text-red-600'}`}>{(m.quantity || 0) > 0 ? '+' : ''}{m.quantity}</td>
+                                        <td className="p-4 text-center text-gray-400">{(m.previousStock || 0)}</td>
+                                        <td className="p-4 text-center font-bold">{(m.newStock || 0)}</td>
+                                        <td className="p-4 text-gray-600 italic">{m.reason || 'Sin motivo'}</td>
                                         <td className="p-4 text-xs">{u?.name || 'Sistema'}</td>
                                     </tr>
                                 );

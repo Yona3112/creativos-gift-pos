@@ -94,18 +94,18 @@ export const POS: React.FC<POSProps> = ({
         });
 
         return {
-            subtotal: subtotalWithoutTax,
-            taxAmount: totalTax
+            subtotal: Number(subtotalWithoutTax.toFixed(2)),
+            taxAmount: Number(totalTax.toFixed(2))
         };
     }, [cart]);
 
     // Total con ISV incluido (suma de precios de venta)
     const totalWithTax = useMemo(() =>
-        cart.reduce((sum, item) => sum + (item.price * item.quantity), 0),
+        Number(cart.reduce((sum, item) => sum + (item.price * item.quantity), 0).toFixed(2)),
         [cart]);
 
-    const totalDiscount = (parseFloat(globalDiscount) || 0) + pointsDiscount;
-    const total = Math.max(0, totalWithTax - totalDiscount);
+    const totalDiscount = Number(((parseFloat(globalDiscount) || 0) + pointsDiscount).toFixed(2));
+    const total = Math.max(0, Number((totalWithTax - totalDiscount).toFixed(2)));
 
     // Lo que el cliente debe entregar en efectivo/tarjeta/etc hoy
     const cashRequiredToday = useMemo(() => {
@@ -114,7 +114,7 @@ export const POS: React.FC<POSProps> = ({
             amt = parseFloat(depositAmount) || 0;
         }
         // Las notas de crédito reducen el monto a pagar en otros medios
-        return Math.max(0, amt - creditNoteAmount);
+        return Math.max(0, Number((amt - creditNoteAmount).toFixed(2)));
     }, [total, isImmediateDelivery, depositAmount, creditNoteAmount]);
 
     const change = paymentMethod === 'Efectivo' ? Math.max(0, (parseFloat(receivedAmount) || 0) - cashRequiredToday) : 0;
@@ -176,7 +176,7 @@ export const POS: React.FC<POSProps> = ({
     const filteredProducts = useMemo(() => {
         return products.filter(p => {
             if (p.active === false) return false;
-            const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.code.toLowerCase().includes(searchTerm.toLowerCase());
+            const matchesSearch = (p.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || (p.code || '').toLowerCase().includes(searchTerm.toLowerCase());
             const matchesCategory = selectedCategory === 'all' || p.categoryId === selectedCategory;
             return matchesSearch && matchesCategory;
         });
@@ -359,6 +359,7 @@ export const POS: React.FC<POSProps> = ({
         // Mostrar modal de éxito estilizado
         setSavedQuoteFolio(quote.folio);
         setIsQuoteSuccessModalOpen(true);
+        showToast("Cotización guardada exitosamente.", "success");
         if (onRefreshData) onRefreshData();
     };
 
@@ -369,7 +370,7 @@ export const POS: React.FC<POSProps> = ({
             if (!lowerTerm) return;
 
             // 1. Intentar buscar por coincidencia EXACTA de código (prioridad escáner)
-            const exactCodeMatch = products.find(p => p.code.toLowerCase() === lowerTerm && p.active !== false);
+            const exactCodeMatch = products.find(p => (p.code || '').toLowerCase() === lowerTerm && p.active !== false);
 
             if (exactCodeMatch) {
                 addToCart(exactCodeMatch);
@@ -663,7 +664,7 @@ export const POS: React.FC<POSProps> = ({
                                 onClick={async () => {
                                     if (!creditNoteFolio) return;
                                     const cn = await db.getCreditNotes();
-                                    const found = cn.find(n => n.folio.toLowerCase() === creditNoteFolio.toLowerCase() && n.status === 'active');
+                                    const found = cn.find(n => (n.folio || '').toLowerCase() === creditNoteFolio.toLowerCase() && n.status === 'active');
                                     if (found && found.remainingAmount > 0) {
                                         setCreditNoteMax(found.remainingAmount);
                                         setCreditNoteAmount(Math.min(found.remainingAmount, total));

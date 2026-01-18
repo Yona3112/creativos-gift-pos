@@ -55,12 +55,36 @@ export const Credits: React.FC<CreditsProps> = ({ settings }) => {
 
     const filteredPayments = useMemo(() => {
         return allPayments.filter(p => {
-            const matchesSearch = p.customerName.toLowerCase().includes(historySearchTerm.toLowerCase()) ||
-                p.creditRef.toLowerCase().includes(historySearchTerm.toLowerCase());
+            const matchesSearch = (p.customerName || '').toLowerCase().includes(historySearchTerm.toLowerCase()) ||
+                (p.creditRef || '').toLowerCase().includes(historySearchTerm.toLowerCase());
+            // Safe date comparison
             const matchesDate = historyDateFilter ? p.date.startsWith(historyDateFilter) : true;
             return matchesSearch && matchesDate;
         });
     }, [allPayments, historySearchTerm, historyDateFilter]);
+
+    // Helper for consistent date display
+    const getLocalDate = (dateStr: string) => {
+        if (!dateStr) return '';
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('es-HN', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            timeZone: 'America/Tegucigalpa'
+        });
+    };
+
+    const getLocalTime = (dateStr: string) => {
+        if (!dateStr) return '';
+        const date = new Date(dateStr);
+        return date.toLocaleTimeString('es-HN', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true,
+            timeZone: 'America/Tegucigalpa'
+        });
+    };
 
     const printPaymentReceipt = (credit: CreditAccount, payment: CreditPayment, customerName: string) => {
         const remaining = credit.totalAmount - credit.paidAmount;
@@ -81,7 +105,7 @@ export const Credits: React.FC<CreditsProps> = ({ settings }) => {
                     <div class="text-center">
                         <h3 class="bold">${settings.name}</h3>
                         <p>RECIBO DE ABONO</p>
-                        <p>${new Date(payment.date).toLocaleString()}</p>
+                        <p>${getLocalDate(payment.date)} ${getLocalTime(payment.date)}</p>
                     </div>
                     <div class="line"></div>
                     <p><strong>Cliente:</strong> ${customerName}</p>
@@ -117,7 +141,7 @@ export const Credits: React.FC<CreditsProps> = ({ settings }) => {
         if (win) {
             const paymentsRows = credit.payments.map(p => `
                 <tr>
-                    <td>${new Date(p.date).toLocaleDateString()}</td>
+                    <td>${getLocalDate(p.date)}</td>
                     <td>${p.method}</td>
                     <td>Abono</td>
                     <td style="text-align:right;">L ${p.amount.toFixed(2)}</td>
@@ -140,7 +164,7 @@ export const Credits: React.FC<CreditsProps> = ({ settings }) => {
                     <h1>ESTADO DE CUENTA</h1>
                     <h3>${settings.name}</h3>
                     <p><strong>Cliente:</strong> ${customer?.name}</p>
-                    <p><strong>Fecha Vencimiento:</strong> ${new Date(credit.dueDate).toLocaleDateString()}</p>
+                    <p><strong>Fecha Vencimiento:</strong> ${getLocalDate(credit.dueDate)}</p>
                     
                     <table>
                         <thead>
@@ -153,7 +177,7 @@ export const Credits: React.FC<CreditsProps> = ({ settings }) => {
                         </thead>
                         <tbody>
                             <tr>
-                                <td>${new Date(credit.createdAt).toLocaleDateString()}</td>
+                                <td>${getLocalDate(credit.createdAt)}</td>
                                 <td>Apertura Crédito</td>
                                 <td>Cargo Inicial</td>
                                 <td style="text-align:right;">L ${credit.totalAmount.toFixed(2)}</td>
@@ -211,7 +235,7 @@ export const Credits: React.FC<CreditsProps> = ({ settings }) => {
                     <div class="content">
                         <p>Por medio de la presente, <strong>${settings.name}</strong> hace constar que el cliente <strong>${customer?.name}</strong>, con ID de sistema ${customer?.id}, ha cancelado en su totalidad la deuda correspondiente al crédito con referencia <strong>${credit.saleId}</strong>.</p>
                         
-                        <p>A la fecha de hoy, ${new Date().toLocaleDateString()}, el saldo de dicha cuenta es <strong>L 0.00</strong>, por lo que se extiende el presente finiquito, liberando al cliente de cualquier obligación de pago relacionada con esta transacción específica.</p>
+                        <p>A la fecha de hoy, ${getLocalDate(new Date().toISOString())}, el saldo de dicha cuenta es <strong>L 0.00</strong>, por lo que se extiende el presente finiquito, liberando al cliente de cualquier obligación de pago relacionada con esta transacción específica.</p>
 
                         <p>Se extiende la presente a petición del interesado para los fines que estime convenientes.</p>
                     </div>
@@ -245,7 +269,8 @@ export const Credits: React.FC<CreditsProps> = ({ settings }) => {
         const amount = parseFloat(payAmount);
         const remaining = selectedCredit.totalAmount - selectedCredit.paidAmount;
 
-        if (isNaN(amount) || amount <= 0 || amount > (remaining + 0.05)) {
+        // Use a small epsilon for floating point comparison validation
+        if (isNaN(amount) || amount <= 0 || amount > (remaining + 0.01)) {
             showToast(`Monto inválido. Saldo pendiente: L ${remaining.toFixed(2)}`, "error");
             return;
         }
@@ -329,7 +354,7 @@ export const Credits: React.FC<CreditsProps> = ({ settings }) => {
                                 return (
                                     <tr key={c.id}>
                                         <td className="p-3 font-medium">{cust?.name}</td>
-                                        <td className="p-3">{new Date(c.dueDate).toLocaleDateString()}</td>
+                                        <td className="p-3">{getLocalDate(c.dueDate)}</td>
                                         <td className="p-3">L {c.totalAmount.toFixed(2)}</td>
                                         <td className="p-3 text-green-600">L {c.paidAmount.toFixed(2)}</td>
                                         <td className="p-3 font-bold text-red-600">L {balance.toFixed(2)}</td>
@@ -387,8 +412,8 @@ export const Credits: React.FC<CreditsProps> = ({ settings }) => {
                             {filteredPayments.map((p, idx) => (
                                 <tr key={p.id || idx} className="hover:bg-gray-50">
                                     <td className="p-4 text-gray-600">
-                                        {new Date(p.date).toLocaleDateString()}
-                                        <span className="text-xs text-gray-400 block">{new Date(p.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                        {getLocalDate(p.date)}
+                                        <span className="text-xs text-gray-400 block">{getLocalTime(p.date)}</span>
                                     </td>
                                     <td className="p-4 font-bold text-gray-800">{p.customerName}</td>
                                     <td className="p-4 font-mono text-xs">{p.creditRef}</td>
@@ -412,6 +437,13 @@ export const Credits: React.FC<CreditsProps> = ({ settings }) => {
                     <div className="p-4 bg-gray-50 rounded-lg text-center">
                         <p className="text-sm text-gray-500">Saldo Pendiente</p>
                         <p className="text-2xl font-bold text-gray-800">L {(selectedCredit ? selectedCredit.totalAmount - selectedCredit.paidAmount : 0).toFixed(2)}</p>
+                    </div>
+
+                    <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 flex items-start gap-2">
+                        <i className="fas fa-info-circle text-blue-500 mt-0.5"></i>
+                        <p className="text-xs text-blue-700">
+                            <strong>Nota:</strong> Todos los abonos reducen el saldo general. Para cancelar la deuda total ahorrando los intereses futuros no devengados, utilice la opción <strong>"Liquidar"</strong> en la pantalla principal.
+                        </p>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">

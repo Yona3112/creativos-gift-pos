@@ -29,6 +29,7 @@ export const Categories: React.FC<CategoriesProps> = ({ categories, onUpdate, se
         await db.saveCategory(formData as Category);
         setIsModalOpen(false);
         onUpdate();
+        showToast("Categoría guardada exitosamente.", "success");
     };
 
     const applyStockToProducts = async () => {
@@ -165,7 +166,7 @@ export const Categories: React.FC<CategoriesProps> = ({ categories, onUpdate, se
                 ${products.map(p => `
                 <div class="product-card group relative bg-white rounded-2xl overflow-hidden card-shadow border border-gray-100 cursor-pointer select-none active:scale-95" 
                      onclick="toggleProduct('${p.id}')" id="card-${p.id}"
-                     data-name="${p.name.toLowerCase()}">
+                     data-name="${(p.name || '').toLowerCase()}">
                     <div class="product-image-container">
                         ${p.image ? `<img src="${p.image}" class="product-image" loading="lazy">` : `<div class="w-full h-full flex items-center justify-center text-gray-300"><i class="fas fa-box-open text-3xl opacity-50"></i></div>`}
                         <div class="check-overlay absolute inset-0 flex items-center justify-center text-white font-bold z-10">
@@ -215,7 +216,7 @@ export const Categories: React.FC<CategoriesProps> = ({ categories, onUpdate, se
             const cards = document.querySelectorAll('.product-card');
             let visibleCount = 0;
             cards.forEach(card => {
-                const name = card.getAttribute('data-name');
+                const name = card.getAttribute('data-name') || '';
                 if (name.includes(query)) { card.style.display = 'block'; visibleCount++; } else { card.style.display = 'none'; }
             });
             const emptyState = document.getElementById('emptyState');
@@ -511,6 +512,7 @@ export const Categories: React.FC<CategoriesProps> = ({ categories, onUpdate, se
                     await db.deleteCategory(deleteCatConfirm.id);
                     setDeleteCatConfirm({ open: false, id: '', name: '' });
                     onUpdate();
+                    showToast("Categoría eliminada exitosamente.", "success");
                 }}
                 onCancel={() => setDeleteCatConfirm({ open: false, id: '', name: '' })}
             />

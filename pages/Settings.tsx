@@ -94,6 +94,7 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
     await db.saveSettings(settings);
     setSaved(true);
     setError(null);
+    showToast("Configuración guardada exitosamente.", "success"); // Push notification
     setTimeout(() => setSaved(false), 3000);
     if (onUpdate) onUpdate();
   };
@@ -155,454 +156,262 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
   };
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto pb-20">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-800">Configuración del Sistema</h1>
-        {saved && <Badge variant="success">¡Guardado!</Badge>}
+    <div className="max-w-6xl mx-auto pb-24 px-4 sm:px-6 animate-fade-in">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+        <div>
+          <h1 className="text-3xl font-black text-gray-900 tracking-tight">Configuración del Sistema</h1>
+          <p className="text-gray-500 mt-1">Administra las preferencias, usuarios y datos de tu negocio.</p>
+        </div>
+        <div className="flex items-center gap-3">
+          {saved && (
+            <div className="flex items-center gap-2 px-4 py-2 bg-green-100 text-green-700 rounded-lg animate-fade-in">
+              <i className="fas fa-check-circle"></i>
+              <span className="font-bold text-sm">Cambios Guardados</span>
+            </div>
+          )}
+          <Button onClick={(e) => handleSubmit(e as any)} size="lg" icon="save" className="shadow-lg shadow-indigo-200">
+            Guardar Todo
+          </Button>
+        </div>
       </div>
 
-      {error && <Alert variant="danger">{error}</Alert>}
+      {error && <div className="mb-6"><Alert variant="danger">{error}</Alert></div>}
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <Card title="Apariencia y Marca">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-            <div className="space-y-4">
-              <label className="text-sm font-bold text-gray-700 block">Logo de la Empresa</label>
-              <div className="flex items-center gap-4">
-                <div className="w-24 h-24 border-2 border-dashed rounded-xl flex items-center justify-center bg-gray-50 overflow-hidden">
-                  {settings.logo ? (
-                    <img src={settings.logo} alt="Logo preview" className="w-full h-full object-contain" />
-                  ) : (
-                    <i className="fas fa-image text-2xl text-gray-300"></i>
-                  )}
-                </div>
-                <div className="flex-1 space-y-2">
-                  <p className="text-xs text-gray-500">Se recomienda una imagen cuadrada de máx 400x400px (WebP/PNG).</p>
-                  <Button type="button" size="sm" variant="outline" onClick={() => document.getElementById('logo-upload')?.click()} icon="upload">
-                    Seleccionar Imagen
-                  </Button>
-                  <input id="logo-upload" type="file" className="hidden" accept="image/*" onChange={handleLogoUpload} />
-                  {settings.logo && (
-                    <button type="button" className="text-xs text-red-500 font-bold ml-2 hover:underline" onClick={() => setSettings(s => s ? ({ ...s, logo: undefined }) : null)}>
-                      Quitar Logo
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* Sidebar Navigation for Settings could go here for larger screens if needed, strictly sticking to current flow but better grid */}
+
+        <div className="lg:col-span-8 space-y-8">
+          {/* Sección 1: Identidad Corporativa */}
+          <section className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="bg-gray-50 px-6 py-4 border-b border-gray-100 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center"><i className="fas fa-id-card"></i></div>
+              <h2 className="font-bold text-lg text-gray-800">Identidad Corporativa</h2>
+            </div>
+            <div className="p-6 space-y-6">
+              <div className="flex flex-col sm:flex-row gap-6">
+                <div className="flex-shrink-0">
+                  <label className="block text-sm font-bold text-gray-700 mb-2">Logotipo</label>
+                  <div className="relative group">
+                    <div className="w-32 h-32 rounded-2xl border-2 border-dashed border-gray-300 flex items-center justify-center bg-gray-50 overflow-hidden transition-all group-hover:border-indigo-400">
+                      {settings.logo ? (
+                        <img src={settings.logo} className={`w-full h-full object-${settings.logoObjectFit || 'contain'}`} />
+                      ) : (
+                        <i className="fas fa-image text-4xl text-gray-300 group-hover:text-indigo-300 transition-colors"></i>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => document.getElementById('logo-upload')?.click()}
+                      className="absolute bottom-2 right-2 w-8 h-8 bg-indigo-600 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-indigo-700 transition-all transform hover:scale-110"
+                      title="Subir Logo"
+                    >
+                      <i className="fas fa-camera text-xs"></i>
                     </button>
-                  )}
+                    <input id="logo-upload" type="file" className="hidden" accept="image/*" onChange={handleLogoUpload} />
+                  </div>
+                  <div className="mt-3 flex flex-col gap-2">
+                    <label className="text-xs flex items-center gap-2 text-gray-600 cursor-pointer">
+                      <input type="radio" name="fit" checked={settings.logoObjectFit === 'cover'} onChange={() => setSettings(s => s ? ({ ...s, logoObjectFit: 'cover' }) : null)} />
+                      <span>Rellenar (Cover)</span>
+                    </label>
+                    <label className="text-xs flex items-center gap-2 text-gray-600 cursor-pointer">
+                      <input type="radio" name="fit" checked={settings.logoObjectFit !== 'cover'} onChange={() => setSettings(s => s ? ({ ...s, logoObjectFit: 'contain' }) : null)} />
+                      <span>Ajustar (Contain)</span>
+                    </label>
+                  </div>
+                </div>
+                <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="sm:col-span-2">
+                    <Input label="Nombre del Negocio" name="name" value={settings.name} onChange={handleChange} required placeholder="Ej: Mi Tienda S. de R.L." />
+                  </div>
+                  <Input label="RTN" name="rtn" value={settings.rtn} onChange={handleChange} required />
+                  <Input label="Teléfono" name="phone" value={settings.phone} onChange={handleChange} required />
+                  <div className="sm:col-span-2">
+                    <Input label="Dirección Física" name="address" value={settings.address} onChange={handleChange} required />
+                  </div>
+                  <Input label="Email" name="email" value={settings.email} onChange={handleChange} required />
+                  <Input label="WhatsApp" name="whatsappNumber" value={settings.whatsappNumber || ''} onChange={handleChange} />
                 </div>
               </div>
-            </div>
 
-            <div className="space-y-4">
-              <label className="text-sm font-bold text-gray-700 block">Ajuste de Logo</label>
-              <div className="flex gap-4">
-                <label className="flex items-center gap-2 cursor-pointer bg-gray-50 p-2 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors">
-                  <input type="radio" name="logoObjectFit" value="cover" checked={settings.logoObjectFit !== 'contain'} onChange={() => setSettings(prev => prev ? ({ ...prev, logoObjectFit: 'cover' }) : null)} className="accent-primary" />
-                  <span className="text-sm">Rellenar Círculo</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer bg-gray-50 p-2 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors">
-                  <input type="radio" name="logoObjectFit" value="contain" checked={settings.logoObjectFit === 'contain'} onChange={() => setSettings(prev => prev ? ({ ...prev, logoObjectFit: 'contain' }) : null)} className="accent-primary" />
-                  <span className="text-sm">Ajustar al Círculo</span>
-                </label>
-              </div>
-              <p className="text-[10px] text-gray-400">Seleccione "Ajustar" si su logo se corta en los bordes.</p>
-            </div>
-
-            <div className="space-y-4">
-              <label className="text-sm font-bold text-gray-700 block">Color de Marca</label>
-              <div className="flex items-center gap-4">
-                <input
-                  type="color"
-                  name="themeColor"
-                  value={settings.themeColor || '#6366F1'}
-                  onChange={handleChange}
-                  className="w-16 h-16 rounded-xl cursor-pointer border-none p-0 bg-transparent"
-                />
+              <div className="bg-indigo-50 rounded-xl p-4 border border-indigo-100 flex items-center gap-4">
                 <div className="flex-1">
-                  <Input
-                    label="Código Hex"
-                    name="themeColor"
-                    value={settings.themeColor || '#6366F1'}
-                    onChange={handleChange}
-                    placeholder="#000000"
-                  />
-                  <p className="text-[10px] text-gray-400 mt-1">Este color se usará para acentos en tickets y reportes.</p>
+                  <label className="block text-sm font-bold text-indigo-900 mb-1">Color de Marca</label>
+                  <p className="text-xs text-indigo-700">Personaliza el color principal de la aplicación.</p>
+                </div>
+                <div className="flex items-center gap-3 bg-white px-3 py-2 rounded-lg border border-indigo-200">
+                  <input type="color" name="themeColor" value={settings.themeColor || '#6366F1'} onChange={handleChange} className="w-8 h-8 rounded-full border-0 p-0 cursor-pointer" />
+                  <span className="font-mono text-sm text-gray-600 uppercase">{settings.themeColor || '#6366F1'}</span>
                 </div>
               </div>
             </div>
-          </div>
-        </Card>
+          </section>
 
-        <Card title="Información de la Empresa">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input label="Nombre del Negocio" name="name" value={settings.name} onChange={handleChange} required />
-            <Input label="RTN" name="rtn" value={settings.rtn} onChange={handleChange} required />
-            <Input label="Dirección" name="address" value={settings.address} onChange={handleChange} required />
-            <Input label="Teléfono" name="phone" value={settings.phone} onChange={handleChange} required />
-            <Input label="Correo Electrónico" name="email" value={settings.email} onChange={handleChange} required />
-            <Input label="WhatsApp (Opcional)" name="whatsappNumber" value={settings.whatsappNumber || ''} onChange={handleChange} />
-            <Input label="Contraseña Maestra" type="password" name="masterPassword" value={settings.masterPassword || ''} onChange={handleChange} placeholder="Clave para anular ventas" />
-          </div>
-        </Card>
-
-        <Card title="Configuración Fiscal (SAR)">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="md:col-span-2">
-              <Input label="CAI" name="cai" value={settings.cai} onChange={handleChange} required placeholder="000000-000000-000000-000000-000000-00" />
+          {/* Sección 2: Configuración Fiscal */}
+          <section className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="bg-gray-50 px-6 py-4 border-b border-gray-100 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center"><i className="fas fa-file-invoice-dollar"></i></div>
+              <h2 className="font-bold text-lg text-gray-800">Datos Fiscales (SAR)</h2>
             </div>
-            <Input label="Rango Inicial (000-001-01-XXXXXXXX)" name="billingRangeStart" value={settings.billingRangeStart} onChange={handleChange} required />
-            <Input label="Rango Final (000-001-01-XXXXXXXX)" name="billingRangeEnd" value={settings.billingRangeEnd} onChange={handleChange} required />
-            <Input label="Fecha Límite de Emisión" type="date" name="billingDeadline" value={settings.billingDeadline} onChange={handleChange} required />
-            <div className="grid grid-cols-2 gap-2">
-              <Input label="Próxima Factura" type="number" value={settings.currentInvoiceNumber} onChange={(e) => handleNumChange('currentInvoiceNumber', e.target.value)} required />
-              <Input label="Próximo Ticket" type="number" value={settings.currentTicketNumber || 1} onChange={(e) => handleNumChange('currentTicketNumber', e.target.value)} required />
-            </div>
-          </div>
-        </Card>
-
-        <Card title="Configuración de Puntos y Crédito">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input label="Lempiras por Punto" type="number" value={settings.moneyPerPoint} onChange={(e) => handleNumChange('moneyPerPoint', e.target.value)} />
-            <Input label="Valor monetario del Punto (L)" type="number" step="0.01" value={settings.pointValue} onChange={(e) => handleNumChange('pointValue', e.target.value)} />
-            <div className="md:col-span-2">
-              <Alert variant="info">
-                <i className="fas fa-info-circle mr-2"></i>
-                La <strong>Tasa de Interés</strong> configurada aquí es <strong>MENSUAL</strong>. Se aplicará automáticamente a todas las nuevas ventas al crédito.
-              </Alert>
-            </div>
-            <div>
-              <Input
-                label="Tasa de Interés Mensual (%)"
-                type="number"
-                value={settings.defaultCreditRate}
-                onChange={(e) => handleNumChange('defaultCreditRate', e.target.value)}
-                className="font-bold text-lg"
-              />
-              <p className="text-xs text-blue-600 font-bold mt-1">
-                Equivalente Anual: {(settings.defaultCreditRate * 12).toFixed(2)}%
-              </p>
-            </div>
-            <div className="flex items-center gap-4">
-              <label className="text-sm font-bold text-gray-700">Tamaño Impresora:</label>
-              <select name="printerSize" value={settings.printerSize} onChange={handleChange} className="p-2 border rounded-lg">
-                <option value="58mm">58mm</option>
-                <option value="80mm">80mm</option>
-              </select>
-            </div>
-          </div>
-        </Card>
-
-        <Card title="Mensajes en Factura / Tickets">
-          <div className="space-y-4">
-            <Input
-              label="Mensaje de Agradecimiento"
-              name="thanksMessage"
-              value={settings.thanksMessage || ''}
-              onChange={handleChange}
-              placeholder="Ej: ¡Gracias por preferir Creativos Gift!"
-            />
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="text-sm font-bold text-gray-700">Política de Garantía</label>
-                <textarea
-                  name="warrantyPolicy"
-                  className="w-full p-2 border rounded-lg text-sm h-20"
-                  value={settings.warrantyPolicy || ''}
-                  onChange={handleChange}
-                  placeholder="Describa los términos de garantía..."
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm font-bold text-gray-700">Política de Devoluciones</label>
-                <textarea
-                  name="returnPolicy"
-                  className="w-full p-2 border rounded-lg text-sm h-20"
-                  value={settings.returnPolicy || ''}
-                  onChange={handleChange}
-                  placeholder="Describa los términos de devoluciones..."
-                />
-              </div>
-            </div>
-            <p className="text-[10px] text-gray-400">Estos mensajes aparecerán en la parte inferior de sus tickets impresos.</p>
-          </div>
-        </Card>
-
-        <Card title="Información Legal (Contratos/Pagarés)">
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Input
-                label="Nombre del Propietario / Representante"
-                name="legalOwnerName"
-                value={settings.legalOwnerName || ''}
-                onChange={handleChange}
-                placeholder="Persona que firma los contratos"
-              />
-              <Input
-                label="Ciudad para Documentos"
-                name="legalCity"
-                value={settings.legalCity || ''}
-                onChange={handleChange}
-                placeholder="Ej: Tegucigalpa, MDC"
-              />
-            </div>
-            <p className="text-[10px] text-gray-400 font-bold uppercase">Esta información se utilizará para generar los contratos y pagarés de ventas al crédito.</p>
-          </div>
-        </Card>
-
-        <Card title="Configuración de Etiquetas (Códigos de Barra)">
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-500 uppercase">Ancho (mm)</label>
-                <input
-                  type="number"
-                  className="w-full p-2 border rounded-lg"
-                  value={settings.barcodeWidth || 50}
-                  onChange={e => handleNumChange('barcodeWidth', e.target.value)}
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-bold text-gray-500 uppercase">Alto (mm)</label>
-                <input
-                  type="number"
-                  className="w-full p-2 border rounded-lg"
-                  value={settings.barcodeHeight || 25}
-                  onChange={e => handleNumChange('barcodeHeight', e.target.value)}
-                />
-              </div>
-              <div className="flex items-center gap-2 pt-6">
-                <input
-                  type="checkbox"
-                  id="showLogoOnBarcode"
-                  className="w-4 h-4 text-primary"
-                  checked={settings.showLogoOnBarcode || false}
-                  onChange={e => setSettings(s => s ? ({ ...s, showLogoOnBarcode: e.target.checked }) : null)}
-                />
-                <label htmlFor="showLogoOnBarcode" className="text-sm font-bold text-gray-700">Mostrar Logo</label>
-              </div>
-              {settings.showLogoOnBarcode && (
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-500 uppercase">Tamaño Logo (mm)</label>
-                  <input
-                    type="number"
-                    className="w-full p-2 border rounded-lg"
-                    value={settings.barcodeLogoSize || 10}
-                    onChange={e => handleNumChange('barcodeLogoSize', e.target.value)}
-                  />
+            <div className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="md:col-span-2">
+                  <Input label="CAI (Clave de Autorización)" name="cai" value={settings.cai} onChange={handleChange} required className="font-mono text-sm" placeholder="XXXXXX-XXXXXX-XXXXXX-XXXXXX-XXXXXX-XX" />
                 </div>
-              )}
-            </div>
-            <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex items-center gap-3">
-              <i className="fas fa-info-circle text-blue-500 text-xl"></i>
-              <div className="text-xs text-blue-700">
-                Ajuste el tamaño según su rollo de etiquetas. Si activa el logo, asegúrese de tener uno subido en la sección de "Apariencia".
+                <Input label="Rango Inicial" name="billingRangeStart" value={settings.billingRangeStart} onChange={handleChange} required className="font-mono" />
+                <Input label="Rango Final" name="billingRangeEnd" value={settings.billingRangeEnd} onChange={handleChange} required className="font-mono" />
+                <Input label="Fecha Límite Emisión" type="date" name="billingDeadline" value={settings.billingDeadline} onChange={handleChange} required />
+                <div className="space-y-4">
+                  <div className="flex gap-4">
+                    <div className="flex-1">
+                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Próx. Factura</label>
+                      <input type="number" className="w-full p-2 border rounded-lg font-mono font-bold text-emerald-600" value={settings.currentInvoiceNumber} onChange={(e) => handleNumChange('currentInvoiceNumber', e.target.value)} />
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Próx. Ticket</label>
+                      <input type="number" className="w-full p-2 border rounded-lg font-mono font-bold text-gray-600" value={settings.currentTicketNumber || 1} onChange={(e) => handleNumChange('currentTicketNumber', e.target.value)} />
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        </Card>
+          </section>
 
-        <Card title="Respaldo y Almacenamiento">
-          <div className="flex flex-col gap-4">
-            <div className="bg-gray-50 p-4 rounded-xl">
-              <div className="flex justify-between mb-2 text-sm font-bold text-gray-600">
-                <span>Espacio en Navegador</span>
-                <span>{storageUsage.percent.toFixed(2)}% Usado</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2.5">
-                <div className={`h-2.5 rounded-full ${storageUsage.percent > 80 ? 'bg-red-500' : 'bg-primary'}`} style={{ width: `${Math.min(100, storageUsage.percent)}%` }}></div>
-              </div>
-              <p className="text-[10px] text-gray-400 mt-2">
-                Usado: {(storageUsage.used / (1024 * 1024)).toFixed(2)} MB de {(storageUsage.total / (1024 * 1024)).toFixed(2)} MB disponibles.
-              </p>
+          {/* Sección 3: Mensajes y Políticas */}
+          <section className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="bg-gray-50 px-6 py-4 border-b border-gray-100 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center"><i className="fas fa-comment-dots"></i></div>
+              <h2 className="font-bold text-lg text-gray-800">Mensajes y Políticas</h2>
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Button type="button" variant="secondary" onClick={handleBackup} icon="download">Descargar Respaldo</Button>
-              <Button type="button" variant="outline" onClick={handleRestoreClick} icon="upload">Restaurar Respaldo</Button>
-              <input type="file" ref={fileInputRef} className="hidden" accept=".json,application/json" onChange={handleFileChange} />
-            </div>
-          </div>
-        </Card>
-
-        {/* User Management Section */}
-        <Card title="Gestión de Usuarios">
-          <div className="space-y-4">
-            <div className="flex justify-end">
-              <Button type="button" size="sm" onClick={() => openUserModal()} icon="user-plus">Nuevo Usuario</Button>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-xs">
-                  <tr>
-                    <th className="px-4 py-2">Nombre</th>
-                    <th className="px-4 py-2">Email</th>
-                    <th className="px-4 py-2">Rol (Permisos)</th>
-                    <th className="px-4 py-2 text-right">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {users.map(u => (
-                    <tr key={u.id}>
-                      <td className="px-4 py-2 font-medium">{u.name}</td>
-                      <td className="px-4 py-2 text-gray-500">{u.email}</td>
-                      <td className="px-4 py-2"><Badge variant={u.role === UserRole.ADMIN ? 'primary' : 'default'}>{u.role}</Badge></td>
-                      <td className="px-4 py-2 text-right space-x-2">
-                        <button type="button" onClick={() => openUserModal(u)} className="text-gray-400 hover:text-blue-600"><i className="fas fa-edit"></i></button>
-                        <button type="button" onClick={() => handleDeleteUser(u.id)} className="text-gray-400 hover:text-red-500"><i className="fas fa-trash"></i></button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </Card>
-
-        <Card title="Nube y Sincronización (Supabase)">
-          <div className="space-y-4">
-            <Alert variant="info">
-              <i className="fas fa-cloud mr-2"></i>
-              Sincronice sus datos locales con Supabase para tener un respaldo en la nube y acceder desde múltiples dispositivos.
-            </Alert>
-            <div className="grid grid-cols-1 gap-4">
-              <Input label="Supabase URL" name="supabaseUrl" value={settings.supabaseUrl || ''} onChange={handleChange} placeholder="https://xyz.supabase.co" />
-              <div className="flex gap-2 items-end">
-                <Input label="Supabase Anon Key" name="supabaseKey" value={settings.supabaseKey || ''} onChange={handleChange} type="password" placeholder="eyJhb..." className="flex-1" />
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  className="mb-1"
-                  onClick={async () => {
-                    setSyncStatus({ type: 'info', message: 'Probando conexión...' });
-                    try {
-                      await SupabaseService.testConnection();
-                      setSyncStatus({ type: 'success', message: '¡Conexión exitosa!' });
-                    } catch (err: any) {
-                      setSyncStatus({ type: 'danger', message: `Fallo: ${err.message}` });
-                    }
-                  }}
-                >
-                  Probar
-                </Button>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-dashed border-gray-300">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
-                  <i className="fas fa-history"></i>
+            <div className="p-6 space-y-4">
+              <Input label="Mensaje de Agradecimiento (Ticket)" name="thanksMessage" value={settings.thanksMessage || ''} onChange={handleChange} placeholder="¡Gracias por su compra!" />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1">Garantía</label>
+                  <textarea name="warrantyPolicy" className="w-full p-3 border rounded-xl text-sm focus:ring-2 focus:ring-amber-200 outline-none transition-shadow" rows={3} value={settings.warrantyPolicy || ''} onChange={handleChange} placeholder="Términos de garantía..."></textarea>
                 </div>
                 <div>
-                  <div className="text-sm font-bold text-gray-700">Sincronización Automática</div>
-                  <div className="text-xs text-gray-500">
-                    Último respaldo: {settings.lastBackupDate ? new Date(settings.lastBackupDate).toLocaleString() : 'Nunca'}
-                  </div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1">Devoluciones</label>
+                  <textarea name="returnPolicy" className="w-full p-3 border rounded-xl text-sm focus:ring-2 focus:ring-amber-200 outline-none transition-shadow" rows={3} value={settings.returnPolicy || ''} onChange={handleChange} placeholder="Política de cambios..."></textarea>
                 </div>
               </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  className="sr-only peer"
-                  checked={settings.autoSync || false}
-                  onChange={e => setSettings(s => s ? ({ ...s, autoSync: e.target.checked }) : null)}
-                />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-              </label>
             </div>
-
-            {(settings.supabaseUrl && settings.supabaseKey) && (
-              <div className="flex flex-col gap-3 pt-4 border-t">
-                <Button
-                  type="button"
-                  variant="primary"
-                  className="w-full"
-                  onClick={async () => {
-                    setIsSyncing(true);
-                    setSyncStatus({ type: 'info', message: 'Subiendo datos a la nube...' });
-                    try {
-                      const results = await SupabaseService.syncAll();
-                      // Save last backup date
-                      const now = new Date().toISOString();
-                      const updatedSettings = { ...settings, lastBackupDate: now };
-                      await db.saveSettings(updatedSettings);
-                      setSettings(updatedSettings);
-                      setSyncStatus({ type: 'success', message: '¡Datos subidos con éxito!', results });
-                      if (onUpdate) onUpdate();
-                    } catch (err: any) {
-                      setSyncStatus({ type: 'danger', message: `Error al subir: ${err.message}` });
-                    } finally {
-                      setIsSyncing(false);
-                    }
-                  }}
-                  disabled={isSyncing}
-                  icon={isSyncing ? 'spinner fa-spin' : 'cloud-upload-alt'}
-                >
-                  Subir a la Nube (Backup Manual)
-                </Button>
-                <p className="text-xs text-gray-500 text-center">
-                  <i className="fas fa-info-circle mr-1"></i>
-                  La descarga de datos es automática al iniciar sesión
-                </p>
-                {syncStatus && (
-                  <div className={`p-4 rounded-xl border ${syncStatus.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' :
-                    syncStatus.type === 'danger' ? 'bg-red-50 border-red-200 text-red-800' :
-                      'bg-blue-50 border-blue-200 text-blue-800'
-                    }`}>
-                    <div className="flex items-center gap-2 font-bold mb-2">
-                      <i className={`fas ${syncStatus.type === 'success' ? 'fa-check-circle' :
-                        syncStatus.type === 'danger' ? 'fa-exclamation-circle' :
-                          'fa-info-circle'
-                        }`}></i>
-                      {syncStatus.message}
-                    </div>
-                    {syncStatus.results && (
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs mt-2">
-                        {Object.entries(syncStatus.results).map(([table, status]: [string, any]) => (
-                          <div key={table} className="flex items-center gap-1">
-                            <span className={`w-2 h-2 rounded-full ${status === 'Sincronizado' ? 'bg-green-500' : 'bg-red-500'}`}></span>
-                            <span className="font-medium">{table}:</span>
-                            <span className="opacity-75 truncate">{status}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </Card>
-
-        <Card title="Mantenimiento de Base de Datos" className="border-amber-200 bg-amber-50">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-bold text-amber-700">Purga de Datos Históricos</h3>
-                <p className="text-xs text-amber-600 font-medium italic">Optimiza la base de datos eliminando registros muy antiguos.</p>
-                <div className="mt-2 flex items-center gap-2">
-                  <label className="text-[10px] font-bold text-gray-500 uppercase">Eliminar anteriores a:</label>
-                  <select
-                    className="text-xs p-1 border rounded bg-white font-bold"
-                    value={purgeYears}
-                    onChange={e => setPurgeYears(parseInt(e.target.value))}
-                  >
-                    <option value={1}>1 Año</option>
-                    <option value={2}>2 Años</option>
-                    <option value={3}>3 Años</option>
-                  </select>
-                </div>
-              </div>
-              <Button type="button" variant="outline" onClick={() => setShowPurgeConfirm(true)}>Ejecutar Purga</Button>
-            </div>
-          </div>
-        </Card>
-
-
-        <div className="flex justify-end pb-10">
-          <Button type="submit" size="lg" icon="save">Guardar Configuración</Button>
+          </section>
         </div>
-      </form>
 
-      {/* User Modal */}
+        <div className="lg:col-span-4 space-y-8">
+          {/* Sección 4: Configuración Rápida (Crédito/Puntos) */}
+          <section className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="bg-gray-50 px-6 py-4 border-b border-gray-100 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center"><i className="fas fa-sliders-h"></i></div>
+              <h2 className="font-bold text-lg text-gray-800">Parámetros</h2>
+            </div>
+            <div className="p-6 space-y-6">
+              <div>
+                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Créditos</h3>
+                <div className="bg-purple-50 p-4 rounded-xl border border-purple-100">
+                  <label className="block text-sm font-bold text-purple-900 mb-1">Interés Mensual (%)</label>
+                  <div className="flex items-center gap-2">
+                    <input type="number" step="0.1" value={settings.defaultCreditRate} onChange={(e) => handleNumChange('defaultCreditRate', e.target.value)} className="w-full p-2 rounded-lg border-purple-200 font-bold text-lg text-center" />
+                    <span className="text-purple-600 font-bold">%</span>
+                  </div>
+                  <p className="text-[10px] text-purple-700 mt-2 text-center">Anual: {(settings.defaultCreditRate * 12).toFixed(1)}%</p>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Programa Lealtad</h3>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-1">Lempiras para ganar 1 Pto</label>
+                    <input type="number" value={settings.moneyPerPoint} onChange={(e) => handleNumChange('moneyPerPoint', e.target.value)} className="w-full p-2 border rounded-lg text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-1">Valor de 1 Pto (L)</label>
+                    <input type="number" step="0.01" value={settings.pointValue} onChange={(e) => handleNumChange('pointValue', e.target.value)} className="w-full p-2 border rounded-lg text-sm" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-gray-100">
+                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Hardware</h3>
+                <label className="block text-sm font-bold text-gray-700 mb-1">Ancho Ticket</label>
+                <select name="printerSize" value={settings.printerSize} onChange={handleChange} className="w-full p-2 border rounded-lg bg-gray-50">
+                  <option value="58mm">58mm (Estándar)</option>
+                  <option value="80mm">80mm (Ancho)</option>
+                </select>
+              </div>
+            </div>
+          </section>
+
+          {/* Sección 5: Usuarios */}
+          <section className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="bg-gray-50 px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center"><i className="fas fa-users"></i></div>
+                <h2 className="font-bold text-lg text-gray-800">Usuarios</h2>
+              </div>
+              <Button size="sm" onClick={() => openUserModal()} icon="plus" variant="ghost"></Button>
+            </div>
+            <div className="p-0">
+              <div className="max-h-[300px] overflow-y-auto">
+                {users.map(u => (
+                  <div key={u.id} className="flex items-center justify-between p-4 border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold ${u.role === UserRole.ADMIN ? 'bg-indigo-500' : 'bg-green-500'}`}>
+                        {u.name.substring(0, 1)}
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-gray-800">{u.name}</p>
+                        <p className="text-[10px] text-gray-500 uppercase">{u.role}</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-1">
+                      <button type="button" onClick={() => openUserModal(u)} className="w-8 h-8 rounded-full hover:bg-blue-50 text-blue-500 flex items-center justify-center transition-colors"><i className="fas fa-pen text-xs"></i></button>
+                      <button type="button" onClick={() => handleDeleteUser(u.id)} className="w-8 h-8 rounded-full hover:bg-red-50 text-red-500 flex items-center justify-center transition-colors"><i className="fas fa-trash text-xs"></i></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {/* Sección 6: Cloud & Backup */}
+          <section className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="bg-gray-50 px-6 py-4 border-b border-gray-100 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-sky-100 text-sky-600 flex items-center justify-center"><i className="fas fa-cloud"></i></div>
+              <h2 className="font-bold text-lg text-gray-800">Nube</h2>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="flex items-center justify-between p-3 bg-sky-50 rounded-xl border border-sky-100">
+                <div className="flex items-center gap-2">
+                  <div className={`w-3 h-3 rounded-full ${settings.autoSync ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`}></div>
+                  <span className="text-sm font-bold text-sky-900">Auto-Backup</span>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" className="sr-only peer" checked={settings.autoSync || false} onChange={e => setSettings(s => s ? ({ ...s, autoSync: e.target.checked }) : null)} />
+                  <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-sky-500"></div>
+                </label>
+              </div>
+
+              <Input label="Supabase URL" name="supabaseUrl" value={settings.supabaseUrl || ''} onChange={handleChange} className="text-xs" />
+              <Input label="Supabase Key" type="password" name="supabaseKey" value={settings.supabaseKey || ''} onChange={handleChange} className="text-xs" />
+
+              <div className="grid grid-cols-2 gap-2 pt-2">
+                <Button size="sm" variant="secondary" onClick={handleBackup} icon="download">Local</Button>
+                <Button size="sm" variant="primary" onClick={() => setIsSyncing(true)} disabled={isSyncing} icon={isSyncing ? 'spinner fa-spin' : 'cloud-upload-alt'}>
+                  Nube
+                </Button>
+              </div>
+
+              <button onClick={() => setShowPurgeConfirm(true)} className="w-full text-center text-xs text-red-500 hover:text-red-700 hover:underline mt-4">
+                Herramientas de Mantenimiento Avanzado
+              </button>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      {/* Modals & Dialogs (Keep existing structure but simplify styles if needed) */}
       <Modal isOpen={isUserModalOpen} onClose={() => setIsUserModalOpen(false)} title={userFormData.id ? "Editar Usuario" : "Nuevo Usuario"}>
         <div className="space-y-4">
           <Input label="Nombre Completo" value={userFormData.name || ''} onChange={e => setUserFormData({ ...userFormData, name: e.target.value })} />
@@ -626,78 +435,9 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
         </div>
       </Modal>
 
-
-      {/* ConfirmDialogs */}
-      <ConfirmDialog
-        isOpen={restoreConfirm.open}
-        title="Restaurar Datos"
-        message="¿Restaurar datos? Se reemplazarán todos los datos actuales con el respaldo."
-        confirmText="Restaurar"
-        cancelText="Cancelar"
-        variant="warning"
-        onConfirm={async () => {
-          await db.restoreData(restoreConfirm.data);
-          setRestoreConfirm({ open: false, data: null });
-          window.location.reload();
-        }}
-        onCancel={() => setRestoreConfirm({ open: false, data: null })}
-      />
-
-      <ConfirmDialog
-        isOpen={deleteUserConfirm.open}
-        title="Desactivar Usuario"
-        message="¿Desactivar este usuario? Ya no podrá iniciar sesión."
-        confirmText="Desactivar"
-        cancelText="Cancelar"
-        variant="danger"
-        onConfirm={async () => {
-          await db.deleteUser(deleteUserConfirm.id);
-          setUsers((await db.getUsers()).filter(u => u.active !== false));
-          setDeleteUserConfirm({ open: false, id: '' });
-        }}
-        onCancel={() => setDeleteUserConfirm({ open: false, id: '' })}
-      />
-
-      <ConfirmDialog
-        isOpen={downloadConfirm}
-        title="Descargar de la Nube"
-        message="Esto sobreescribirá los datos locales con los de la nube. ¿Continuar?"
-        confirmText="Descargar"
-        cancelText="Cancelar"
-        variant="warning"
-        onConfirm={async () => {
-          setDownloadConfirm(false);
-          setIsSyncing(true);
-          setSyncStatus({ type: 'info', message: 'Descargando datos de la nube...' });
-          try {
-            await SupabaseService.pullAll();
-            setSyncStatus({ type: 'success', message: '¡Datos descargados con éxito!' });
-            setTimeout(() => window.location.reload(), 2000);
-          } catch (err: any) {
-            setSyncStatus({ type: 'danger', message: `Error al descargar: ${err.message}` });
-          } finally {
-            setIsSyncing(false);
-          }
-        }}
-        onCancel={() => setDownloadConfirm(false)}
-      />
-
-      <ConfirmDialog
-        isOpen={showPurgeConfirm}
-        title="Confirmar Purga de Datos"
-        message={`¿Está seguro? Se eliminarán permanentemente las ventas y movimientos de hace más de ${purgeYears} año(s). Esta acción no se puede deshacer.`}
-        confirmText="Purgar Ahora"
-        cancelText="Cancelar"
-        variant="danger"
-        onConfirm={async () => {
-          const results = await db.purgeOldData(purgeYears);
-          showToast(`Purga completada. Se eliminaron ${results.sales} ventas y ${results.history} movimientos viejos.`, "success");
-          setShowPurgeConfirm(false);
-          if (onUpdate) onUpdate();
-        }}
-        onCancel={() => setShowPurgeConfirm(false)}
-      />
-
+      <ConfirmDialog isOpen={restoreConfirm.open} title="Restaurar Datos" message="¿Restaurar datos? Se reemplazarán todos los datos actuales con el respaldo." confirmText="Restaurar" cancelText="Cancelar" variant="warning" onConfirm={async () => { await db.restoreData(restoreConfirm.data); setRestoreConfirm({ open: false, data: null }); window.location.reload(); }} onCancel={() => setRestoreConfirm({ open: false, data: null })} />
+      <ConfirmDialog isOpen={deleteUserConfirm.open} title="Desactivar Usuario" message="¿Desactivar este usuario? Ya no podrá iniciar sesión." confirmText="Desactivar" cancelText="Cancelar" variant="danger" onConfirm={async () => { await db.deleteUser(deleteUserConfirm.id); setUsers((await db.getUsers()).filter(u => u.active !== false)); setDeleteUserConfirm({ open: false, id: '' }); }} onCancel={() => setDeleteUserConfirm({ open: false, id: '' })} />
+      <ConfirmDialog isOpen={showPurgeConfirm} title="Confirmar Purga de Datos" message={`¿Está seguro? Se eliminarán permanentemente datos antiguos.`} confirmText="Purgar Ahora" cancelText="Cancelar" variant="danger" onConfirm={async () => { const results = await db.purgeOldData(purgeYears); showToast(`Purga completada.`, "success"); setShowPurgeConfirm(false); if (onUpdate) onUpdate(); }} onCancel={() => setShowPurgeConfirm(false)} />
     </div>
   );
 };

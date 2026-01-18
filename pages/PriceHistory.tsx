@@ -21,7 +21,7 @@ export const PriceHistory: React.FC<Props> = ({ products, users }) => {
         return history.filter(h => {
             const p = products.find(prod => prod.id === h.productId);
             const search = searchTerm.toLowerCase();
-            return p?.name.toLowerCase().includes(search) || p?.code.toLowerCase().includes(search);
+            return (p?.name || '').toLowerCase().includes(search) || (p?.code || '').toLowerCase().includes(search);
         });
     }, [history, searchTerm, products]);
 

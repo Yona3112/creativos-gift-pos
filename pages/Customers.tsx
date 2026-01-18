@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Customer, LoyaltyLevel, User, UserRole, CompanySettings } from '../types';
-import { Button, Input, Card, Modal, Badge, Pagination, useDebounce, Alert, PasswordConfirmDialog } from '../components/UIComponents';
+import { Button, Input, Card, Modal, Badge, Pagination, useDebounce, Alert, PasswordConfirmDialog, showToast } from '../components/UIComponents';
 import { db } from '../services/storageService';
 
 interface CustomersProps {
@@ -24,7 +24,7 @@ export const Customers: React.FC<CustomersProps> = ({ customers, onUpdate, user,
   const debouncedSearch = useDebounce(searchTerm, 300);
   const [currentPage, setCurrentPage] = useState(1);
 
-  const validateForm = (data: Partial<Customer>): string | null => {
+  const validateForm = async (data: Partial<Customer>): Promise<string | null> => {
     // 1. Validar Nombre
     if (!data.name || data.name.trim().length < 3) {
       return "El nombre del cliente es obligatorio y debe tener al menos 3 caracteres.";
@@ -45,6 +45,13 @@ export const Customers: React.FC<CustomersProps> = ({ customers, onUpdate, user,
       if (!rtnRegex.test(cleanRTN)) {
         return "El RTN debe contener exactamente 14 dígitos numéricos.";
       }
+
+      // Chequear Duplicado de RTN
+      if (!data.id) { // Solo si es nuevo
+        const customers = await db.getCustomers();
+        const exists = customers.find(c => c.rtn === data.rtn && c.active !== false);
+        if (exists) return "Ya existe un cliente con este RTN.";
+      }
     }
 
     // 4. Validar DNI (Si es Natural y se ingresa)
@@ -53,16 +60,22 @@ export const Customers: React.FC<CustomersProps> = ({ customers, onUpdate, user,
       if (cleanDNI.length !== 13) {
         return "El DNI debe tener 13 dígitos numéricos.";
       }
+      // Chequear Duplicado de DNI
+      if (!data.id) {
+        const customers = await db.getCustomers();
+        const exists = customers.find(c => c.dni === data.dni && c.active !== false);
+        if (exists) return "Ya existe un cliente con este DNI.";
+      }
     }
 
     return null;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    const validationError = validateForm(formData);
+    const validationError = await validateForm(formData);
     if (validationError) {
       setError(validationError);
       return;
@@ -80,6 +93,7 @@ export const Customers: React.FC<CustomersProps> = ({ customers, onUpdate, user,
     setIsModalOpen(false);
     setError(null);
     onUpdate();
+    showToast("Cliente guardado exitosamente.", "success");
   };
 
   const handleArchive = (customer?: Customer) => {
@@ -102,8 +116,8 @@ export const Customers: React.FC<CustomersProps> = ({ customers, onUpdate, user,
 
       const lowerSearch = debouncedSearch.toLowerCase();
       return (
-        c.name.toLowerCase().includes(lowerSearch) ||
-        c.email.toLowerCase().includes(lowerSearch) ||
+        (c.name || '').toLowerCase().includes(lowerSearch) ||
+        (c.email || '').toLowerCase().includes(lowerSearch) ||
         (c.rtn && c.rtn.includes(debouncedSearch)) ||
         (c.dni && c.dni.includes(debouncedSearch))
       );
@@ -316,6 +330,7 @@ export const Customers: React.FC<CustomersProps> = ({ customers, onUpdate, user,
           await db.deleteCustomer(archiveConfirm.id);
           setArchiveConfirm({ open: false, id: '', name: '' });
           onUpdate();
+          showToast("Cliente archivado exitosamente.", "success");
         }}
         onCancel={() => setArchiveConfirm({ open: false, id: '', name: '' })}
       />

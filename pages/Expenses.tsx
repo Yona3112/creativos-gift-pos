@@ -18,12 +18,21 @@ export const Expenses: React.FC<ExpensesProps> = ({ user, onUpdate, settings }) 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isFixedModalOpen, setIsFixedModalOpen] = useState(false);
 
+    // Helper for Honduras Time
+    const getLocalTodayISO = () => {
+        const d = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Tegucigalpa" }));
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
+
     const [formData, setFormData] = useState<Partial<Expense>>({
         categoryId: 'Otros',
         paymentMethod: 'Efectivo',
         amount: 0,
         description: '',
-        date: new Date().toISOString().split('T')[0]
+        date: getLocalTodayISO()
     });
 
     const [fixedFormData, setFixedFormData] = useState<Partial<FixedExpense>>({
@@ -57,14 +66,17 @@ export const Expenses: React.FC<ExpensesProps> = ({ user, onUpdate, settings }) 
         await load();
         onUpdate();
         setIsModalOpen(false);
-        setFormData({ categoryId: 'Otros', paymentMethod: 'Efectivo', amount: 0, description: '', date: new Date().toISOString().split('T')[0] });
+        setFormData({ categoryId: 'Otros', paymentMethod: 'Efectivo', amount: 0, description: '', date: getLocalTodayISO() });
+        showToast("Gasto registrado exitosamente.", "success");
     };
 
     const handleFixedSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         await db.saveFixedExpense({ ...fixedFormData } as FixedExpense);
         await load();
+        await load();
         setIsFixedModalOpen(false);
+        showToast(fixedFormData.id ? "Plantilla actualizada." : "Plantilla guardada exitosamente.", "success");
     };
 
     const handleDelete = async (id: string, type: 'expense' | 'fixed') => {
@@ -79,9 +91,9 @@ export const Expenses: React.FC<ExpensesProps> = ({ user, onUpdate, settings }) 
             return;
         }
 
-        const now = new Date();
-        const monthYear = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}`;
-        const todayStr = now.toISOString().split('T')[0];
+        // Use local time for checks
+        const todayStr = getLocalTodayISO();
+        const monthYear = todayStr.substring(0, 7); // e.g., "2026-01"
 
         // Verificar si ya se aplicaron este mes (búsqueda simple por descripción y mes)
         const currentMonthExpenses = expenses.filter(e => e.date.startsWith(monthYear));
@@ -129,7 +141,7 @@ export const Expenses: React.FC<ExpensesProps> = ({ user, onUpdate, settings }) 
                             setFixedFormData({ categoryId: 'Otros', paymentMethod: 'Efectivo', amount: 0, description: '', active: true });
                             setIsFixedModalOpen(true);
                         } else {
-                            setFormData({ categoryId: 'Otros', paymentMethod: 'Efectivo', amount: 0, description: '', date: new Date().toISOString().split('T')[0] });
+                            setFormData({ categoryId: 'Otros', paymentMethod: 'Efectivo', amount: 0, description: '', date: getLocalTodayISO() });
                             setIsModalOpen(true);
                         }
                     }} icon="plus">
@@ -154,7 +166,7 @@ export const Expenses: React.FC<ExpensesProps> = ({ user, onUpdate, settings }) 
                             <div className="flex justify-between items-start">
                                 <div>
                                     <p className="text-xs font-bold text-red-600 uppercase">Total Gastos (Mes Actual)</p>
-                                    <p className="text-3xl font-black text-red-800">L {expenses.filter(e => e.date.startsWith(new Date().toISOString().slice(0, 7))).reduce((a, b) => a + b.amount, 0).toLocaleString()}</p>
+                                    <p className="text-3xl font-black text-red-800">L {expenses.filter(e => e.date.startsWith(getLocalTodayISO().substring(0, 7))).reduce((a, b) => a + b.amount, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                 </div>
                                 <Button size="sm" variant="success" icon="magic" onClick={handleApplyFixed}>Aplicar Fijos</Button>
                             </div>
@@ -244,7 +256,7 @@ export const Expenses: React.FC<ExpensesProps> = ({ user, onUpdate, settings }) 
                 </Card>
             )}
 
-            <Modal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setFormData({ categoryId: 'Otros', paymentMethod: 'Efectivo', amount: 0, description: '', date: new Date().toISOString().split('T')[0] }); }} title={formData.id ? "Editar Gasto" : "Registrar Egreso"}>
+            <Modal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setFormData({ categoryId: 'Otros', paymentMethod: 'Efectivo', amount: 0, description: '', date: getLocalTodayISO() }); }} title={formData.id ? "Editar Gasto" : "Registrar Egreso"}>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <Input label="Fecha" type="date" value={formData.date} onChange={e => setFormData({ ...formData, date: e.target.value })} required />
                     <Input label="Descripción del Gasto" value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} required placeholder="Ej: Pago de Luz local 2" />
@@ -316,6 +328,7 @@ export const Expenses: React.FC<ExpensesProps> = ({ user, onUpdate, settings }) 
                     setDeleteConfirm({ ...deleteConfirm, open: false });
                     await load();
                     onUpdate();
+                    showToast("Registro eliminado correctamente.", "success");
                 }}
                 onCancel={() => setDeleteConfirm({ ...deleteConfirm, open: false })}
             />

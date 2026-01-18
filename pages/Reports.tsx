@@ -45,27 +45,32 @@ export const Reports: React.FC<ReportsProps> = ({ sales: allSales, products: all
         let totalDiscount = 0;
 
         filteredSales.forEach(s => {
-            totalSales += s.total;
-            totalTax += s.taxAmount || 0;
-            totalDiscount += s.discount || 0;
+            totalSales += (s.total || 0);
+            totalTax += (s.taxAmount || 0);
+            totalDiscount += (s.discount || 0);
 
-            s.items.forEach(item => {
-                totalCost += (item.cost || 0) * item.quantity;
+            (s.items || []).forEach(item => {
+                totalCost += ((item.cost || 0) * (item.quantity || 0));
             });
         });
 
-        const netRevenue = totalSales - totalTax;
-        let totalProfit = netRevenue - totalCost;
+        const netRevenue = Number((totalSales - totalTax).toFixed(2));
+        let totalProfit = Number((netRevenue - totalCost).toFixed(2));
 
         // Fix: If there are no sales, utility should be 0 (requested by user)
-        // This prevents showing negative values from test data or orphaned costs in a clean state
         if (totalSales === 0) {
             totalProfit = 0;
         }
 
-        const ticketAverage = filteredSales.length > 0 ? totalSales / filteredSales.length : 0;
+        const ticketAverage = filteredSales.length > 0 ? Number((totalSales / filteredSales.length).toFixed(2)) : 0;
 
-        return { totalSales, totalProfit, ticketAverage, count: filteredSales.length, totalCost };
+        return {
+            totalSales: Number(totalSales.toFixed(2)),
+            totalProfit: Number(totalProfit.toFixed(2)),
+            ticketAverage,
+            count: filteredSales.length,
+            totalCost: Number(totalCost.toFixed(2))
+        };
     }, [filteredSales]);
 
     // 3. DATOS PARA GRÁFICO DE TENDENCIA DIARIA

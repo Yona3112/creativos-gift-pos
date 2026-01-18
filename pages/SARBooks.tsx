@@ -27,10 +27,18 @@ export const SARBooks: React.FC = () => {
         load();
     }, []);
 
+    // Helper para fechas locales (evita fallos de zona horaria)
+    const getLocalDate = (dateStr: string) => {
+        if (!dateStr) return '';
+        const date = new Date(dateStr);
+        const offset = date.getTimezoneOffset() * 60000;
+        return new Date(date.getTime() - offset).toISOString().split('T')[0];
+    };
+
     // Filter by date range
     const filteredSales = useMemo(() => {
         return sales.filter(s => {
-            const saleDate = s.date.split('T')[0];
+            const saleDate = getLocalDate(s.date);
             return saleDate >= dateFrom && saleDate <= dateTo;
         }).sort((a, b) => a.date.localeCompare(b.date));
     }, [sales, dateFrom, dateTo]);
@@ -43,13 +51,20 @@ export const SARBooks: React.FC = () => {
 
     // Calculate totals
     const totals = useMemo(() => {
-        const totalVentas = filteredSales.reduce((acc, s) => acc + s.total, 0);
-        const totalISV = filteredSales.reduce((acc, s) => acc + s.taxAmount, 0);
-        const totalGastos = filteredExpenses.reduce((acc, e) => acc + e.amount, 0);
-        const ventasNetas = totalVentas - totalISV;
-        const utilidadBruta = ventasNetas - totalGastos;
+        const totalVentas = filteredSales.reduce((acc, s) => acc + (s.total || 0), 0);
+        const totalISV = filteredSales.reduce((acc, s) => acc + (s.taxAmount || 0), 0);
+        const totalGastos = filteredExpenses.reduce((acc, e) => acc + (e.amount || 0), 0);
 
-        return { totalVentas, totalISV, totalGastos, ventasNetas, utilidadBruta };
+        const ventasNetas = Number((totalVentas - totalISV).toFixed(2));
+        const utilidadBruta = Number((ventasNetas - totalGastos).toFixed(2));
+
+        return {
+            totalVentas: Number(totalVentas.toFixed(2)),
+            totalISV: Number(totalISV.toFixed(2)),
+            totalGastos: Number(totalGastos.toFixed(2)),
+            ventasNetas,
+            utilidadBruta
+        };
     }, [filteredSales, filteredExpenses]);
 
     const exportToCSV = (type: 'ingresos' | 'gastos') => {
@@ -59,7 +74,7 @@ export const SARBooks: React.FC = () => {
         if (type === 'ingresos') {
             csv = 'Fecha,Factura,Cliente,Subtotal,ISV 15%,Total\n';
             filteredSales.forEach(s => {
-                csv += `${s.date.split('T')[0]},${s.invoiceNumber || s.id},${s.customerName || 'Consumidor Final'},${s.subtotal.toFixed(2)},${s.taxAmount.toFixed(2)},${s.total.toFixed(2)}\n`;
+                csv += `${getLocalDate(s.date)},${s.invoiceNumber || s.id},${s.customerName || 'Consumidor Final'},${(s.subtotal || 0).toFixed(2)},${(s.taxAmount || 0).toFixed(2)},${(s.total || 0).toFixed(2)}\n`;
             });
             filename = `libro_ingresos_${dateFrom}_${dateTo}.csv`;
         } else {
@@ -135,12 +150,12 @@ export const SARBooks: React.FC = () => {
                             <tbody className="divide-y">
                                 {filteredSales.map(s => (
                                     <tr key={s.id} className="hover:bg-gray-50">
-                                        <td className="p-3 font-mono text-xs">{s.date.split('T')[0]}</td>
+                                        <td className="p-3 font-mono text-xs">{getLocalDate(s.date)}</td>
                                         <td className="p-3 font-bold">{s.invoiceNumber || s.id.slice(-6)}</td>
                                         <td className="p-3">{s.customerName || 'Consumidor Final'}</td>
-                                        <td className="p-3 text-right">L {s.subtotal.toFixed(2)}</td>
-                                        <td className="p-3 text-right text-blue-600">L {s.taxAmount.toFixed(2)}</td>
-                                        <td className="p-3 text-right font-bold">L {s.total.toFixed(2)}</td>
+                                        <td className="p-3 text-right">L {(s.subtotal || 0).toFixed(2)}</td>
+                                        <td className="p-3 text-right text-blue-600">L {(s.taxAmount || 0).toFixed(2)}</td>
+                                        <td className="p-3 text-right font-bold">L {(s.total || 0).toFixed(2)}</td>
                                     </tr>
                                 ))}
                             </tbody>

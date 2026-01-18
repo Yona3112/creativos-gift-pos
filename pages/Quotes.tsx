@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Product, Customer, Quote, User, CompanySettings, UserRole } from '../types';
-import { Card, Button, Badge, PasswordConfirmDialog, Modal } from '../components/UIComponents';
+import { Card, Button, Badge, PasswordConfirmDialog, Modal, showToast } from '../components/UIComponents';
 import { db } from '../services/storageService';
 
 interface QuotesProps {
@@ -20,7 +20,8 @@ export const Quotes: React.FC<QuotesProps> = ({ products, customers, user, branc
 
     const loadQuotes = async () => {
         const list = await db.getQuotes();
-        list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        // Sort by date descending (safe string comparison for ISO dates)
+        list.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
         setQuotes(list);
     };
 
@@ -66,8 +67,10 @@ export const Quotes: React.FC<QuotesProps> = ({ products, customers, user, branc
         const win = window.open('', '', 'width=850,height=800');
         if (win) {
             const date = new Date().toLocaleDateString('es-HN', { year: 'numeric', month: 'long', day: 'numeric' });
-            const [y, m, d] = expDate.split('-').map(Number);
-            const validUntilDate = new Date(y, m - 1, d);
+            // Handle potentially missing expiration date
+            const [y, m, d] = (expDate || '').split('-').map(Number);
+            // Default to today + 15 days if invalid? Or just Today? Let's use Today if invalid.
+            const validUntilDate = (y > 0 && m > 0 && d > 0) ? new Date(y, m - 1, d) : new Date();
             const validUntil = validUntilDate.toLocaleDateString('es-HN', { year: 'numeric', month: 'long', day: 'numeric' });
 
             win.document.write(`
@@ -200,7 +203,7 @@ export const Quotes: React.FC<QuotesProps> = ({ products, customers, user, branc
                             {quotes.map(q => (
                                 <tr key={q.id} className="hover:bg-gray-50">
                                     <td className="p-4 font-mono font-bold">{q.folio}</td>
-                                    <td className="p-4">{new Date(q.date).toLocaleDateString()}</td>
+                                    <td className="p-4">{new Date(q.date).toLocaleDateString('es-HN')}</td>
                                     <td className="p-4">{customers.find(c => c.id === q.customerId)?.name || 'General'}</td>
                                     <td className="p-4"><Badge variant={q.status === 'accepted' ? 'success' : q.status === 'expired' ? 'danger' : 'warning'}>{q.status}</Badge></td>
                                     <td className="p-4 text-right font-bold">L {q.total.toFixed(2)}</td>
@@ -232,6 +235,7 @@ export const Quotes: React.FC<QuotesProps> = ({ products, customers, user, branc
                     await db.deleteQuote(deleteConfirm.id);
                     setDeleteConfirm({ open: false, id: '', folio: '' });
                     loadQuotes();
+                    showToast("Cotización eliminada correctamente.", "success");
                 }}
                 onCancel={() => setDeleteConfirm({ open: false, id: '', folio: '' })}
             />

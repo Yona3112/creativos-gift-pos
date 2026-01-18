@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Consumable, UserRole } from '../types';
-import { Card, Button, Input, Badge, Modal, PasswordConfirmDialog } from '../components/UIComponents';
+import { Card, Button, Input, Badge, Modal, PasswordConfirmDialog, showToast } from '../components/UIComponents';
 import { db } from '../services/storageService';
 
 interface ConsumablesProps {
@@ -44,6 +44,7 @@ export const Consumables: React.FC<ConsumablesProps> = ({ onUpdate }) => {
         await loadData();
         setIsModalOpen(false);
         if (onUpdate) onUpdate();
+        showToast("Insumo guardado exitosamente.", "success");
     };
 
     return (
@@ -108,11 +109,20 @@ export const Consumables: React.FC<ConsumablesProps> = ({ onUpdate }) => {
                         </datalist>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
-                        <Input label="Stock Actual" type="number" value={formData.stock || 0} onChange={e => setFormData({ ...formData, stock: parseFloat(e.target.value) })} required />
-                        <Input label="Stock Mínimo" type="number" value={formData.minStock || 0} onChange={e => setFormData({ ...formData, minStock: parseFloat(e.target.value) })} required />
+                        <Input label="Stock Actual" type="number" value={formData.stock || ''} onChange={e => {
+                            const val = parseFloat(e.target.value);
+                            setFormData({ ...formData, stock: isNaN(val) ? 0 : val });
+                        }} required />
+                        <Input label="Stock Mínimo" type="number" value={formData.minStock || ''} onChange={e => {
+                            const val = parseFloat(e.target.value);
+                            setFormData({ ...formData, minStock: isNaN(val) ? 0 : val });
+                        }} required />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
-                        <Input label="Costo" type="number" value={formData.cost || 0} onChange={e => setFormData({ ...formData, cost: parseFloat(e.target.value) })} required />
+                        <Input label="Costo" type="number" value={formData.cost || ''} onChange={e => {
+                            const val = parseFloat(e.target.value);
+                            setFormData({ ...formData, cost: isNaN(val) ? 0 : val });
+                        }} required />
                         <Input label="Unidad (ej: Rollo, Caja)" value={formData.unit || ''} onChange={e => setFormData({ ...formData, unit: e.target.value })} required />
                     </div>
                     <Button type="submit" className="w-full">Guardar</Button>
@@ -133,6 +143,7 @@ export const Consumables: React.FC<ConsumablesProps> = ({ onUpdate }) => {
                     setDeleteConfirm({ open: false, id: '', name: '' });
                     loadData();
                     if (onUpdate) onUpdate();
+                    showToast("Insumo eliminado exitosamente.", "success");
                 }}
                 onCancel={() => setDeleteConfirm({ open: false, id: '', name: '' })}
             />

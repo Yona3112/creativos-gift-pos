@@ -61,14 +61,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, 
     const stats = useMemo(() => {
         // Sales Logic
         const salesToday = sales.filter(s => getLocalDate(new Date(s.date)) === today && s.status === 'active');
-        const totalSalesToday = salesToday.reduce((acc, s) => acc + s.total, 0);
+        const totalSalesToday = salesToday.reduce((acc, s) => acc + (s.total || 0), 0);
 
         // Inventory Logic
-        const lowStock = products.filter(p => (p.enableLowStockAlert !== false) && p.stock <= p.minStock).length;
-        const inventoryValue = products.reduce((acc, p) => acc + (p.cost * p.stock), 0);
+        const lowStock = products.filter(p => (p.enableLowStockAlert !== false) && (p.stock || 0) <= (p.minStock || 0)).length;
+        const inventoryValue = products.reduce((acc, p) => acc + ((p.cost || 0) * (p.stock || 0)), 0);
 
         // Consumables Logic
-        const lowStockConsumables = consumables.filter(c => c.stock <= c.minStock);
+        const lowStockConsumables = (consumables || []).filter(c => (c.stock || 0) <= (c.minStock || 0));
 
         // Orders Logic
         const pendingOrders = sales.filter(s => s.fulfillmentStatus === 'pending' && s.status === 'active').length;
@@ -76,7 +76,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, 
         const readyOrders = sales.filter(s => s.fulfillmentStatus === 'ready' && s.status === 'active').length;
 
         // Credits Logic
-        const totalReceivable = credits.filter(c => c.status !== 'cancelled' && c.status !== 'paid').reduce((acc, c) => acc + (c.totalAmount - c.paidAmount), 0);
+        const totalReceivable = (credits || []).filter(c => c.status !== 'cancelled' && c.status !== 'paid').reduce((acc, c) => acc + ((c.totalAmount || 0) - (c.paidAmount || 0)), 0);
 
         return {
             totalSalesToday,

@@ -66,8 +66,15 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
     // NOTA: El precio siempre se guarda CON ISV incluido
     // Esto es consistente con la legislación hondureña donde el precio al público incluye el ISV
     const handlePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const val = parseFloat(e.target.value);
-        setFormData(prev => ({ ...prev, price: val }));
+        const val = e.target.value;
+        if (val === '') {
+            setFormData(prev => ({ ...prev, price: 0 }));
+            return;
+        }
+        const num = parseFloat(val);
+        if (!isNaN(num)) {
+            setFormData(prev => ({ ...prev, price: num }));
+        }
     };
 
     const getDisplayPrice = () => {
@@ -84,6 +91,7 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
             await db.saveProduct({ ...formData, id: editingProduct?.id || '' } as Product, user.id);
             setIsModalOpen(false);
             onUpdate();
+            showToast("Producto guardado exitosamente.", "success");
         } catch (error: any) {
             if (error.message.startsWith('DuplicateCode:')) {
                 const productName = error.message.split(':')[1];
@@ -107,7 +115,7 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
         const lower = debouncedSearch.toLowerCase();
         return products.filter(p => {
             if (p.active === false) return false;
-            const matchesSearch = p.name.toLowerCase().includes(lower) || p.code.toLowerCase().includes(lower);
+            const matchesSearch = (p.name || '').toLowerCase().includes(lower) || (p.code || '').toLowerCase().includes(lower);
             const matchesCategory = filterCategory === 'all' ? true : (filterCategory === 'lowStock' ? p.stock <= p.minStock : p.categoryId === filterCategory);
             return matchesSearch && matchesCategory;
         });
@@ -122,7 +130,7 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
 
     const handleScan = (e: React.FormEvent) => {
         e.preventDefault();
-        const product = products.find(p => p.code.toLowerCase() === scanCode.toLowerCase());
+        const product = products.find(p => (p.code || '').toLowerCase() === scanCode.toLowerCase());
         if (product) {
             setScanProduct(product);
             setScanQty(1);
@@ -357,15 +365,24 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
                     <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-xl">
                         <div>
                             <label className="block text-sm font-bold text-gray-700 mb-1">Precio Venta (con ISV incluido)</label>
-                            <input type="number" step="0.01" value={getDisplayPrice()} onChange={handlePriceChange} className="w-full p-3 rounded-xl border font-black text-xl" required />
+                            <input type="number" step="0.01" value={formData.price || ''} onChange={handlePriceChange} className="w-full p-3 rounded-xl border font-black text-xl" required />
                             <p className="text-[10px] text-gray-500 mt-1">El precio al público siempre incluye ISV del 15%</p>
                         </div>
-                        <Input label="Costo" type="number" step="0.01" value={formData.cost || 0} onChange={e => setFormData({ ...formData, cost: parseFloat(e.target.value) })} required />
+                        <Input label="Costo" type="number" step="0.01" value={formData.cost || ''} onChange={e => {
+                            const val = parseFloat(e.target.value);
+                            setFormData({ ...formData, cost: isNaN(val) ? 0 : val });
+                        }} required />
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
-                        <Input label="Stock" type="number" value={formData.stock || 0} onChange={e => setFormData({ ...formData, stock: parseFloat(e.target.value) })} required />
-                        <Input label="Mínimo" type="number" value={formData.minStock || 0} onChange={e => setFormData({ ...formData, minStock: parseFloat(e.target.value) })} required />
+                        <Input label="Stock" type="number" value={formData.stock || ''} onChange={e => {
+                            const val = parseFloat(e.target.value);
+                            setFormData({ ...formData, stock: isNaN(val) ? 0 : val });
+                        }} required />
+                        <Input label="Mínimo" type="number" value={formData.minStock || ''} onChange={e => {
+                            const val = parseFloat(e.target.value);
+                            setFormData({ ...formData, minStock: isNaN(val) ? 0 : val });
+                        }} required />
                     </div>
 
                     <div className="flex justify-between gap-2 pt-4 border-t">
@@ -447,6 +464,7 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
                     await db.deleteProduct(deleteConfirm.id);
                     setDeleteConfirm({ open: false, id: '', name: '' });
                     onUpdate();
+                    showToast("Producto eliminado exitosamente.", "success");
                 }}
                 onCancel={() => setDeleteConfirm({ open: false, id: '', name: '' })}
             />

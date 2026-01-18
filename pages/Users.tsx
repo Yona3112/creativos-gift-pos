@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { User, UserRole, Branch } from '../types';
-import { Card, Button, Input, Modal, Badge } from '../components/UIComponents';
+import { Card, Button, Input, Modal, Badge, showToast } from '../components/UIComponents';
 import { db } from '../services/storageService';
 
 export const Users: React.FC = () => {
@@ -28,6 +28,7 @@ export const Users: React.FC = () => {
         await db.saveUser({ ...formData, active: formData.active ?? true } as User);
         await loadData();
         setIsModalOpen(false);
+        showToast("Usuario guardado exitosamente.", "success");
     };
 
     return (
@@ -36,7 +37,7 @@ export const Users: React.FC = () => {
                 <h1 className="text-2xl font-bold text-gray-800">Gestión de Usuarios</h1>
                 <Button onClick={() => { setFormData({ role: UserRole.VENDEDOR, active: true, branchId: branches[0]?.id }); setIsModalOpen(true); }} icon="plus">Nuevo Usuario</Button>
             </div>
-            
+
             <Card>
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">
@@ -70,36 +71,36 @@ export const Users: React.FC = () => {
 
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={formData.id ? "Editar Usuario" : "Nuevo Usuario"}>
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    <Input label="Nombre Completo" value={formData.name || ''} onChange={e => setFormData({...formData, name: e.target.value})} required />
-                    <Input label="Email" type="email" value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} required />
-                    
-                    <Input 
-                        label="Contraseña" 
-                        type="password" 
-                        value={formData.password || ''} 
-                        onChange={e => setFormData({...formData, password: e.target.value})} 
+                    <Input label="Nombre Completo" value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} required />
+                    <Input label="Email" type="email" value={formData.email || ''} onChange={e => setFormData({ ...formData, email: e.target.value })} required />
+
+                    <Input
+                        label="Contraseña"
+                        type="password"
+                        value={formData.password || ''}
+                        onChange={e => setFormData({ ...formData, password: e.target.value })}
                         placeholder={formData.id ? "Dejar en blanco para no cambiar" : "Ingresa contraseña"}
-                        required={!formData.id} 
+                        required={!formData.id}
                     />
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Rol</label>
-                            <select className="w-full px-3 py-2 border rounded-lg text-gray-900" value={formData.role} onChange={e => setFormData({...formData, role: e.target.value as UserRole})}>
+                            <select className="w-full px-3 py-2 border rounded-lg text-gray-900" value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value as UserRole })}>
                                 <option value={UserRole.ADMIN}>Administrador</option>
                                 <option value={UserRole.VENDEDOR}>Vendedor</option>
                             </select>
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Sucursal Asignada</label>
-                            <select className="w-full px-3 py-2 border rounded-lg text-gray-900" value={formData.branchId} onChange={e => setFormData({...formData, branchId: e.target.value})}>
+                            <select className="w-full px-3 py-2 border rounded-lg text-gray-900" value={formData.branchId} onChange={e => setFormData({ ...formData, branchId: e.target.value })}>
                                 {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                             </select>
                         </div>
                     </div>
 
                     <div className="flex items-center gap-2 mt-2">
-                        <input type="checkbox" checked={formData.active} onChange={e => setFormData({...formData, active: e.target.checked})} className="w-4 h-4" />
+                        <input type="checkbox" checked={formData.active} onChange={e => setFormData({ ...formData, active: e.target.checked })} className="w-4 h-4" />
                         <span className="text-sm text-gray-700">Usuario Activo</span>
                     </div>
 

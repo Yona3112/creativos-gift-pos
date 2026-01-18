@@ -69,7 +69,7 @@ export const SalesHistory: React.FC<SalesHistoryProps> = ({ sales, customers, us
             const clientRTN = client?.rtn || '';
 
             const matchFolio = (s.folio || '').toLowerCase().includes(lowerSearch);
-            const matchCustomer = clientName.toLowerCase().includes(lowerSearch) || clientRTN.includes(lowerSearch);
+            const matchCustomer = (clientName || '').toLowerCase().includes(lowerSearch) || (clientRTN || '').includes(lowerSearch);
             const matchProduct = s.items.some(item =>
                 (item.name && item.name.toLowerCase().includes(lowerSearch)) ||
                 (item.code && item.code.toLowerCase().includes(lowerSearch))
