@@ -304,29 +304,30 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
                         <table className="w-full text-sm text-left">
                             <thead className="bg-gray-50 text-gray-400 font-bold uppercase text-[10px] tracking-widest border-b">
                                 <tr>
-                                    <th className="px-6 py-4">Producto</th>
-                                    <th className="px-6 py-4">Precio</th>
-                                    <th className="px-6 py-4 text-center">Stock</th>
-                                    <th className="px-6 py-4 text-right">Acciones</th>
+                                    <th className="px-3 py-1 text-left">Producto</th>
+                                    <th className="px-3 py-1 text-center">Precio</th>
+                                    <th className="px-3 py-1 text-center">Stock</th>
+                                    <th className="px-3 py-1 text-right">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y">
                                 {filteredProducts.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE).map(p => (
-                                    <tr key={p.id} className="hover:bg-gray-50 transition-colors">
-                                        <td className="px-6 py-4 flex items-center gap-4">
-                                            <div className="w-12 h-12 rounded-lg bg-gray-100 overflow-hidden border">
-                                                {p.image ? <img src={p.image} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-gray-300"><i className="fas fa-image"></i></div>}
+                                    <tr key={p.id} className="hover:bg-gray-50 transition-colors border-b">
+                                        <td className="px-2 py-0.5 flex items-center gap-2">
+                                            <div className="w-8 h-8 rounded-lg bg-gray-100 overflow-hidden border flex-shrink-0">
+                                                {p.image ? <img src={p.image} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-gray-300"><i className="fas fa-image text-[10px]"></i></div>}
                                             </div>
-                                            <div><p className="font-bold text-gray-800">{p.name}</p><p className="text-xs text-gray-400 font-mono">{p.code}</p></div>
+                                            <div className="min-w-0 leading-tight">
+                                                <p className="font-bold text-gray-800 truncate text-[13px]">{p.name}</p>
+                                                <p className="text-[9px] text-gray-400 font-mono">{p.code}</p>
+                                            </div>
                                         </td>
-                                        <td className="px-6 py-4 font-black">L {p.price.toFixed(2)}</td>
-                                        <td className={`px-6 py-4 text-center font-black ${p.stock <= p.minStock ? 'text-red-600' : 'text-green-600'}`}>{p.stock}</td>
-                                        <td className="px-6 py-4 text-right">
-                                            <Button size="sm" variant="ghost" onClick={() => printBarcode(p)} icon="print" className="mr-2" title="Imprimir Código"></Button>
-                                            <Button size="sm" variant="ghost" onClick={() => openModal(p)} icon="edit"></Button>
-                                            <Button size="sm" variant="ghost" onClick={() => {
-                                                setDeleteConfirm({ open: true, id: p.id, name: p.name });
-                                            }} icon="trash" className="text-red-400 hover:text-red-600"></Button>
+                                        <td className="px-2 py-0.5 text-center font-black text-xs">L {p.price.toFixed(2)}</td>
+                                        <td className={`px-2 py-0.5 text-center font-black text-xs ${p.stock <= p.minStock ? 'text-red-600' : 'text-green-600'}`}>{p.stock}</td>
+                                        <td className="px-2 py-0.5 text-right flex justify-end gap-0.5">
+                                            <Button size="sm" variant="ghost" onClick={() => printBarcode(p)} icon="print" className="h-7 w-7 p-0" title="Imprimir Código"></Button>
+                                            <Button size="sm" variant="ghost" onClick={() => openModal(p)} icon="edit" className="h-7 w-7 p-0"></Button>
+                                            <Button size="sm" variant="ghost" onClick={() => setDeleteConfirm({ open: true, id: p.id, name: p.name })} icon="trash" className="h-7 w-7 p-0 text-red-400 hover:text-red-500"></Button>
                                         </td>
                                     </tr>
                                 ))}
@@ -338,26 +339,26 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
             )}
 
             {activeTab === 'kardex' && <InventoryHistory products={products} users={users} />}
-            {activeTab === 'audit' && <InventoryAudit products={products} categories={categories} users={users} onUpdate={onUpdate} />}
+            {activeTab === 'audit' && <InventoryAudit products={products} categories={categories} users={users} onUpdate={onUpdate} settings={settings} user={user} />}
             {activeTab === 'prices' && <PriceHistory products={products} users={users} />}
             {activeTab === 'categories' && <Categories categories={categories} onUpdate={onUpdate} settings={{} as any} />}
             {activeTab === 'consumables' && <Consumables onUpdate={onUpdate} />}
             {activeTab === 'suppliers' && <Suppliers />}
 
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={formData.id ? "Editar Producto" : "Nuevo Producto"} size="lg">
-                <form onSubmit={handleSubmit} className="space-y-4">
+                <form onSubmit={handleSubmit} className="space-y-3">
                     <div className="flex gap-4 items-start">
-                        <div className="relative w-32 h-32 bg-gray-50 rounded-2xl border-2 border-dashed flex items-center justify-center overflow-hidden cursor-pointer" onClick={() => fileInputRef.current?.click()}>
-                            {formData.image ? <img src={formData.image} className="w-full h-full object-cover" /> : <i className="fas fa-camera text-2xl text-gray-300"></i>}
+                        <div className="relative w-24 h-24 bg-gray-50 rounded-2xl border-2 border-dashed flex items-center justify-center overflow-hidden cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+                            {formData.image ? <img src={formData.image} className="w-full h-full object-cover" /> : <i className="fas fa-camera text-xl text-gray-300"></i>}
                             <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
                         </div>
-                        <div className="flex-1 space-y-4">
+                        <div className="flex-1 space-y-3">
                             <Input label="Nombre" value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} required />
                             <div className="flex gap-2">
                                 <Input label="Código" value={formData.code || ''} onChange={e => setFormData({ ...formData, code: e.target.value })} required className="flex-1" />
-                                <div className="w-48">
+                                <div className="w-40 text-xs">
                                     <label className="block text-sm font-bold text-gray-700 mb-1">Categoría</label>
-                                    <select className="w-full p-3 border rounded-xl bg-white" value={formData.categoryId} onChange={e => setFormData({ ...formData, categoryId: e.target.value })}>
+                                    <select className="w-full p-2.5 border rounded-xl bg-white text-sm" value={formData.categoryId} onChange={e => setFormData({ ...formData, categoryId: e.target.value })}>
                                         {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                     </select>
                                 </div>
@@ -365,11 +366,11 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-xl">
+                    <div className="grid grid-cols-2 gap-3 bg-gray-50 p-3 rounded-xl">
                         <div>
-                            <label className="block text-sm font-bold text-gray-700 mb-1">Precio Venta (con ISV incluido)</label>
-                            <input type="number" step="0.01" value={formData.price || ''} onChange={handlePriceChange} className="w-full p-3 rounded-xl border font-black text-xl" required />
-                            <p className="text-[10px] text-gray-500 mt-1">El precio al público siempre incluye ISV del 15%</p>
+                            <label className="block text-xs font-bold text-gray-700 mb-1">Precio Venta (con ISV incluido)</label>
+                            <input type="number" step="0.01" value={formData.price || ''} onChange={handlePriceChange} className="w-full p-2.5 rounded-xl border font-black text-lg" required />
+                            <p className="text-[9px] text-gray-400 mt-1">El precio al público siempre incluye ISV del 15%</p>
                         </div>
                         <Input label="Costo" type="number" step="0.01" value={formData.cost || ''} onChange={e => {
                             const val = parseFloat(e.target.value);
@@ -377,7 +378,7 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
                         }} required />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-3">
                         <Input label="Stock" type="number" value={formData.stock || ''} onChange={e => {
                             const val = parseFloat(e.target.value);
                             setFormData({ ...formData, stock: isNaN(val) ? 0 : val });

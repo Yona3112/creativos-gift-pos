@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Product, Category, InventoryMovement, User } from '../types';
-import { Card, Button, Input, Modal, showToast } from '../components/UIComponents';
+import { Product, Category, InventoryMovement, User, UserRole, CompanySettings } from '../types';
+import { Card, Button, Input, Modal, showToast, PasswordConfirmDialog } from '../components/UIComponents';
 import { db } from '../services/storageService';
 
 interface InventoryAuditProps {
@@ -9,6 +9,8 @@ interface InventoryAuditProps {
     categories: Category[];
     users: User[];
     onUpdate: () => void;
+    settings?: CompanySettings;
+    user?: User;
 }
 
 interface AuditItem {
@@ -20,13 +22,18 @@ interface AuditItem {
 
 type AuditMode = 'manual' | 'scanner';
 
-export const InventoryAudit: React.FC<InventoryAuditProps> = ({ products, categories, users, onUpdate }) => {
+export const InventoryAudit: React.FC<InventoryAuditProps> = ({ products, categories, users, onUpdate, settings, user }) => {
     const [selectedCategory, setSelectedCategory] = useState<string>('all');
     const [isAuditing, setIsAuditing] = useState(false);
     const [auditItems, setAuditItems] = useState<AuditItem[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [showSummaryModal, setShowSummaryModal] = useState(false);
+
+    // Estados para protección por contraseña
+    const [resetItem, setResetItem] = useState<AuditItem | null>(null);
+    const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+    const [recountMode, setRecountMode] = useState(false);
 
     // Modo de auditoría: manual o escáner
     const [auditMode, setAuditMode] = useState<AuditMode>('manual');
@@ -92,19 +99,51 @@ export const InventoryAudit: React.FC<InventoryAuditProps> = ({ products, catego
         }));
     };
 
-    // Reiniciar conteo de un item
-    const resetItemCount = (productId: string) => {
-        setAuditItems(prev => prev.map(item => {
-            if (item.product.id === productId) {
-                return {
-                    ...item,
-                    physicalCount: null,
-                    difference: 0,
-                    counted: false
-                };
+    // Reiniciar conteo de un item (ahora requiere confirmación)
+    const handleResetRequest = (item: AuditItem) => {
+        setResetItem(item);
+        setRecountMode(false);
+        setShowPasswordDialog(true);
+    };
+
+    // Editar conteo directo desde el resumen (requiere contraseña)
+    const handleEditInSummary = (item: AuditItem) => {
+        setResetItem(item);
+        setRecountMode(true);
+        setShowPasswordDialog(true);
+    };
+
+    const confirmResetOrEdit = () => {
+        if (!resetItem) return;
+
+        if (recountMode) {
+            // Se abre un prompt o simplemente se marca para editar
+            // Por simplicidad, si es desde resumen, pedimos la nueva cantidad aquí
+            const newCount = prompt(`Ingrese la nueva cantidad física para ${resetItem.product.name}:`, resetItem.physicalCount?.toString() || '0');
+            if (newCount !== null) {
+                const count = parseInt(newCount);
+                if (!isNaN(count)) {
+                    updatePhysicalCount(resetItem.product.id, count);
+                }
             }
-            return item;
-        }));
+        } else {
+            // Reiniciar conteo
+            setAuditItems(prev => prev.map(item => {
+                if (item.product.id === resetItem.product.id) {
+                    return {
+                        ...item,
+                        physicalCount: null,
+                        difference: 0,
+                        counted: false
+                    };
+                }
+                return item;
+            }));
+            showToast(`${resetItem.product.name} reiniciado`, 'info');
+        }
+
+        setResetItem(null);
+        setShowPasswordDialog(false);
     };
 
     // Manejar escaneo de código de barras
@@ -542,14 +581,14 @@ export const InventoryAudit: React.FC<InventoryAuditProps> = ({ products, catego
                                                     </span>
                                                 )}
                                             </td>
-                                            <td className="p-2 text-center">
+                                            <td className="p-1.5 text-center">
                                                 {item.counted && (
                                                     <button
-                                                        onClick={() => resetItemCount(item.product.id)}
+                                                        onClick={() => handleResetRequest(item)}
                                                         className="text-gray-400 hover:text-red-500 transition-colors p-1"
                                                         title="Reiniciar conteo de este item"
                                                     >
-                                                        <i className="fas fa-undo-alt text-xs"></i>
+                                                        <i className="fas fa-undo-alt text-[10px]"></i>
                                                     </button>
                                                 )}
                                             </td>
@@ -617,16 +656,25 @@ export const InventoryAudit: React.FC<InventoryAuditProps> = ({ products, catego
                             </div>
                             <div className="max-h-48 overflow-y-auto divide-y">
                                 {auditItems.filter(i => i.counted && i.difference !== 0).map(item => (
-                                    <div key={item.product.id} className="p-3 flex justify-between items-center">
-                                        <div>
-                                            <p className="font-medium text-gray-800">{item.product.name}</p>
-                                            <p className="text-xs text-gray-500">
+                                    <div key={item.product.id} className="p-2 flex justify-between items-center group">
+                                        <div className="flex-1 min-w-0">
+                                            <p className="font-bold text-gray-800 text-xs truncate">{item.product.name}</p>
+                                            <p className="text-[10px] text-gray-500">
                                                 Sistema: {item.product.stock} → Físico: {item.physicalCount}
                                             </p>
                                         </div>
-                                        <span className={`font-black ${item.difference > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                            {item.difference > 0 ? '+' : ''}{item.difference}
-                                        </span>
+                                        <div className="flex items-center gap-2">
+                                            <span className={`font-black text-xs ${item.difference > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                {item.difference > 0 ? '+' : ''}{item.difference}
+                                            </span>
+                                            <button
+                                                onClick={() => handleEditInSummary(item)}
+                                                className="opacity-0 group-hover:opacity-100 p-1.5 text-indigo-500 hover:bg-indigo-50 rounded-lg transition-all"
+                                                title="Corregir cantidad"
+                                            >
+                                                <i className="fas fa-edit text-xs"></i>
+                                            </button>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -661,6 +709,22 @@ export const InventoryAudit: React.FC<InventoryAuditProps> = ({ products, catego
                     )}
                 </div>
             </Modal>
+
+            <PasswordConfirmDialog
+                isOpen={showPasswordDialog}
+                title={recountMode ? "Autorizar Corrección" : "Autorizar Reinicio"}
+                message={recountMode ? `Se requiere autorización para corregir el conteo de "${resetItem?.product.name}".` : `Se requiere autorización para reiniciar el conteo de "${resetItem?.product.name}".`}
+                confirmText="Autorizar"
+                cancelText="Cancelar"
+                variant="warning"
+                masterPassword={settings?.masterPassword || ''}
+                isAdmin={user?.role === UserRole.ADMIN}
+                onConfirm={confirmResetOrEdit}
+                onCancel={() => {
+                    setShowPasswordDialog(false);
+                    setResetItem(null);
+                }}
+            />
         </div>
     );
 };
