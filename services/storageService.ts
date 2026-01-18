@@ -1032,6 +1032,12 @@ class StorageService {
     return await db_engine.cashCuts.toArray();
   }
 
+  async deleteCashCut(id: string): Promise<void> {
+    await db_engine.cashCuts.delete(id);
+    const settings = await this.getSettings();
+    if (settings.autoSync) this.triggerAutoSync();
+  }
+
   async getLastCashCut(): Promise<CashCut | null> {
     const cuts = await db_engine.cashCuts.toArray();
     if (cuts.length === 0) return null;

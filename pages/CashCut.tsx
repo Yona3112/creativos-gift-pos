@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/storageService';
-import { CashCut as ICashCut, Sale } from '../types';
-import { Button, Input, Card, ConfirmDialog, showToast } from '../components/UIComponents';
+import { CashCut as ICashCut, Sale, CompanySettings } from '../types';
+import { Button, Input, Card, ConfirmDialog, Modal, Badge, showToast } from '../components/UIComponents';
 
 export const CashCut: React.FC = () => {
   const [todaySales, setTodaySales] = useState<Sale[]>([]);
@@ -13,47 +13,62 @@ export const CashCut: React.FC = () => {
   });
   const [cashCutConfirm, setCashCutConfirm] = useState(false);
 
+  // Reversal State
+  const [history, setHistory] = useState<ICashCut[]>([]);
+  const [settings, setSettings] = useState<CompanySettings | null>(null);
+  const [revertModalOpen, setRevertModalOpen] = useState(false);
+  const [revertCutId, setRevertCutId] = useState<string | null>(null);
+  const [adminPassword, setAdminPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+
   // Helper for Local Date (Fix UTC Bug in Cash Cut)
   const getLocalDate = (d: Date = new Date()) => {
     const offset = d.getTimezoneOffset() * 60000;
     return new Date(d.getTime() - offset).toISOString().split('T')[0];
   };
 
+  const loadData = async () => {
+    const today = getLocalDate();
+    const allSales = await db.getSales();
+    const sales = allSales.filter(s => {
+      const saleLocal = getLocalDate(new Date(s.date));
+      return saleLocal === today && s.status === 'active';
+    });
+
+    setTodaySales(sales);
+    const creditPayments = await db.getTodaysCreditPayments(today);
+
+    // Load History and Settings
+    const cuts = await db.getCashCuts();
+    setHistory(cuts.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+    const s = await db.getSettings();
+    setSettings(s);
+
+    const t = sales.reduce((acc, s) => {
+      if (s.paymentMethod === 'Efectivo') acc.cash += s.total;
+      else if (s.paymentMethod === 'Tarjeta') acc.card += s.total;
+      else if (s.paymentMethod === 'Transferencia') acc.transfer += s.total;
+      else if (s.paymentMethod === 'Crédito') acc.credit += s.total;
+
+      if (s.paymentMethod === 'Mixto' && s.paymentDetails) {
+        acc.cash += s.paymentDetails.cash || 0;
+        acc.card += s.paymentDetails.card || 0;
+        acc.transfer += s.paymentDetails.transfer || 0;
+      }
+
+      acc.total += s.total;
+      return acc;
+    }, { cash: 0, card: 0, transfer: 0, credit: 0, total: 0, creditPayments: 0 });
+
+    t.cash += creditPayments.cash;
+    t.card += creditPayments.card;
+    t.transfer += creditPayments.transfer;
+    t.creditPayments = creditPayments.cash + creditPayments.card + creditPayments.transfer;
+
+    setTotals(t);
+  };
+
   useEffect(() => {
-    const loadData = async () => {
-      const today = getLocalDate();
-      const allSales = await db.getSales();
-      const sales = allSales.filter(s => {
-        const saleLocal = getLocalDate(new Date(s.date));
-        return saleLocal === today && s.status === 'active';
-      });
-
-      setTodaySales(sales);
-      const creditPayments = await db.getTodaysCreditPayments(today);
-
-      const t = sales.reduce((acc, s) => {
-        if (s.paymentMethod === 'Efectivo') acc.cash += s.total;
-        else if (s.paymentMethod === 'Tarjeta') acc.card += s.total;
-        else if (s.paymentMethod === 'Transferencia') acc.transfer += s.total;
-        else if (s.paymentMethod === 'Crédito') acc.credit += s.total;
-
-        if (s.paymentMethod === 'Mixto' && s.paymentDetails) {
-          acc.cash += s.paymentDetails.cash || 0;
-          acc.card += s.paymentDetails.card || 0;
-          acc.transfer += s.paymentDetails.transfer || 0;
-        }
-
-        acc.total += s.total;
-        return acc;
-      }, { cash: 0, card: 0, transfer: 0, credit: 0, total: 0, creditPayments: 0 });
-
-      t.cash += creditPayments.cash;
-      t.card += creditPayments.card;
-      t.transfer += creditPayments.transfer;
-      t.creditPayments = creditPayments.cash + creditPayments.card + creditPayments.transfer;
-
-      setTotals(t);
-    };
     loadData();
   }, []);
 
@@ -88,6 +103,29 @@ export const CashCut: React.FC = () => {
     showToast('Corte de caja guardado exitosamente', 'success');
     setDenominations({ bill500: 0, bill200: 0, bill100: 0, bill50: 0, bill20: 0, bill10: 0, bill5: 0, bill2: 0, bill1: 0, coins: 0 });
     setCashCutConfirm(false);
+    loadData(); // Reload to show in history
+  };
+
+  const handleRevertClick = (id: string) => {
+    setRevertCutId(id);
+    setAdminPassword('');
+    setPasswordError('');
+    setRevertModalOpen(true);
+  };
+
+  const confirmReversal = async () => {
+    const correctPassword = settings?.masterPassword || 'admin123';
+    if (adminPassword !== correctPassword) {
+      setPasswordError('Contraseña incorrecta');
+      return;
+    }
+
+    if (revertCutId) {
+      await db.deleteCashCut(revertCutId);
+      showToast('Corte de caja revertido exitosamente', 'success');
+      setRevertModalOpen(false);
+      loadData();
+    }
   };
 
   return (
@@ -200,6 +238,58 @@ export const CashCut: React.FC = () => {
         </Card>
       </div>
 
+      <Card title="Historial de Cortes Recientes" className="shadow-md">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm text-left">
+            <thead className="bg-gray-50 text-gray-500 font-semibold border-b">
+              <tr>
+                <th className="px-4 py-3">Fecha / Hora</th>
+                <th className="px-4 py-3">Ventas Totales</th>
+                <th className="px-4 py-3">Efectivo Sistema</th>
+                <th className="px-4 py-3">Efectivo Contado</th>
+                <th className="px-4 py-3">Diferencia</th>
+                <th className="px-4 py-3 text-right">Acción</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {history.slice(0, 10).map(cut => (
+                <tr key={cut.id} className="hover:bg-gray-50/50">
+                  <td className="px-4 py-3 text-gray-600">
+                    {new Date(cut.date).toLocaleString()}
+                  </td>
+                  <td className="px-4 py-3 font-medium">L {cut.totalSales.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-gray-600">L {cut.cashExpected.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-gray-600">L {cut.cashCounted.toFixed(2)}</td>
+                  <td className="px-4 py-3">
+                    <Badge variant={Math.abs(cut.difference) < 1 ? 'success' : 'danger'}>
+                      L {cut.difference.toFixed(2)}
+                    </Badge>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      onClick={() => handleRevertClick(cut.id)}
+                      icon="undo"
+                      title="Revertir Corte"
+                    >
+                      Revertir
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+              {history.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
+                    No hay cortes registrados
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
       <ConfirmDialog
         isOpen={cashCutConfirm}
         title="Cerrar Caja"
@@ -210,6 +300,31 @@ export const CashCut: React.FC = () => {
         onConfirm={confirmCashCut}
         onCancel={() => setCashCutConfirm(false)}
       />
+
+      {/* Modal de Reversión */}
+      <Modal isOpen={revertModalOpen} onClose={() => setRevertModalOpen(false)} title="Revertir Corte de Caja" size="sm">
+        <div className="space-y-4">
+          <div className="bg-red-50 p-4 rounded-xl border border-red-100 flex items-start gap-3">
+            <i className="fas fa-exclamation-triangle text-red-500 mt-1"></i>
+            <p className="text-sm text-red-800">
+              Esta acción eliminará el registro del corte y permitirá volver a cerrar la caja para este turno. Requiere permiso administrativo.
+            </p>
+          </div>
+          <Input
+            type="password"
+            label="Contraseña Administrativa"
+            placeholder="Ingrese clave maestra"
+            value={adminPassword}
+            onChange={e => { setAdminPassword(e.target.value); setPasswordError(''); }}
+            error={passwordError}
+            autoFocus
+          />
+          <div className="flex gap-3">
+            <Button variant="secondary" className="flex-1" onClick={() => setRevertModalOpen(false)}>Cancelar</Button>
+            <Button variant="danger" className="flex-1" onClick={confirmReversal} disabled={!adminPassword}>Confirmar</Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };
