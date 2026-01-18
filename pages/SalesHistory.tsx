@@ -6,7 +6,6 @@ import { db } from '../services/storageService';
 
 // Import sub-modules
 import { Quotes } from './Quotes';
-import { Credits } from './Credits';
 
 interface SalesHistoryProps {
     sales: Sale[];
@@ -22,7 +21,7 @@ interface SalesHistoryProps {
 const ITEMS_PER_PAGE = 15;
 
 export const SalesHistory: React.FC<SalesHistoryProps> = ({ sales, customers, users, onUpdate, user, branchId, onLoadQuote, settings }) => {
-    const [activeTab, setActiveTab] = useState<'history' | 'quotes' | 'credits' | 'creditNotes'>('history');
+    const [activeTab, setActiveTab] = useState<'history' | 'quotes' | 'creditNotes'>('history');
 
     // --- History State ---
     const [searchTerm, setSearchTerm] = useState('');
@@ -175,7 +174,6 @@ export const SalesHistory: React.FC<SalesHistoryProps> = ({ sales, customers, us
                         { id: 'history', label: 'Historial', icon: 'history' },
                         { id: 'creditNotes', label: 'Notas de Crédito', icon: 'file-invoice' },
                         { id: 'quotes', label: 'Cotizaciones', icon: 'file-alt' },
-                        { id: 'credits', label: 'Cuentas x Cobrar', icon: 'hand-holding-usd' },
                     ].map(tab => (
                         <button
                             key={tab.id}
@@ -316,12 +314,6 @@ export const SalesHistory: React.FC<SalesHistoryProps> = ({ sales, customers, us
             {activeTab === 'quotes' && (
                 <div className="animate-fade-in">
                     <Quotes products={sales.flatMap(s => s.items)} customers={customers} user={user} branchId={branchId} onLoadQuote={onLoadQuote} settings={settings} />
-                </div>
-            )}
-
-            {activeTab === 'credits' && (
-                <div className="animate-fade-in">
-                    <Credits settings={settings} />
                 </div>
             )}
 
