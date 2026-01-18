@@ -72,10 +72,15 @@ export const Expenses: React.FC<ExpensesProps> = ({ user, onUpdate, settings }) 
 
     const handleFixedSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        await db.saveFixedExpense({ ...fixedFormData } as FixedExpense);
-        await load();
+        // Asegurar que tenga un ID único si es nuevo
+        const dataToSave = {
+            ...fixedFormData,
+            id: fixedFormData.id || Date.now().toString() + Math.random().toString(36).substring(2, 5)
+        } as FixedExpense;
+        await db.saveFixedExpense(dataToSave);
         await load();
         setIsFixedModalOpen(false);
+        setFixedFormData({ categoryId: 'Otros', paymentMethod: 'Efectivo', amount: 0, description: '', active: true });
         showToast(fixedFormData.id ? "Plantilla actualizada." : "Plantilla guardada exitosamente.", "success");
     };
 

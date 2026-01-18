@@ -10,6 +10,7 @@ import { Consumables } from './Consumables';
 import { Suppliers } from './Suppliers';
 import { InventoryHistory } from './InventoryHistory';
 import { PriceHistory } from './PriceHistory';
+import { InventoryAudit } from './InventoryAudit';
 
 interface ProductsProps {
     products: Product[];
@@ -25,7 +26,7 @@ interface ProductsProps {
 const ITEMS_PER_PAGE = 8;
 
 export const Products: React.FC<ProductsProps> = ({ products, categories, users, onUpdate, initialFilter, initialTab, settings, user }) => {
-    const [activeTab, setActiveTab] = useState<'products' | 'categories' | 'consumables' | 'suppliers' | 'kardex' | 'prices'>('products');
+    const [activeTab, setActiveTab] = useState<'products' | 'categories' | 'consumables' | 'suppliers' | 'kardex' | 'prices' | 'audit'>('products');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
     const [formData, setFormData] = useState<Partial<Product>>({});
@@ -266,6 +267,7 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
                     {[
                         { id: 'products', label: 'Productos', icon: 'box' },
                         { id: 'kardex', label: 'Kardex', icon: 'history' },
+                        { id: 'audit', label: 'Auditoría', icon: 'clipboard-check' },
                         { id: 'prices', label: 'Precios', icon: 'dollar-sign' },
                         { id: 'categories', label: 'Categorías', icon: 'tags' },
                         { id: 'consumables', label: 'Insumos', icon: 'tools' },
@@ -336,6 +338,7 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
             )}
 
             {activeTab === 'kardex' && <InventoryHistory products={products} users={users} />}
+            {activeTab === 'audit' && <InventoryAudit products={products} categories={categories} users={users} onUpdate={onUpdate} />}
             {activeTab === 'prices' && <PriceHistory products={products} users={users} />}
             {activeTab === 'categories' && <Categories categories={categories} onUpdate={onUpdate} settings={{} as any} />}
             {activeTab === 'consumables' && <Consumables onUpdate={onUpdate} />}

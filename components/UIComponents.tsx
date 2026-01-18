@@ -411,21 +411,45 @@ export const StatCard: React.FC<{ title: string; value: string | number; icon: s
 );
 
 export const WhatsAppButton: React.FC<{ phoneNumber?: string }> = ({ phoneNumber }) => {
-  const [position, setPosition] = useState({ bottom: 20, right: 20 });
+  const [isMinimized, setIsMinimized] = useState(false);
 
   // Clean number
   const targetNumber = phoneNumber ? phoneNumber.replace(/[^0-9]/g, '') : '50499999999';
 
+  if (isMinimized) {
+    return (
+      <button
+        onClick={() => setIsMinimized(false)}
+        className="fixed z-50 bg-gray-200 hover:bg-gray-300 text-gray-600 w-8 h-8 rounded-full flex items-center justify-center shadow-sm transition-all hover:scale-110"
+        style={{ bottom: '80px', right: '16px' }}
+        title="Mostrar WhatsApp"
+      >
+        <i className="fab fa-whatsapp text-sm"></i>
+      </button>
+    );
+  }
+
   return (
-    <a
-      href={`https://wa.me/${targetNumber}`}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="fixed z-50 bg-[#25D366] hover:bg-green-600 text-white w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-transform hover:scale-110"
-      style={{ bottom: `${position.bottom}px`, right: `${position.right}px` }}
-    >
-      <i className="fab fa-whatsapp text-3xl"></i>
-    </a>
+    <div className="fixed z-50 flex flex-col items-end gap-1" style={{ bottom: '80px', right: '16px' }}>
+      {/* Botón para minimizar */}
+      <button
+        onClick={() => setIsMinimized(true)}
+        className="w-5 h-5 bg-gray-300 hover:bg-gray-400 text-gray-600 rounded-full flex items-center justify-center text-[10px] shadow-sm transition-all"
+        title="Ocultar botón"
+      >
+        <i className="fas fa-times"></i>
+      </button>
+      {/* Botón principal de WhatsApp */}
+      <a
+        href={`https://wa.me/${targetNumber}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="bg-[#25D366] hover:bg-green-600 text-white w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-transform hover:scale-110"
+        title="Contactar por WhatsApp"
+      >
+        <i className="fab fa-whatsapp text-2xl"></i>
+      </a>
+    </div>
   );
 };
 

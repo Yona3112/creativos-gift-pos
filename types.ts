@@ -314,6 +314,32 @@ export interface CreditPayment {
   note?: string;
 }
 
+// Iconos organizados por categoría para fácil selección
 export const ICONS = [
-  'tag', 'tags', 'box', 'gift', 'star', 'heart', 'shopping-cart', 'shopping-bag', 'tshirt', 'graduation-cap', 'mug-hot', 'camera', 'pen-fancy', 'print', 'cut'
+  // Básicos y Comercio
+  'tag', 'tags', 'box', 'boxes', 'gift', 'gifts', 'star', 'heart', 'shopping-cart', 'shopping-bag', 'store', 'warehouse',
+  // Ropa y Accesorios
+  'tshirt', 'hat-cowboy', 'socks', 'glasses', 'ring', 'gem', 'crown',
+  // Educación y Oficina
+  'graduation-cap', 'book', 'book-open', 'pen-fancy', 'pencil-alt', 'ruler', 'sticky-note',
+  // Tecnología e Impresión (3D, DTF, Láser)
+  'print', 'cube', 'cubes', 'layer-group', 'vector-square', 'bezier-curve', 'palette', 'paint-brush', 'brush', 'magic', 'wand-magic-sparkles', 'fire-flame-curved',
+  // Comida y Bebidas
+  'mug-hot', 'coffee', 'birthday-cake', 'cake-candles', 'ice-cream', 'cookie', 'wine-glass', 'champagne-glasses',
+  // Naturaleza, Flores y Arreglos Florales
+  'seedling', 'leaf', 'spa', 'tree', 'sun', 'moon', 'snowflake', 'clover', 'fan', 'feather', 'holly-berry', 'pepper-hot',
+  // Juguetes y Peluches
+  'hippo', 'dog', 'cat', 'dove', 'dragon', 'fish', 'horse', 'paw', 'puzzle-piece', 'gamepad', 'dice', 'robot', 'ghost',
+  // Eventos y Celebraciones
+  'balloon', 'medal', 'trophy', 'award', 'certificate',
+  // Herramientas y DIY
+  'cut', 'scissors', 'tools', 'wrench', 'screwdriver', 'fire', 'bolt', 'lightbulb',
+  // Fotografía y Media
+  'camera', 'camera-retro', 'video', 'music', 'microphone', 'film', 'image', 'images',
+  // Hogar y Decoración
+  'home', 'couch', 'bed', 'lamp', 'fan', 'chair', 'door-open',
+  // Transporte
+  'car', 'motorcycle', 'bicycle', 'plane', 'ship', 'truck',
+  // Otros útiles
+  'hand-holding-heart', 'handshake', 'user', 'users', 'baby', 'child', 'person', 'people-group'
 ];

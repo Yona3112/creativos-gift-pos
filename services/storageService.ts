@@ -344,6 +344,13 @@ class StorageService {
     });
   }
 
+  // Método público para guardar movimientos de inventario (usado por auditorías)
+  async saveInventoryMovement(movement: InventoryMovement) {
+    await db_engine.inventoryHistory.add(movement);
+    const settings = await this.getSettings();
+    if (settings.autoSync) this.triggerAutoSync();
+  }
+
   async getInventoryHistory(productId?: string): Promise<InventoryMovement[]> {
     if (productId) {
       return await db_engine.inventoryHistory.where('productId').equals(productId).reverse().sortBy('date');
