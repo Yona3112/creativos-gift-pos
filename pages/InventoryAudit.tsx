@@ -92,6 +92,21 @@ export const InventoryAudit: React.FC<InventoryAuditProps> = ({ products, catego
         }));
     };
 
+    // Reiniciar conteo de un item
+    const resetItemCount = (productId: string) => {
+        setAuditItems(prev => prev.map(item => {
+            if (item.product.id === productId) {
+                return {
+                    ...item,
+                    physicalCount: null,
+                    difference: 0,
+                    counted: false
+                };
+            }
+            return item;
+        }));
+    };
+
     // Manejar escaneo de código de barras
     const handleScan = (e: React.FormEvent) => {
         e.preventDefault();
@@ -350,7 +365,7 @@ export const InventoryAudit: React.FC<InventoryAuditProps> = ({ products, catego
                 // Panel de auditoría activa
                 <div className="space-y-4">
                     {/* Barra de resumen */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <Card className="bg-blue-50 border-blue-100">
                             <div className="text-center">
                                 <p className="text-xs uppercase font-bold text-blue-600 mb-1">Total</p>
@@ -367,12 +382,6 @@ export const InventoryAudit: React.FC<InventoryAuditProps> = ({ products, catego
                             <div className="text-center">
                                 <p className="text-xs uppercase font-bold text-yellow-600 mb-1">Pendientes</p>
                                 <p className="text-2xl font-black text-yellow-800">{auditSummary.pendingProducts}</p>
-                            </div>
-                        </Card>
-                        <Card className="bg-red-50 border-red-100">
-                            <div className="text-center">
-                                <p className="text-xs uppercase font-bold text-red-600 mb-1">Con Diferencia</p>
-                                <p className="text-2xl font-black text-red-800">{auditSummary.itemsWithDifference}</p>
                             </div>
                         </Card>
                     </div>
@@ -472,54 +481,46 @@ export const InventoryAudit: React.FC<InventoryAuditProps> = ({ products, catego
                     <Card noPadding>
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm">
-                                <thead className="bg-gray-50 text-gray-500 uppercase text-xs font-bold border-b">
+                                <thead className="bg-gray-50 text-gray-500 uppercase text-[10px] font-bold border-b">
                                     <tr>
-                                        <th className="p-4 text-left">Producto</th>
-                                        <th className="p-4 text-center">Categoría</th>
-                                        <th className="p-4 text-center">Stock Sistema</th>
-                                        <th className="p-4 text-center">Stock Físico</th>
-                                        <th className="p-4 text-center">Diferencia</th>
-                                        <th className="p-4 text-center">Estado</th>
+                                        <th className="p-2 text-left">Producto</th>
+                                        <th className="p-2 text-center">Categoría</th>
+                                        <th className="p-2 text-center">Stock Físico</th>
+                                        <th className="p-2 text-center w-10">Acción</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y">
                                     {filteredAuditItems.map(item => (
                                         <tr
                                             key={item.product.id}
-                                            className={`hover:bg-gray-50 transition-colors ${item.counted
-                                                    ? (item.difference !== 0 ? 'bg-yellow-50' : 'bg-green-50')
-                                                    : ''
-                                                } ${lastScannedProduct?.id === item.product.id
-                                                    ? 'ring-2 ring-green-500 ring-inset'
-                                                    : ''
+                                            className={`hover:bg-gray-50 transition-colors ${item.counted ? 'bg-indigo-50/30' : ''} ${lastScannedProduct?.id === item.product.id
+                                                ? 'ring-2 ring-green-500 ring-inset'
+                                                : ''
                                                 }`}
                                         >
-                                            <td className="p-4">
+                                            <td className="p-2">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0">
+                                                    <div className="w-8 h-8 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0">
                                                         {item.product.image ? (
                                                             <img src={item.product.image} className="w-full h-full object-cover" />
                                                         ) : (
                                                             <div className="w-full h-full flex items-center justify-center text-gray-300">
-                                                                <i className="fas fa-box"></i>
+                                                                <i className="fas fa-box text-xs"></i>
                                                             </div>
                                                         )}
                                                     </div>
-                                                    <div>
-                                                        <p className="font-bold text-gray-800">{item.product.name}</p>
-                                                        <p className="text-xs text-gray-400 font-mono">{item.product.code}</p>
+                                                    <div className="min-w-0">
+                                                        <p className="font-bold text-gray-800 truncate text-xs">{item.product.name}</p>
+                                                        <p className="text-[10px] text-gray-400 font-mono">{item.product.code}</p>
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td className="p-4 text-center">
-                                                <span className="text-xs font-medium text-gray-600 bg-gray-100 px-2 py-1 rounded">
+                                            <td className="p-2 text-center">
+                                                <span className="text-[10px] font-medium text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded">
                                                     {getCategoryName(item.product.categoryId)}
                                                 </span>
                                             </td>
-                                            <td className="p-4 text-center font-bold text-gray-800">
-                                                {item.product.stock}
-                                            </td>
-                                            <td className="p-4 text-center">
+                                            <td className="p-2 text-center">
                                                 {auditMode === 'manual' ? (
                                                     <input
                                                         type="number"
@@ -532,44 +533,24 @@ export const InventoryAudit: React.FC<InventoryAuditProps> = ({ products, catego
                                                                 val === '' ? null : parseInt(val)
                                                             );
                                                         }}
-                                                        className="w-20 p-2 text-center border rounded-lg font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
+                                                        className="w-16 p-1.5 text-center border rounded-lg font-bold focus:ring-2 focus:ring-indigo-500 outline-none text-xs"
                                                         placeholder="—"
                                                     />
                                                 ) : (
-                                                    <span className={`font-black text-lg ${item.counted ? 'text-green-600' : 'text-gray-300'}`}>
+                                                    <span className={`font-black text-base ${item.counted ? 'text-green-600' : 'text-gray-300'}`}>
                                                         {item.physicalCount ?? '—'}
                                                     </span>
                                                 )}
                                             </td>
-                                            <td className="p-4 text-center">
+                                            <td className="p-2 text-center">
                                                 {item.counted && (
-                                                    <span className={`font-black text-lg ${item.difference > 0 ? 'text-green-600' :
-                                                            item.difference < 0 ? 'text-red-600' :
-                                                                'text-gray-400'
-                                                        }`}>
-                                                        {item.difference > 0 ? '+' : ''}{item.difference}
-                                                    </span>
-                                                )}
-                                            </td>
-                                            <td className="p-4 text-center">
-                                                {item.counted ? (
-                                                    item.difference === 0 ? (
-                                                        <span className="inline-flex items-center gap-1 text-green-600 text-xs font-bold">
-                                                            <i className="fas fa-check-circle"></i> OK
-                                                        </span>
-                                                    ) : item.difference > 0 ? (
-                                                        <span className="inline-flex items-center gap-1 text-blue-600 text-xs font-bold">
-                                                            <i className="fas fa-arrow-up"></i> Sobrante
-                                                        </span>
-                                                    ) : (
-                                                        <span className="inline-flex items-center gap-1 text-red-600 text-xs font-bold">
-                                                            <i className="fas fa-arrow-down"></i> Faltante
-                                                        </span>
-                                                    )
-                                                ) : (
-                                                    <span className="text-gray-400 text-xs">
-                                                        <i className="fas fa-clock"></i> Pendiente
-                                                    </span>
+                                                    <button
+                                                        onClick={() => resetItemCount(item.product.id)}
+                                                        className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                                                        title="Reiniciar conteo de este item"
+                                                    >
+                                                        <i className="fas fa-undo-alt text-xs"></i>
+                                                    </button>
                                                 )}
                                             </td>
                                         </tr>
