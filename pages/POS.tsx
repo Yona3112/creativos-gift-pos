@@ -492,7 +492,7 @@ export const POS: React.FC<POSProps> = ({
                 <div className="flex gap-2 shrink-0">
                     <Input
                         ref={searchInputRef}
-                        placeholder="Buscar por nombre o código..."
+                        placeholder="Escanear o buscar por nombre..."
                         value={searchTerm}
                         onChange={e => setSearchTerm(e.target.value)}
                         onKeyDown={handleKeyDown}
