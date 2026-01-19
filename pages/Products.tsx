@@ -26,6 +26,7 @@ interface ProductsProps {
 const ITEMS_PER_PAGE = 8;
 
 export const Products: React.FC<ProductsProps> = ({ products, categories, users, onUpdate, initialFilter, initialTab, settings, user }) => {
+    const isAdmin = user?.role === UserRole.ADMIN;
     const [activeTab, setActiveTab] = useState<'products' | 'categories' | 'consumables' | 'suppliers' | 'kardex' | 'prices' | 'audit'>('products');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -156,6 +157,113 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
         setTimeout(() => scanInputRef.current?.focus(), 100);
     };
 
+    // Catalog Share Feature
+    const [isCatalogModalOpen, setIsCatalogModalOpen] = useState(false);
+    const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+
+    const generateCatalogHTML = () => {
+        const selectedProducts = products.filter(p =>
+            p.active !== false &&
+            selectedCategories.includes(p.categoryId) &&
+            p.stock > 0
+        );
+
+        const groupedProducts: Record<string, Product[]> = {};
+        selectedProducts.forEach(p => {
+            const cat = categories.find(c => c.id === p.categoryId);
+            const catName = cat?.name || 'Otros';
+            if (!groupedProducts[catName]) groupedProducts[catName] = [];
+            groupedProducts[catName].push(p);
+        });
+
+        const storeName = settings?.name || 'Mi Tienda';
+        const phone = settings?.whatsappNumber || '';
+        const themeColor = settings?.themeColor || '#4F46E5';
+
+        const html = `
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Catálogo - ${storeName}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background: linear-gradient(135deg, ${themeColor}20, white); min-height: 100vh; padding: 20px; }
+        .header { text-align: center; padding: 30px 20px; background: ${themeColor}; color: white; border-radius: 20px; margin-bottom: 30px; box-shadow: 0 10px 40px ${themeColor}40; }
+        .header h1 { font-size: 2em; font-weight: 800; margin-bottom: 5px; }
+        .header p { opacity: 0.9; font-size: 0.9em; }
+        .category { margin-bottom: 30px; }
+        .category-title { font-size: 1.3em; font-weight: 800; color: ${themeColor}; padding: 10px 15px; background: white; border-radius: 12px; margin-bottom: 15px; display: inline-block; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
+        .products { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 15px; }
+        .product { background: white; border-radius: 16px; padding: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); transition: transform 0.3s; }
+        .product:hover { transform: translateY(-5px); }
+        .product-img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 12px; background: #f3f4f6; margin-bottom: 10px; }
+        .product-name { font-weight: 600; font-size: 0.9em; color: #1f2937; margin-bottom: 5px; line-height: 1.3; }
+        .product-price { font-weight: 800; font-size: 1.2em; color: ${themeColor}; }
+        .whatsapp-btn { display: block; text-align: center; background: #25D366; color: white; padding: 15px 30px; border-radius: 50px; text-decoration: none; font-weight: 700; font-size: 1.1em; margin: 30px auto; max-width: 300px; box-shadow: 0 8px 30px rgba(37,211,102,0.4); }
+        .whatsapp-btn:hover { transform: scale(1.05); }
+        .footer { text-align: center; color: #6b7280; font-size: 0.85em; padding: 20px; }
+        .no-img { display: flex; align-items: center; justify-content: center; color: #d1d5db; font-size: 2em; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        ${settings?.logo ? `<img src="${settings.logo}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;margin-bottom:10px;border:3px solid white;">` : ''}
+        <h1>📦 ${storeName}</h1>
+        <p>Catálogo de Productos</p>
+    </div>
+    
+    ${Object.entries(groupedProducts).map(([catName, prods]) => `
+        <div class="category">
+            <div class="category-title">🏷️ ${catName}</div>
+            <div class="products">
+                ${prods.map(p => `
+                    <div class="product">
+                        ${p.image
+                ? `<img src="${p.image}" class="product-img" alt="${p.name}">`
+                : `<div class="product-img no-img">📦</div>`
+            }
+                        <div class="product-name">${p.name}</div>
+                        <div class="product-price">L ${p.price.toFixed(2)}</div>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `).join('')}
+    
+    ${phone ? `<a href="https://wa.me/${phone.replace(/\D/g, '')}" class="whatsapp-btn">💬 Pedir por WhatsApp</a>` : ''}
+    
+    <div class="footer">
+        <p>Generado desde ${storeName} • ${new Date().toLocaleDateString()}</p>
+    </div>
+</body>
+</html>`;
+
+        // Open catalog in new window
+        const win = window.open('', '_blank');
+        if (win) {
+            win.document.write(html);
+            win.document.close();
+        }
+
+        // Also offer to share via WhatsApp with a text summary
+        const productList = Object.entries(groupedProducts).map(([cat, prods]) =>
+            `*${cat}*\n${prods.map(p => `• ${p.name}: L${p.price.toFixed(2)}`).join('\n')}`
+        ).join('\n\n');
+
+        const message = encodeURIComponent(
+            `🛍️ *Catálogo ${storeName}*\n\n${productList}\n\n📞 Contáctanos para hacer tu pedido!`
+        );
+
+        if (confirm('¿Deseas compartir también un resumen del catálogo por WhatsApp?')) {
+            window.open(`https://wa.me/?text=${message}`, '_blank');
+        }
+
+        setIsCatalogModalOpen(false);
+    };
+
     const printBarcode = (product: Product) => {
         const storeName = settings?.name || 'Mi Tienda';
         const w = settings?.barcodeWidth || 50;
@@ -259,16 +367,96 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
         }
     };
 
+    // Multi-label printing
+    const [labelModalOpen, setLabelModalOpen] = useState(false);
+    const [labelProduct, setLabelProduct] = useState<Product | null>(null);
+    const [labelCount, setLabelCount] = useState(1);
+
+    const openLabelModal = (product: Product) => {
+        setLabelProduct(product);
+        setLabelCount(1);
+        setLabelModalOpen(true);
+    };
+
+    const printMultipleLabels = () => {
+        if (!labelProduct) return;
+
+        const storeName = settings?.name || 'Mi Tienda';
+        const w = settings?.barcodeWidth || 50;
+        const h = settings?.barcodeHeight || 25;
+        const showLogo = settings?.showLogoOnBarcode || false;
+        const logoSize = settings?.barcodeLogoSize || 10;
+        const cols = 3; // Labels per row
+        const rows = Math.ceil(labelCount / cols);
+
+        const win = window.open('', '', 'width=800,height=600');
+        if (win) {
+            win.document.write(`
+                <html>
+                <head>
+                    <title>Imprimir ${labelCount} Etiquetas - ${labelProduct.code}</title>
+                    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+                    <style>
+                        @page { margin: 5mm; }
+                        body { font-family: sans-serif; margin: 0; padding: 5mm; }
+                        .labels-grid { display: grid; grid-template-columns: repeat(${cols}, ${w}mm); gap: 2mm; }
+                        .label { 
+                            width: ${w}mm; height: ${h}mm; 
+                            border: 1px dashed #ccc;
+                            display: flex; flex-direction: column;
+                            align-items: center; justify-content: center;
+                            text-align: center; padding: 1mm;
+                            box-sizing: border-box; page-break-inside: avoid;
+                        }
+                        .store-name { font-size: 6px; font-weight: bold; margin: 0; text-transform: uppercase; }
+                        .product-name { font-size: 8px; font-weight: bold; margin: 1px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; }
+                        svg { max-width: 100% !important; height: ${h * 0.4}mm !important; }
+                        .price { font-size: 9px; font-weight: bold; }
+                        .store-logo { width: ${logoSize}mm; height: ${logoSize}mm; object-fit: contain; }
+                        @media print { .label { border: none; } }
+                    </style>
+                </head>
+                <body>
+                    <div class="labels-grid">
+                        ${Array(labelCount).fill(0).map((_, i) => `
+                            <div class="label">
+                                ${(showLogo && settings?.logo) ? `<img src="${settings.logo}" class="store-logo" />` : ''}
+                                <p class="store-name">${storeName}</p>
+                                <p class="product-name">${labelProduct.name}</p>
+                                <svg id="barcode-${i}"></svg>
+                                <div class="price">L ${labelProduct.price.toFixed(2)}</div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <script>
+                        try {
+                            for (let i = 0; i < ${labelCount}; i++) {
+                                JsBarcode("#barcode-" + i, "${labelProduct.code}", {
+                                    format: "CODE128", width: 1.5, height: 30,
+                                    displayValue: true, fontSize: 8, margin: 0
+                                });
+                            }
+                            setTimeout(() => { window.print(); window.close(); }, 500);
+                        } catch(e) { document.body.innerHTML = "Error: " + e.message; }
+                    </script>
+                </body>
+                </html>
+            `);
+            win.document.close();
+        }
+        setLabelModalOpen(false);
+    };
+
     return (
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <h1 className="text-2xl font-black text-gray-800 tracking-tight">Inventario Maestro</h1>
+                <h1 className="text-2xl font-black text-gray-800 tracking-tight">Mis Productos</h1>
                 <div className="flex bg-white p-1 rounded-xl border shadow-sm overflow-x-auto max-w-full">
                     {[
                         { id: 'products', label: 'Productos', icon: 'box' },
-                        { id: 'kardex', label: 'Kardex', icon: 'history' },
-                        { id: 'audit', label: 'Auditoría', icon: 'clipboard-check' },
-                        { id: 'prices', label: 'Precios', icon: 'dollar-sign' },
+                        { id: 'kardex', label: 'Movimientos', icon: 'history' },
+                        { id: 'audit', label: 'Conteo Físico', icon: 'clipboard-check' },
+                        { id: 'prices', label: 'Historial Precios', icon: 'dollar-sign' },
                         { id: 'categories', label: 'Categorías', icon: 'tags' },
                         { id: 'consumables', label: 'Insumos', icon: 'tools' },
                     ].map(tab => (
@@ -295,8 +483,11 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
                             </select>
                         </div>
                         <div className="flex gap-2">
-                            <Button onClick={() => setIsScanModalOpen(true)} variant="secondary" icon="barcode">Stock Rápido</Button>
-                            <Button onClick={() => openModal()} icon="plus">Nuevo Producto</Button>
+                            <Button onClick={() => { setSelectedCategories(categories.map(c => c.id)); setIsCatalogModalOpen(true); }} variant="ghost" className="text-green-600 hover:bg-green-50">
+                                <i className="fab fa-whatsapp mr-1"></i> Compartir Catálogo
+                            </Button>
+                            {isAdmin && <Button onClick={() => setIsScanModalOpen(true)} variant="secondary" icon="barcode">Stock Rápido</Button>}
+                            {isAdmin && <Button onClick={() => openModal()} icon="plus">Nuevo Producto</Button>}
                         </div>
                     </div>
 
@@ -325,9 +516,10 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
                                         <td className="px-2 py-0.5 text-center font-black text-xs">L {p.price.toFixed(2)}</td>
                                         <td className={`px-2 py-0.5 text-center font-black text-xs ${p.stock <= p.minStock ? 'text-red-600' : 'text-green-600'}`}>{p.stock}</td>
                                         <td className="px-2 py-0.5 text-right flex justify-end gap-0.5">
-                                            <Button size="sm" variant="ghost" onClick={() => printBarcode(p)} icon="print" className="h-7 w-7 p-0" title="Imprimir Código"></Button>
-                                            <Button size="sm" variant="ghost" onClick={() => openModal(p)} icon="edit" className="h-7 w-7 p-0"></Button>
-                                            <Button size="sm" variant="ghost" onClick={() => setDeleteConfirm({ open: true, id: p.id, name: p.name })} icon="trash" className="h-7 w-7 p-0 text-red-400 hover:text-red-500"></Button>
+                                            <Button size="sm" variant="ghost" onClick={() => printBarcode(p)} icon="print" className="h-7 w-7 p-0" title="Imprimir una etiqueta"></Button>
+                                            <Button size="sm" variant="ghost" onClick={() => openLabelModal(p)} icon="copy" className="h-7 w-7 p-0 text-blue-500 hover:text-blue-600" title="Imprimir múltiples etiquetas"></Button>
+                                            {isAdmin && <Button size="sm" variant="ghost" onClick={() => openModal(p)} icon="edit" className="h-7 w-7 p-0"></Button>}
+                                            {isAdmin && <Button size="sm" variant="ghost" onClick={() => setDeleteConfirm({ open: true, id: p.id, name: p.name })} icon="trash" className="h-7 w-7 p-0 text-red-400 hover:text-red-500"></Button>}
                                         </td>
                                     </tr>
                                 ))}
@@ -379,14 +571,19 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">
-                        <Input label="Stock" type="number" value={formData.stock || ''} onChange={e => {
-                            const val = parseFloat(e.target.value);
-                            setFormData({ ...formData, stock: isNaN(val) ? 0 : val });
-                        }} required />
-                        <Input label="Mínimo" type="number" value={formData.minStock || ''} onChange={e => {
-                            const val = parseFloat(e.target.value);
-                            setFormData({ ...formData, minStock: isNaN(val) ? 0 : val });
-                        }} required />
+                        <div>
+                            <Input label="Stock" type="number" value={formData.stock || ''} onChange={e => {
+                                const val = parseFloat(e.target.value);
+                                setFormData({ ...formData, stock: isNaN(val) ? 0 : val });
+                            }} required disabled={!isAdmin} />
+                            {!isAdmin && <p className="text-xs text-red-500 mt-1"><i className="fas fa-lock mr-1"></i>Solo admin puede modificar stock</p>}
+                        </div>
+                        <div>
+                            <Input label="Mínimo" type="number" value={formData.minStock || ''} onChange={e => {
+                                const val = parseFloat(e.target.value);
+                                setFormData({ ...formData, minStock: isNaN(val) ? 0 : val });
+                            }} required disabled={!isAdmin} />
+                        </div>
                     </div>
 
                     <div className="flex justify-between gap-2 pt-4 border-t">
@@ -472,6 +669,95 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
                 }}
                 onCancel={() => setDeleteConfirm({ open: false, id: '', name: '' })}
             />
+
+            {/* Modal para impresión múltiple de etiquetas */}
+            <Modal isOpen={labelModalOpen} onClose={() => setLabelModalOpen(false)} title="Imprimir Múltiples Etiquetas" size="sm">
+                <div className="space-y-4">
+                    <div className="p-4 bg-blue-50 rounded-xl flex items-center gap-3">
+                        <i className="fas fa-print text-blue-500 text-xl"></i>
+                        <div>
+                            <p className="font-bold text-blue-900 text-sm">{labelProduct?.name}</p>
+                            <p className="text-blue-700 text-xs font-mono">{labelProduct?.code}</p>
+                        </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="block text-sm font-bold text-gray-700">Cantidad de etiquetas</label>
+                        <Input
+                            type="number"
+                            value={labelCount}
+                            onChange={e => setLabelCount(parseInt(e.target.value) || 1)}
+                            min={1}
+                            max={100}
+                        />
+                        <p className="text-[10px] text-gray-500 italic">Máximo 100 por vez para evitar bloqueos del navegador.</p>
+                    </div>
+
+                    <div className="flex gap-2 pt-2">
+                        <Button variant="secondary" className="flex-1" onClick={() => setLabelModalOpen(false)}>Cancelar</Button>
+                        <Button variant="primary" className="flex-1" onClick={printMultipleLabels}>Imprimir</Button>
+                    </div>
+                </div>
+            </Modal>
+
+            {/* Catalog Share Modal */}
+            <Modal isOpen={isCatalogModalOpen} onClose={() => setIsCatalogModalOpen(false)} title="Compartir Catálogo por WhatsApp" size="sm">
+                <div className="space-y-4">
+                    <p className="text-sm text-gray-600">Selecciona las categorías que deseas incluir en el catálogo:</p>
+
+                    <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                        <label className="flex items-center gap-3 p-3 bg-primary/5 rounded-xl cursor-pointer hover:bg-primary/10">
+                            <input
+                                type="checkbox"
+                                checked={selectedCategories.length === categories.length}
+                                onChange={(e) => setSelectedCategories(e.target.checked ? categories.map(c => c.id) : [])}
+                                className="w-5 h-5 rounded"
+                            />
+                            <span className="font-bold text-primary">Seleccionar Todas</span>
+                        </label>
+
+                        {categories.map(cat => (
+                            <label key={cat.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl cursor-pointer hover:bg-gray-100">
+                                <input
+                                    type="checkbox"
+                                    checked={selectedCategories.includes(cat.id)}
+                                    onChange={(e) => {
+                                        if (e.target.checked) {
+                                            setSelectedCategories([...selectedCategories, cat.id]);
+                                        } else {
+                                            setSelectedCategories(selectedCategories.filter(id => id !== cat.id));
+                                        }
+                                    }}
+                                    className="w-5 h-5 rounded"
+                                />
+                                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: cat.color }}></span>
+                                <span className="font-medium">{cat.name}</span>
+                                <span className="text-xs text-gray-400 ml-auto">
+                                    {products.filter(p => p.categoryId === cat.id && p.stock > 0).length} productos
+                                </span>
+                            </label>
+                        ))}
+                    </div>
+
+                    <div className="border-t pt-4 flex gap-3">
+                        <Button
+                            variant="secondary"
+                            onClick={() => setIsCatalogModalOpen(false)}
+                            className="flex-1"
+                        >
+                            Cancelar
+                        </Button>
+                        <Button
+                            onClick={generateCatalogHTML}
+                            disabled={selectedCategories.length === 0}
+                            className="flex-1 bg-green-600 hover:bg-green-700"
+                        >
+                            <i className="fab fa-whatsapp mr-2"></i>
+                            Generar y Compartir
+                        </Button>
+                    </div>
+                </div>
+            </Modal>
         </div>
     );
 };

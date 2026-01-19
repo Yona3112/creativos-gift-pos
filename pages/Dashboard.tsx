@@ -1,8 +1,9 @@
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Product, Sale, CreditAccount, Customer, Consumable } from '../types';
-import { Card, Button } from '../components/UIComponents';
+import { Card, Button, Badge } from '../components/UIComponents';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { NotificationService, SystemNotification } from '../services/NotificationService';
 
 interface DashboardProps {
     products: Product[];
@@ -49,6 +50,21 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, customers, consumables, onNavigate }) => {
+    // Notification state
+    const [notifications, setNotifications] = useState<SystemNotification[]>([]);
+    const [reorderSuggestions, setReorderSuggestions] = useState<Awaited<ReturnType<typeof NotificationService.getReorderSuggestions>>>([]);
+
+    // Load notifications and reorder suggestions on mount
+    useEffect(() => {
+        const loadNotifications = async () => {
+            const notifs = await NotificationService.getAllNotifications();
+            setNotifications(notifs);
+            const reorder = await NotificationService.getReorderSuggestions();
+            setReorderSuggestions(reorder);
+        };
+        loadNotifications();
+    }, [products, credits]); // Reload when data changes
+
     // Helper for Local Date (Fix UTC Bug)
     const getLocalDate = (d: Date = new Date()) => {
         const offset = d.getTimezoneOffset() * 60000;
@@ -181,6 +197,108 @@ export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, 
                     <Button size="sm" variant="danger" onClick={() => onNavigate && onNavigate('products', { tab: 'consumables' })}>
                         <i className="fas fa-tools mr-2"></i> Gestionar Insumos
                     </Button>
+                </div>
+            )}
+
+            {/* PANEL DE NOTIFICACIONES DEL SISTEMA */}
+            {notifications.length > 0 && (
+                <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+                    <div className="flex items-center justify-between mb-3">
+                        <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                            <i className="fas fa-bell text-primary"></i>
+                            Alertas del Sistema
+                            <Badge variant="danger">{notifications.length}</Badge>
+                        </h3>
+                    </div>
+                    <div className="space-y-2">
+                        {notifications.slice(0, 5).map(notif => (
+                            <div
+                                key={notif.id}
+                                className={`flex items-center justify-between p-3 rounded-xl border-l-4 ${notif.type === 'danger' ? 'bg-red-50 border-red-500' :
+                                    notif.type === 'warning' ? 'bg-amber-50 border-amber-500' :
+                                        notif.type === 'info' ? 'bg-blue-50 border-blue-500' :
+                                            'bg-green-50 border-green-500'
+                                    }`}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${notif.type === 'danger' ? 'bg-red-100 text-red-600' :
+                                        notif.type === 'warning' ? 'bg-amber-100 text-amber-600' :
+                                            notif.type === 'info' ? 'bg-blue-100 text-blue-600' :
+                                                'bg-green-100 text-green-600'
+                                        }`}>
+                                        <i className={`fas fa-${notif.icon}`}></i>
+                                    </div>
+                                    <div>
+                                        <p className="font-bold text-sm text-gray-800">{notif.title}</p>
+                                        <p className="text-xs text-gray-600">{notif.message}</p>
+                                    </div>
+                                </div>
+                                {notif.action && (
+                                    <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => onNavigate && onNavigate(notif.action!.page)}
+                                    >
+                                        {notif.action.label}
+                                    </Button>
+                                )}
+                            </div>
+                        ))}
+                        {notifications.length > 5 && (
+                            <p className="text-xs text-gray-500 text-center mt-2">
+                                +{notifications.length - 5} alertas más
+                            </p>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* PANEL DE SUGERENCIAS DE REORDEN */}
+            {reorderSuggestions.length > 0 && (
+                <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
+                    <div className="flex items-center justify-between mb-3">
+                        <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                            <i className="fas fa-truck text-orange-500"></i>
+                            Sugerencias de Reorden
+                            <Badge variant="warning">{reorderSuggestions.length}</Badge>
+                        </h3>
+                        <Button size="sm" variant="ghost" onClick={() => onNavigate && onNavigate('products', { filter: 'lowStock' })}>
+                            Ver Todos
+                        </Button>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                            <thead className="bg-gray-50 text-gray-500 uppercase">
+                                <tr>
+                                    <th className="px-3 py-2 text-left">Producto</th>
+                                    <th className="px-3 py-2 text-center">Stock</th>
+                                    <th className="px-3 py-2 text-center">Sugerido</th>
+                                    <th className="px-3 py-2 text-center">Días Stock</th>
+                                    <th className="px-3 py-2 text-center">Urgencia</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y">
+                                {reorderSuggestions.slice(0, 5).map(item => (
+                                    <tr key={item.productId} className="hover:bg-gray-50">
+                                        <td className="px-3 py-2">
+                                            <p className="font-bold text-gray-800">{item.productName}</p>
+                                            <p className="text-gray-400 text-[10px]">{item.code}</p>
+                                        </td>
+                                        <td className="px-3 py-2 text-center font-bold text-red-500">{item.currentStock}</td>
+                                        <td className="px-3 py-2 text-center font-bold text-green-600">+{item.suggestedQty}</td>
+                                        <td className="px-3 py-2 text-center">
+                                            {item.daysOfStock === 999 ? '∞' : `${item.daysOfStock}d`}
+                                        </td>
+                                        <td className="px-3 py-2 text-center">
+                                            <Badge variant={item.urgency === 'critical' ? 'danger' : item.urgency === 'low' ? 'warning' : 'info'}>
+                                                {item.urgency === 'critical' ? '🔴 Urgente' : item.urgency === 'low' ? '🟡 Bajo' : '🟢 Normal'}
+                                            </Badge>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             )}
 

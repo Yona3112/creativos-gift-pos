@@ -238,6 +238,8 @@ export interface CompanySettings {
   barcodeLogoSize?: number;
   legalOwnerName?: string;
   legalCity?: string;
+  darkMode?: boolean;
+  enableBeep?: boolean;
 }
 
 export interface CashCut {

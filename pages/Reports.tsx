@@ -1,7 +1,8 @@
 
-import React, { useState, useMemo } from 'react';
-import { Sale, Product, Customer, Category } from '../types';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Sale, Product, Customer, Category, CreditAccount } from '../types';
 import { Card, StatCard, Button, Input, Badge } from '../components/UIComponents';
+import { db } from '../services/storageService';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
     ResponsiveContainer, PieChart, Pie, Cell, LineChart,
@@ -27,7 +28,17 @@ export const Reports: React.FC<ReportsProps> = ({ sales: allSales, products: all
     firstDayMonth.setDate(1);
     const [startDate, setStartDate] = useState(getLocalDate(firstDayMonth));
     const [endDate, setEndDate] = useState(today);
-    const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'customers'>('overview');
+    const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'customers' | 'cashflow'>('overview');
+    const [credits, setCredits] = useState<CreditAccount[]>([]);
+
+    // Load credits for cash flow report
+    useEffect(() => {
+        const loadCredits = async () => {
+            const c = await db.getCredits();
+            setCredits(c);
+        };
+        loadCredits();
+    }, []);
 
     // 1. FILTRADO DE VENTAS POR RANGO
     const filteredSales = useMemo(() => {
@@ -169,8 +180,8 @@ export const Reports: React.FC<ReportsProps> = ({ sales: allSales, products: all
         <div className="space-y-6 pb-20">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h1 className="text-3xl font-black text-gray-800 tracking-tight">Reportes Avanzados</h1>
-                    <p className="text-gray-500 font-medium">Análisis de rendimiento de "Creativos Gift"</p>
+                    <h1 className="text-3xl font-black text-gray-800 tracking-tight">Reportes</h1>
+                    <p className="text-gray-500 font-medium">Análisis de tu negocio</p>
                 </div>
                 <div className="flex items-center gap-2 bg-white p-2 rounded-2xl shadow-sm border border-gray-100">
                     <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-40 border-0 bg-transparent" />
@@ -188,7 +199,7 @@ export const Reports: React.FC<ReportsProps> = ({ sales: allSales, products: all
             </div>
 
             {/* TABS NAVEGACIÓN */}
-            <div className="flex bg-gray-200 p-1 rounded-2xl w-fit">
+            <div className="flex flex-wrap bg-gray-200 p-1 rounded-2xl w-fit gap-1">
                 <button onClick={() => setActiveTab('overview')} className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'overview' ? 'bg-white text-indigo-600 shadow-md' : 'text-gray-500 hover:text-gray-700'}`}>
                     <i className="fas fa-th-large mr-2"></i>Vista General
                 </button>
@@ -197,6 +208,9 @@ export const Reports: React.FC<ReportsProps> = ({ sales: allSales, products: all
                 </button>
                 <button onClick={() => setActiveTab('customers')} className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'customers' ? 'bg-white text-indigo-600 shadow-md' : 'text-gray-500 hover:text-gray-700'}`}>
                     <i className="fas fa-users mr-2"></i>Clientes
+                </button>
+                <button onClick={() => setActiveTab('cashflow')} className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'cashflow' ? 'bg-white text-green-600 shadow-md' : 'text-gray-500 hover:text-gray-700'}`}>
+                    <i className="fas fa-money-bill-wave mr-2"></i>Flujo de Efectivo
                 </button>
             </div>
 
@@ -332,6 +346,127 @@ export const Reports: React.FC<ReportsProps> = ({ sales: allSales, products: all
                             </div>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {activeTab === 'cashflow' && (
+                <div className="space-y-6 animate-fade-in">
+                    <div className="bg-gradient-to-r from-green-600 to-emerald-600 p-6 rounded-2xl text-white shadow-lg">
+                        <div className="flex items-center gap-3 mb-2">
+                            <i className="fas fa-info-circle text-green-200"></i>
+                            <span className="text-green-100 text-sm font-medium">Este reporte es solo para control interno - NO afecta reportes SAR</span>
+                        </div>
+                        <h3 className="text-xl font-bold">Flujo de Efectivo Real</h3>
+                        <p className="text-green-100 text-sm">Incluye ventas + recuperación de cartera (abonos a créditos)</p>
+                    </div>
+
+                    {(() => {
+                        // Calculate credit payments in date range
+                        const creditPayments = credits.flatMap(c =>
+                            c.payments.filter(p => {
+                                const payDate = getLocalDate(new Date(p.date));
+                                return payDate >= startDate && payDate <= endDate;
+                            }).map(p => ({ ...p, customerId: c.customerId }))
+                        );
+
+                        const totalCreditPayments = creditPayments.reduce((sum, p) => sum + p.amount, 0);
+                        const creditPaymentsByCash = creditPayments.filter(p => p.method === 'Efectivo').reduce((sum, p) => sum + p.amount, 0);
+                        const creditPaymentsByCard = creditPayments.filter(p => p.method === 'Tarjeta').reduce((sum, p) => sum + p.amount, 0);
+                        const creditPaymentsByTransfer = creditPayments.filter(p => p.method === 'Transferencia').reduce((sum, p) => sum + p.amount, 0);
+
+                        // Sales breakdown
+                        const salesByCash = filteredSales.filter(s => s.paymentMethod === 'Efectivo').reduce((sum, s) => sum + s.total, 0) +
+                            filteredSales.filter(s => s.paymentMethod === 'Mixto').reduce((sum, s) => sum + (s.paymentDetails?.cash || 0), 0);
+                        const salesByCard = filteredSales.filter(s => s.paymentMethod === 'Tarjeta').reduce((sum, s) => sum + s.total, 0) +
+                            filteredSales.filter(s => s.paymentMethod === 'Mixto').reduce((sum, s) => sum + (s.paymentDetails?.card || 0), 0);
+                        const salesByTransfer = filteredSales.filter(s => s.paymentMethod === 'Transferencia').reduce((sum, s) => sum + s.total, 0) +
+                            filteredSales.filter(s => s.paymentMethod === 'Mixto').reduce((sum, s) => sum + (s.paymentDetails?.transfer || 0), 0);
+                        const salesByCredit = filteredSales.filter(s => s.paymentMethod === 'Crédito').reduce((sum, s) => sum + s.total, 0);
+
+                        const totalCashInflow = salesByCash + salesByCard + salesByTransfer + totalCreditPayments;
+
+                        return (
+                            <>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                    <StatCard title="Ingresos por Ventas" value={`L ${stats.totalSales.toLocaleString()}`} icon="shopping-cart" color="bg-blue-600" />
+                                    <StatCard title="Abonos Recibidos" value={`L ${totalCreditPayments.toLocaleString()}`} icon="hand-holding-usd" color="bg-purple-600" />
+                                    <StatCard title="Créditos Otorgados" value={`L ${salesByCredit.toLocaleString()}`} icon="file-invoice-dollar" color="bg-orange-500" />
+                                    <StatCard title="Flujo Neto Recibido" value={`L ${totalCashInflow.toLocaleString()}`} icon="coins" color="bg-green-600" />
+                                </div>
+
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                    <Card title="Desglose por Método de Pago - Ventas">
+                                        <div className="space-y-4">
+                                            <div className="flex justify-between items-center p-4 bg-green-50 rounded-xl">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-full bg-green-200 flex items-center justify-center text-green-700"><i className="fas fa-money-bill-wave"></i></div>
+                                                    <span className="font-medium">Efectivo</span>
+                                                </div>
+                                                <span className="font-bold text-green-700">L {salesByCash.toLocaleString()}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center p-4 bg-blue-50 rounded-xl">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-full bg-blue-200 flex items-center justify-center text-blue-700"><i className="fas fa-credit-card"></i></div>
+                                                    <span className="font-medium">Tarjeta</span>
+                                                </div>
+                                                <span className="font-bold text-blue-700">L {salesByCard.toLocaleString()}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center p-4 bg-purple-50 rounded-xl">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-full bg-purple-200 flex items-center justify-center text-purple-700"><i className="fas fa-wifi"></i></div>
+                                                    <span className="font-medium">Transferencia</span>
+                                                </div>
+                                                <span className="font-bold text-purple-700">L {salesByTransfer.toLocaleString()}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center p-4 bg-orange-50 rounded-xl">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-full bg-orange-200 flex items-center justify-center text-orange-700"><i className="fas fa-file-invoice"></i></div>
+                                                    <span className="font-medium">A Crédito (CxC)</span>
+                                                </div>
+                                                <span className="font-bold text-orange-700">L {salesByCredit.toLocaleString()}</span>
+                                            </div>
+                                        </div>
+                                    </Card>
+
+                                    <Card title="Recuperación de Cartera (Abonos)">
+                                        <div className="space-y-4">
+                                            <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100 mb-4">
+                                                <p className="text-sm text-indigo-800"><i className="fas fa-info-circle mr-2"></i>Pagos recibidos de clientes con crédito pendiente</p>
+                                            </div>
+                                            <div className="flex justify-between items-center p-4 bg-green-50 rounded-xl">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-full bg-green-200 flex items-center justify-center text-green-700"><i className="fas fa-money-bill-wave"></i></div>
+                                                    <span className="font-medium">Efectivo</span>
+                                                </div>
+                                                <span className="font-bold text-green-700">L {creditPaymentsByCash.toLocaleString()}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center p-4 bg-blue-50 rounded-xl">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-full bg-blue-200 flex items-center justify-center text-blue-700"><i className="fas fa-credit-card"></i></div>
+                                                    <span className="font-medium">Tarjeta</span>
+                                                </div>
+                                                <span className="font-bold text-blue-700">L {creditPaymentsByCard.toLocaleString()}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center p-4 bg-purple-50 rounded-xl">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-full bg-purple-200 flex items-center justify-center text-purple-700"><i className="fas fa-wifi"></i></div>
+                                                    <span className="font-medium">Transferencia</span>
+                                                </div>
+                                                <span className="font-bold text-purple-700">L {creditPaymentsByTransfer.toLocaleString()}</span>
+                                            </div>
+                                            <div className="border-t border-dashed pt-4 mt-4">
+                                                <div className="flex justify-between items-center">
+                                                    <span className="font-bold text-gray-700">Total Abonos:</span>
+                                                    <span className="text-2xl font-black text-indigo-600">L {totalCreditPayments.toLocaleString()}</span>
+                                                </div>
+                                                <p className="text-xs text-gray-500 mt-1">{creditPayments.length} abono(s) recibidos en el período</p>
+                                            </div>
+                                        </div>
+                                    </Card>
+                                </div>
+                            </>
+                        );
+                    })()}
                 </div>
             )}
         </div>

@@ -6,17 +6,81 @@
 :root {
   --primary-color: #4F46E5;
   --accent-color: #8B5CF6;
+  --bg-surface: #F3F4F6;
+  --bg-card: #FFFFFF;
+  --text-primary: #111827;
+  --text-secondary: #6B7280;
+  --border-color: #E5E7EB;
+}
+
+/* Dark Mode Variables */
+html.dark {
+  --bg-surface: #0f172a;
+  --bg-card: #1e293b;
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --border-color: #334155;
 }
 
 body {
   font-family: 'Plus Jakarta Sans', sans-serif;
-  background-color: #F3F4F6;
-  color: #111827;
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 #root {
   min-height: 100vh;
   box-sizing: border-box;
+}
+
+/* Dark mode overrides for common elements */
+html.dark aside,
+html.dark .bg-white {
+  background-color: var(--bg-card) !important;
+  border-color: var(--border-color) !important;
+}
+
+html.dark .text-gray-800,
+html.dark .text-gray-900 {
+  color: var(--text-primary) !important;
+}
+
+html.dark .text-gray-500,
+html.dark .text-gray-600,
+html.dark .text-gray-400 {
+  color: var(--text-secondary) !important;
+}
+
+html.dark .bg-gray-50,
+html.dark .bg-gray-100,
+html.dark .bg-surface {
+  background-color: #0f172a !important;
+}
+
+html.dark .border-gray-100,
+html.dark .border-gray-200 {
+  border-color: var(--border-color) !important;
+}
+
+html.dark input,
+html.dark select,
+html.dark textarea {
+  background-color: #1e293b !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-primary) !important;
+}
+
+html.dark .bg-gray-200 {
+  background-color: #334155 !important;
+}
+
+html.dark table thead {
+  background-color: #1e293b !important;
+}
+
+html.dark table tbody tr:hover {
+  background-color: #334155 !important;
 }
 
 /* Scrollbar Styling */
@@ -32,6 +96,10 @@ body {
 ::-webkit-scrollbar-thumb {
   background: #94A3B8;
   border-radius: 4px;
+}
+
+html.dark ::-webkit-scrollbar-thumb {
+  background: #475569;
 }
 
 /* Fix for mobile input styling */

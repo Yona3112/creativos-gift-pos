@@ -85,6 +85,25 @@ export const SalesHistory: React.FC<SalesHistoryProps> = ({ sales, customers, us
     const totalPages = Math.ceil(filteredSales.length / ITEMS_PER_PAGE);
     const paginatedSales = filteredSales.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
+    // Calculate time elapsed since sale
+    const getTimeElapsedWarning = (saleDate: string) => {
+        const saleTime = new Date(saleDate).getTime();
+        const now = Date.now();
+        const minutesElapsed = Math.floor((now - saleTime) / (1000 * 60));
+
+        if (minutesElapsed < 30) {
+            return { level: 'ok', text: `Hace ${minutesElapsed} minutos`, color: 'green' };
+        } else if (minutesElapsed < 60) {
+            return { level: 'warning', text: `Hace ${minutesElapsed} minutos`, color: 'yellow' };
+        } else if (minutesElapsed < 1440) { // 24 hours
+            const hours = Math.floor(minutesElapsed / 60);
+            return { level: 'danger', text: `Hace ${hours} hora(s)`, color: 'orange' };
+        } else {
+            const days = Math.floor(minutesElapsed / 1440);
+            return { level: 'critical', text: `Hace ${days} día(s) - REQUIERE AUTORIZACIÓN`, color: 'red' };
+        }
+    };
+
     const openCancelModal = () => {
         setAdminPassword('');
         setConfirmWord('');
@@ -168,7 +187,7 @@ export const SalesHistory: React.FC<SalesHistoryProps> = ({ sales, customers, us
     return (
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <h1 className="text-2xl font-bold text-gray-800">Gestión de Ventas</h1>
+                <h1 className="text-2xl font-bold text-gray-800">Historial de Ventas</h1>
                 <div className="flex bg-white p-1 rounded-xl border border-gray-200 shadow-sm overflow-x-auto max-w-full">
                     {[
                         { id: 'history', label: 'Historial', icon: 'history' },
@@ -370,7 +389,28 @@ export const SalesHistory: React.FC<SalesHistoryProps> = ({ sales, customers, us
                             )}
                         </div>
 
-                        <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+                        <div className="flex flex-wrap justify-end gap-3 pt-4 border-t border-gray-100">
+                            <Button
+                                variant="ghost"
+                                onClick={() => {
+                                    const customer = customers.find(c => c.id === selectedSale.customerId);
+                                    const itemsList = selectedSale.items?.map(i => `• ${i.quantity}x ${i.name}: L${(i.price * i.quantity).toFixed(2)}`).join('\n');
+                                    const message = encodeURIComponent(
+                                        `🧾 *Recibo de ${settings.name || 'Tienda'}*\n\n` +
+                                        `📄 Folio: ${selectedSale.folio}\n` +
+                                        `📅 Fecha: ${new Date(selectedSale.date).toLocaleDateString()}\n` +
+                                        `👤 Cliente: ${customer?.name || 'Consumidor Final'}\n\n` +
+                                        `*Productos:*\n${itemsList}\n\n` +
+                                        `💰 *Total: L${selectedSale.total.toFixed(2)}*\n\n` +
+                                        `¡Gracias por su compra! 🙏`
+                                    );
+                                    const phone = customer?.phone?.replace(/\D/g, '') || '';
+                                    window.open(`https://wa.me/${phone}?text=${message}`, '_blank');
+                                }}
+                                className="text-green-600 hover:bg-green-50"
+                            >
+                                <i className="fab fa-whatsapp mr-1"></i> WhatsApp
+                            </Button>
                             <Button variant="secondary" onClick={() => reprintTicket(selectedSale)} icon="print">Reimprimir</Button>
                             {selectedSale.status === 'active' && (
                                 <Button variant="danger" onClick={openCancelModal} icon="ban">Anular Venta</Button>
@@ -382,6 +422,38 @@ export const SalesHistory: React.FC<SalesHistoryProps> = ({ sales, customers, us
 
             <Modal isOpen={cancelModalOpen} onClose={() => setCancelModalOpen(false)} title="Confirmación Crítica de Seguridad" size="sm">
                 <div className="space-y-5">
+                    {/* Time elapsed warning */}
+                    {selectedSale && (() => {
+                        const elapsed = getTimeElapsedWarning(selectedSale.date);
+                        return (
+                            <div className={`p-3 rounded-xl flex items-center justify-between ${elapsed.level === 'ok' ? 'bg-green-50 border border-green-200' :
+                                elapsed.level === 'warning' ? 'bg-yellow-50 border border-yellow-200' :
+                                    elapsed.level === 'danger' ? 'bg-orange-50 border border-orange-200' :
+                                        'bg-red-100 border-2 border-red-400'
+                                }`}>
+                                <div className="flex items-center gap-2">
+                                    <i className={`fas fa-clock ${elapsed.level === 'ok' ? 'text-green-500' :
+                                        elapsed.level === 'warning' ? 'text-yellow-600' :
+                                            elapsed.level === 'danger' ? 'text-orange-500' :
+                                                'text-red-600'
+                                        }`}></i>
+                                    <span className={`font-bold text-sm ${elapsed.level === 'ok' ? 'text-green-700' :
+                                        elapsed.level === 'warning' ? 'text-yellow-700' :
+                                            elapsed.level === 'danger' ? 'text-orange-700' :
+                                                'text-red-700'
+                                        }`}>
+                                        {elapsed.text}
+                                    </span>
+                                </div>
+                                {elapsed.level === 'critical' && (
+                                    <span className="bg-red-600 text-white text-[10px] px-2 py-1 rounded-full font-bold animate-pulse">
+                                        ADMIN
+                                    </span>
+                                )}
+                            </div>
+                        );
+                    })()}
+
                     <div className="bg-red-50 border-2 border-red-500 p-4 rounded-xl flex items-start gap-3 animate-pulse">
                         <i className="fas fa-exclamation-triangle text-red-600 text-2xl mt-1"></i>
                         <div className="text-sm text-red-900 font-bold">

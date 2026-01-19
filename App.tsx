@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { db } from './services/storageService';
 import { User, Product, Category, Customer, Sale, Branch, CreditAccount, Promotion, CompanySettings, Quote, Consumable, Expense } from './types';
 import { Layout } from './components/Layout';
@@ -47,6 +47,10 @@ function App() {
 
   const [quoteToLoad, setQuoteToLoad] = useState<Quote | null>(null);
   const { sendNotification } = useNotifications();
+
+  // Ref to prevent multiple pullAll() calls during session - fixes duplicate data bug
+  const hasPulledFromCloud = useRef(false);
+
 
   const refreshData = async (shouldPushToCloud = false, isManual = false) => {
     try {
@@ -103,10 +107,9 @@ function App() {
     const initApp = async () => {
       try {
         await db.init();
-        // Carga rápida desde IndexedDB
+        // Carga rápida desde IndexedDB - NO hacer pull/push aquí
+        // El pull se maneja en initSync cuando user cambia
         await refreshData(false);
-        // Sync en background (solo una vez al inicio)
-        refreshData(true);
 
         // Setup background check for 3-hour backup
         backupIntervalId = setInterval(() => {
@@ -201,12 +204,21 @@ function App() {
   useEffect(() => {
     const initSync = async () => {
       if (user) {
+        // Guard: Only pull once per session to prevent duplicate data
+        if (hasPulledFromCloud.current) {
+          console.log("⚡ Pull ya realizado esta sesión, omitiendo...");
+          return;
+        }
+
         console.log("🚀 Usuario ingresó al sistema. Descargando datos de la nube...");
         const sett = await db.getSettings();
 
         // Solo sincronizar si Supabase está configurado
         if (sett.supabaseUrl && sett.supabaseKey) {
           try {
+            // Mark as pulled BEFORE the actual pull to prevent race conditions
+            hasPulledFromCloud.current = true;
+
             // SOLO PULL - Descargar datos de la nube
             // NO hacer push para evitar que datos viejos locales sobrescriban la nube
             console.log("⬇️ Descargando datos de la nube...");

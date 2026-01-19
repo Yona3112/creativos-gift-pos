@@ -106,7 +106,8 @@ export class SupabaseService {
                 'creditDueDateAlertDays', 'enableCreditAlerts', 'showFloatingWhatsapp', 'whatsappTemplate',
                 'logo', 'themeColor', 'whatsappNumber', 'masterPassword', 'supabaseUrl', 'supabaseKey',
                 'autoSync', 'lastBackupDate', 'logoObjectFit', 'thanksMessage', 'warrantyPolicy', 'returnPolicy',
-                'barcodeWidth', 'barcodeHeight', 'showLogoOnBarcode', 'barcodeLogoSize', 'legalOwnerName', 'legalCity'
+                'barcodeWidth', 'barcodeHeight', 'showLogoOnBarcode', 'barcodeLogoSize', 'legalOwnerName', 'legalCity',
+                'darkMode', 'enableBeep'
             ];
 
             const settingsToSync: any = { id: 'main' };

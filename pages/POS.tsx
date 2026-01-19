@@ -107,6 +107,35 @@ export const POS: React.FC<POSProps> = ({
     const totalDiscount = Number(((parseFloat(globalDiscount) || 0) + pointsDiscount).toFixed(2));
     const total = Math.max(0, Number((totalWithTax - totalDiscount).toFixed(2)));
 
+    // Calculate profit margin and detect negative margins
+    const marginAnalysis = useMemo(() => {
+        let totalCost = 0;
+        let totalRevenue = 0;
+        const itemsBelowCost: { name: string; price: number; cost: number }[] = [];
+
+        cart.forEach(item => {
+            const revenue = item.price * item.quantity;
+            const cost = (item.cost || 0) * item.quantity;
+            totalRevenue += revenue;
+            totalCost += cost;
+
+            if (item.cost && item.price < item.cost) {
+                itemsBelowCost.push({ name: item.name, price: item.price, cost: item.cost });
+            }
+        });
+
+        const profit = totalRevenue - totalCost - totalDiscount;
+        const marginPercent = totalRevenue > 0 ? (profit / totalRevenue) * 100 : 0;
+
+        return {
+            totalCost,
+            profit,
+            marginPercent,
+            hasNegativeMargin: profit < 0,
+            itemsBelowCost
+        };
+    }, [cart, totalDiscount]);
+
     // Lo que el cliente debe entregar en efectivo/tarjeta/etc hoy
     const cashRequiredToday = useMemo(() => {
         let amt = total;
@@ -182,6 +211,40 @@ export const POS: React.FC<POSProps> = ({
         });
     }, [products, searchTerm, selectedCategory]);
 
+    // Beep sound utility using Web Audio API
+    const playBeep = (type: 'scan' | 'success' | 'error' = 'scan') => {
+        if (!settings.enableBeep) return;
+        try {
+            const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            if (type === 'scan') {
+                oscillator.frequency.value = 1200;
+                oscillator.type = 'sine';
+                gainNode.gain.value = 0.1;
+                oscillator.start();
+                oscillator.stop(audioContext.currentTime + 0.08);
+            } else if (type === 'success') {
+                oscillator.frequency.value = 800;
+                oscillator.type = 'sine';
+                gainNode.gain.value = 0.1;
+                oscillator.start();
+                setTimeout(() => { oscillator.frequency.value = 1000; }, 100);
+                oscillator.stop(audioContext.currentTime + 0.25);
+            } else {
+                oscillator.frequency.value = 300;
+                oscillator.type = 'square';
+                gainNode.gain.value = 0.08;
+                oscillator.start();
+                oscillator.stop(audioContext.currentTime + 0.2);
+            }
+        } catch (e) { console.log('Audio not supported'); }
+    };
+
     const addToCart = (product: Product) => {
         const existing = cart.find(item => item.id === product.id);
 
@@ -189,11 +252,13 @@ export const POS: React.FC<POSProps> = ({
         if (!product.id.startsWith('manual-')) {
             const currentQty = existing ? existing.quantity : 0;
             if (currentQty >= product.stock) {
+                playBeep('error');
                 showToast(`Stock insuficiente para "${product.name}". Disponible: ${product.stock}`, "warning");
                 return;
             }
         }
 
+        playBeep('scan');
         if (existing) setCart(cart.map(item => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item));
         else setCart([...cart, { ...product, quantity: 1 }]);
     };
@@ -303,6 +368,7 @@ export const POS: React.FC<POSProps> = ({
             setCreditNoteAmount(0);
             setCreditNoteValid(false);
             setCreditNoteMax(0);
+            playBeep('success');
             onSaleComplete();
         } catch (e: any) {
             showToast(e.message || "Error al procesar venta", "error");
@@ -585,6 +651,35 @@ export const POS: React.FC<POSProps> = ({
             {/* MODAL DE COBRO */}
             <Modal isOpen={isPaymentModalOpen} onClose={() => setIsPaymentModalOpen(false)} title="Finalizar Venta" size="lg">
                 <div className="space-y-6">
+                    {/* ALERTA DE MARGEN NEGATIVO */}
+                    {(marginAnalysis.hasNegativeMargin || marginAnalysis.itemsBelowCost.length > 0) && (
+                        <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl animate-pulse">
+                            <div className="flex items-start gap-3">
+                                <div className="bg-red-100 p-2 rounded-full text-red-600">
+                                    <i className="fas fa-exclamation-triangle"></i>
+                                </div>
+                                <div className="flex-1">
+                                    <h3 className="font-bold text-red-800">⚠️ Alerta de Margen</h3>
+                                    {marginAnalysis.hasNegativeMargin && (
+                                        <p className="text-sm text-red-700 font-medium">
+                                            Esta venta tiene <strong>margen negativo</strong>: L {marginAnalysis.profit.toFixed(2)} ({marginAnalysis.marginPercent.toFixed(1)}%)
+                                        </p>
+                                    )}
+                                    {marginAnalysis.itemsBelowCost.length > 0 && (
+                                        <div className="mt-2">
+                                            <p className="text-xs text-red-600 font-bold">Productos vendidos bajo costo:</p>
+                                            <ul className="text-xs text-red-700 mt-1">
+                                                {marginAnalysis.itemsBelowCost.slice(0, 3).map((item, idx) => (
+                                                    <li key={idx}>• {item.name}: Venta L{item.price.toFixed(2)} vs Costo L{item.cost.toFixed(2)}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Documento</label>

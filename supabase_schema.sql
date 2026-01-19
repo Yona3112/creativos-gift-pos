@@ -288,7 +288,9 @@ CREATE TABLE IF NOT EXISTS settings (
   "showLogoOnBarcode" BOOLEAN DEFAULT false,
   "barcodeLogoSize" INTEGER DEFAULT 10,
   "legalOwnerName" TEXT,
-  "legalCity" TEXT
+  "legalCity" TEXT,
+  "darkMode" BOOLEAN DEFAULT false,
+  "enableBeep" BOOLEAN DEFAULT true
 );
 
 -- ================================================
@@ -313,3 +315,6 @@ ALTER TABLE sales ADD COLUMN IF NOT EXISTS "isOrder" BOOLEAN DEFAULT false;
 ALTER TABLE sales ADD COLUMN IF NOT EXISTS "deposit" NUMERIC DEFAULT 0;
 ALTER TABLE sales ADD COLUMN IF NOT EXISTS "balance" NUMERIC DEFAULT 0;
 
+-- Dark mode support
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS "darkMode" BOOLEAN DEFAULT false;
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS "enableBeep" BOOLEAN DEFAULT true;

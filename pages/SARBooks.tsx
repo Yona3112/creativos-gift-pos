@@ -67,25 +67,54 @@ export const SARBooks: React.FC = () => {
         };
     }, [filteredSales, filteredExpenses]);
 
-    const exportToCSV = (type: 'ingresos' | 'gastos') => {
+    const exportToCSV = async (type: 'ingresos' | 'gastos') => {
+        const settings = await db.getSettings();
         let csv = '';
         let filename = '';
 
+        // Add company header for SAR compliance
+        csv += `"EMPRESA:","${settings.name || 'Mi Empresa'}"\n`;
+        csv += `"RTN:","${settings.rtn || ''}"\n`;
+        csv += `"DIRECCIÓN:","${settings.address || ''}"\n`;
+        csv += `"PERÍODO:","${dateFrom} al ${dateTo}"\n`;
+        csv += `"GENERADO:","${new Date().toLocaleString()}"\n`;
+        csv += '\n';
+
         if (type === 'ingresos') {
-            csv = 'Fecha,Factura,Cliente,Subtotal,ISV 15%,Total\n';
+            csv += '"LIBRO DIARIO DE INGRESOS - FORMATO SAR"\n\n';
+            csv += '"Fecha","N° Factura","CAI","Cliente","Subtotal (sin ISV)","ISV 15%","Total"\n';
+
             filteredSales.forEach(s => {
-                csv += `${getLocalDate(s.date)},${s.invoiceNumber || s.id},${s.customerName || 'Consumidor Final'},${(s.subtotal || 0).toFixed(2)},${(s.taxAmount || 0).toFixed(2)},${(s.total || 0).toFixed(2)}\n`;
+                const subtotal = s.subtotal || (s.total / 1.15);
+                const isv = s.taxAmount || (s.total - subtotal);
+                csv += `"${getLocalDate(s.date)}","${s.folio || s.invoiceNumber || s.id.slice(-8)}","${s.cai || settings.cai || ''}","${s.customerName || 'Consumidor Final'}","${subtotal.toFixed(2)}","${isv.toFixed(2)}","${(s.total || 0).toFixed(2)}"\n`;
             });
-            filename = `libro_ingresos_${dateFrom}_${dateTo}.csv`;
+
+            // Add totals row
+            csv += '\n';
+            csv += `"","","","TOTALES:","${totals.ventasNetas.toFixed(2)}","${totals.totalISV.toFixed(2)}","${totals.totalVentas.toFixed(2)}"\n`;
+            csv += '\n';
+            csv += `"Total Transacciones:","${filteredSales.length}"\n`;
+
+            filename = `Libro_Ingresos_SAR_${dateFrom}_${dateTo}.csv`;
         } else {
-            csv = 'Fecha,Categoría,Descripción,Monto\n';
+            csv += '"LIBRO DIARIO DE GASTOS Y EGRESOS"\n\n';
+            csv += '"Fecha","Categoría","Descripción","Método de Pago","Monto"\n';
+
             filteredExpenses.forEach(e => {
-                csv += `${e.date},${e.categoryId},${e.description},${e.amount.toFixed(2)}\n`;
+                csv += `"${e.date}","${e.categoryId}","${e.description}","${e.paymentMethod}","${e.amount.toFixed(2)}"\n`;
             });
-            filename = `libro_gastos_${dateFrom}_${dateTo}.csv`;
+
+            csv += '\n';
+            csv += `"","","","TOTAL GASTOS:","${totals.totalGastos.toFixed(2)}"\n`;
+            csv += `"Total Registros:","${filteredExpenses.length}"\n`;
+
+            filename = `Libro_Gastos_SAR_${dateFrom}_${dateTo}.csv`;
         }
 
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        // Add BOM for Excel to recognize UTF-8
+        const BOM = '\uFEFF';
+        const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
         link.download = filename;

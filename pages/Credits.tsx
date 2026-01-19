@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { CreditAccount, Customer, CreditPayment, CompanySettings } from '../types';
 import { Card, Button, Input, Badge, Modal, Alert, showToast } from '../components/UIComponents';
 import { db } from '../services/storageService';
+import { NotificationService } from '../services/NotificationService';
 
 interface CreditsProps {
     settings: CompanySettings; // Added settings prop
@@ -324,11 +325,43 @@ export const Credits: React.FC<CreditsProps> = ({ settings }) => {
         <div className="space-y-6">
             <h1 className="text-2xl font-bold text-gray-800">Cuentas por Cobrar</h1>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <Card className="bg-blue-50 border-blue-200">
                     <div className="text-blue-800">
                         <p className="text-sm font-medium">Total CxC</p>
-                        <p className="text-2xl font-bold">L {credits.reduce((a, c) => a + (c.totalAmount - c.paidAmount), 0).toFixed(2)}</p>
+                        <p className="text-2xl font-bold">L {credits.filter(c => c.status !== 'paid').reduce((a, c) => a + (c.totalAmount - c.paidAmount), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                    </div>
+                </Card>
+                <Card className="bg-red-50 border-red-200">
+                    <div className="text-red-800">
+                        <p className="text-sm font-medium">Créditos Vencidos</p>
+                        <p className="text-2xl font-bold">
+                            {credits.filter(c => {
+                                if (c.status === 'paid') return false;
+                                const dueDate = new Date(c.dueDate);
+                                dueDate.setHours(0, 0, 0, 0);
+                                const today = new Date();
+                                today.setHours(0, 0, 0, 0);
+                                return dueDate < today;
+                            }).length} créditos
+                        </p>
+                    </div>
+                </Card>
+                <Card className="bg-orange-50 border-orange-200">
+                    <div className="text-orange-800">
+                        <p className="text-sm font-medium">Total Mora Acumulada</p>
+                        <p className="text-2xl font-bold">
+                            L {credits.filter(c => c.status !== 'paid').reduce((sum, c) => {
+                                const mora = NotificationService.calculateMora(c, settings?.defaultCreditRate || 2);
+                                return sum + mora.moraAmount;
+                            }, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </p>
+                    </div>
+                </Card>
+                <Card className="bg-green-50 border-green-200">
+                    <div className="text-green-800">
+                        <p className="text-sm font-medium">Créditos Liquidados</p>
+                        <p className="text-2xl font-bold">{credits.filter(c => c.status === 'paid').length}</p>
                     </div>
                 </Card>
             </div>
@@ -340,9 +373,11 @@ export const Credits: React.FC<CreditsProps> = ({ settings }) => {
                             <tr>
                                 <th className="p-3">Cliente</th>
                                 <th className="p-3">Vencimiento</th>
+                                <th className="p-3">Días Vencido</th>
                                 <th className="p-3">Total</th>
                                 <th className="p-3">Pagado</th>
                                 <th className="p-3">Saldo</th>
+                                <th className="p-3">Mora</th>
                                 <th className="p-3">Estado</th>
                                 <th className="p-3 text-right">Acciones</th>
                             </tr>
@@ -351,14 +386,30 @@ export const Credits: React.FC<CreditsProps> = ({ settings }) => {
                             {credits.map(c => {
                                 const cust = customers.find(cust => cust.id === c.customerId);
                                 const balance = c.totalAmount - c.paidAmount;
+                                const mora = NotificationService.calculateMora(c, settings?.defaultCreditRate || 2);
+                                const isOverdue = mora.daysOverdue > 0;
                                 return (
-                                    <tr key={c.id}>
+                                    <tr key={c.id} className={isOverdue ? 'bg-red-50/50' : ''}>
                                         <td className="p-3 font-medium">{cust?.name}</td>
                                         <td className="p-3">{getLocalDate(c.dueDate)}</td>
+                                        <td className="p-3">
+                                            {isOverdue ? (
+                                                <span className="text-red-600 font-bold">{mora.daysOverdue} días</span>
+                                            ) : (
+                                                <span className="text-gray-400">-</span>
+                                            )}
+                                        </td>
                                         <td className="p-3">L {c.totalAmount.toFixed(2)}</td>
                                         <td className="p-3 text-green-600">L {c.paidAmount.toFixed(2)}</td>
                                         <td className="p-3 font-bold text-red-600">L {balance.toFixed(2)}</td>
-                                        <td className="p-3"><Badge variant={c.status === 'paid' ? 'success' : c.status === 'overdue' ? 'danger' : 'warning'}>{c.status}</Badge></td>
+                                        <td className="p-3">
+                                            {mora.moraAmount > 0 ? (
+                                                <span className="text-orange-600 font-bold">L {mora.moraAmount.toFixed(2)}</span>
+                                            ) : (
+                                                <span className="text-gray-400">-</span>
+                                            )}
+                                        </td>
+                                        <td className="p-3"><Badge variant={c.status === 'paid' ? 'success' : isOverdue ? 'danger' : 'warning'}>{isOverdue ? 'overdue' : c.status}</Badge></td>
                                         <td className="p-3 text-right">
                                             <div className="flex justify-end gap-2">
                                                 <Button size="sm" variant="ghost" onClick={() => printAccountStatement(c)} title="Estado de Cuenta"><i className="fas fa-file-alt"></i></Button>

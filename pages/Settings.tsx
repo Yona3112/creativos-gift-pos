@@ -243,6 +243,47 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
                   <span className="font-mono text-sm text-gray-600 uppercase">{settings.themeColor || '#6366F1'}</span>
                 </div>
               </div>
+
+              <div className="bg-gray-800 rounded-xl p-4 border border-gray-700 flex items-center gap-4">
+                <div className="flex-1">
+                  <label className="block text-sm font-bold text-white mb-1">
+                    <i className="fas fa-moon mr-2 text-yellow-400"></i>Modo Oscuro
+                  </label>
+                  <p className="text-xs text-gray-400">Reduce la fatiga visual en ambientes con poca luz.</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="sr-only peer"
+                    checked={settings.darkMode || false}
+                    onChange={e => {
+                      const newDarkMode = e.target.checked;
+                      setSettings(s => s ? ({ ...s, darkMode: newDarkMode }) : null);
+                      // Apply immediately
+                      document.documentElement.classList.toggle('dark', newDarkMode);
+                    }}
+                  />
+                  <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-500"></div>
+                </label>
+              </div>
+
+              <div className="bg-blue-50 rounded-xl p-4 border border-blue-100 flex items-center gap-4 mt-3">
+                <div className="flex-1">
+                  <label className="block text-sm font-bold text-blue-900 mb-1">
+                    <i className="fas fa-volume-up mr-2 text-blue-500"></i>Sonidos de Confirmación
+                  </label>
+                  <p className="text-xs text-blue-700">Emitir un "beep" al escanear productos o completar ventas.</p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={settings.enableBeep || false}
+                    onChange={(e) => setSettings({ ...settings, enableBeep: e.target.checked })}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
+              </div>
             </div>
           </section>
 
