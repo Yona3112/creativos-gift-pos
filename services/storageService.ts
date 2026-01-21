@@ -99,8 +99,8 @@ class StorageService {
       });
     }
 
-    // Limpiar gastos duplicados al iniciar
-    await this.cleanupDuplicateExpenses();
+    // NOTA: La limpieza de duplicados ahora se ejecuta en restoreData()
+    // después de que los datos de la nube se han fusionado
   }
 
   async cleanupDuplicateExpenses() {
@@ -1014,7 +1014,16 @@ class StorageService {
     if (data.quotes) await mergeTable(db_engine.quotes, data.quotes);
     if (data.cash_cuts) await mergeTable(db_engine.cashCuts, data.cash_cuts);
     if (data.credit_notes) await mergeTable(db_engine.creditNotes, data.credit_notes);
-    if (data.expenses) await mergeTable(db_engine.expenses, data.expenses);
+    if (data.expenses) {
+      // Normalizar fechas de expenses al formato YYYY-MM-DD
+      const normalizedExpenses = data.expenses.map((exp: any) => ({
+        ...exp,
+        date: exp.date.substring(0, 10) // Convertir 2026-01-18T00:00:00+00:00 a 2026-01-18
+      }));
+      await mergeTable(db_engine.expenses, normalizedExpenses);
+      // Limpiar duplicados DESPUÉS de fusionar datos de la nube
+      await this.cleanupDuplicateExpenses();
+    }
     if (data.fixedExpenses) await mergeTable(db_engine.fixedExpenses, data.fixedExpenses);
     if (data.inventoryHistory) await mergeTable(db_engine.inventoryHistory, data.inventoryHistory);
     if (data.priceHistory) await mergeTable(db_engine.priceHistory, data.priceHistory);
