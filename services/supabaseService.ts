@@ -131,7 +131,15 @@ export class SupabaseService {
         for (const table of tables) {
             if (table.data && table.data.length > 0) {
                 console.log(`📤 Sincronizando ${table.name}: ${table.data.length} registros...`);
-                const { error, data: responseData } = await client.from(table.name).upsert(table.data);
+
+                // Handle tables with unique constraints specially
+                let upsertOptions: any = {};
+                if (table.name === 'users') {
+                    // Users have unique email constraint, use onConflict to update by id
+                    upsertOptions = { onConflict: 'id', ignoreDuplicates: true };
+                }
+
+                const { error, data: responseData } = await client.from(table.name).upsert(table.data, upsertOptions);
                 if (error) {
                     console.error(`❌ Error en ${table.name}:`, error);
                     results[table.name] = `Error: ${error.message}`;
