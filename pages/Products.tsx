@@ -179,17 +179,10 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
             p.stock > 0
         );
 
-        const groupedProducts: Record<string, Product[]> = {};
-        selectedProducts.forEach(p => {
-            const cat = categories.find(c => c.id === p.categoryId);
-            const catName = cat?.name || 'Otros';
-            if (!groupedProducts[catName]) groupedProducts[catName] = [];
-            groupedProducts[catName].push(p);
-        });
-
         const storeName = settings?.name || 'Mi Tienda';
         const phone = settings?.whatsappNumber || '';
-        const themeColor = settings?.themeColor || '#4F46E5';
+        const themeColor = settings?.themeColor || '#e62e8a';
+        const logo = settings?.logo || '';
 
         const html = `
 <!DOCTYPE html>
@@ -197,87 +190,195 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Catálogo - ${storeName}</title>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap" rel="stylesheet">
+    <title>Menú Digital - ${storeName}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Plus Jakarta Sans', sans-serif; background: linear-gradient(135deg, ${themeColor}20, white); min-height: 100vh; padding: 20px; }
-        .header { text-align: center; padding: 30px 20px; background: ${themeColor}; color: white; border-radius: 20px; margin-bottom: 30px; box-shadow: 0 10px 40px ${themeColor}40; }
-        .header h1 { font-size: 2em; font-weight: 800; margin-bottom: 5px; }
-        .header p { opacity: 0.9; font-size: 0.9em; }
-        .category { margin-bottom: 30px; }
-        .category-title { font-size: 1.3em; font-weight: 800; color: ${themeColor}; padding: 10px 15px; background: white; border-radius: 12px; margin-bottom: 15px; display: inline-block; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
-        .products { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 15px; }
-        .product { background: white; border-radius: 16px; padding: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); transition: transform 0.3s; }
-        .product:hover { transform: translateY(-5px); }
-        .product-img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 12px; background: #f3f4f6; margin-bottom: 10px; }
-        .product-name { font-weight: 600; font-size: 0.9em; color: #1f2937; margin-bottom: 5px; line-height: 1.3; }
-        .product-price { font-weight: 800; font-size: 1.2em; color: ${themeColor}; }
-        .whatsapp-btn { display: block; text-align: center; background: #25D366; color: white; padding: 15px 30px; border-radius: 50px; text-decoration: none; font-weight: 700; font-size: 1.1em; margin: 30px auto; max-width: 300px; box-shadow: 0 8px 30px rgba(37,211,102,0.4); }
-        .whatsapp-btn:hover { transform: scale(1.05); }
-        .footer { text-align: center; color: #6b7280; font-size: 0.85em; padding: 20px; }
-        .no-img { display: flex; align-items: center; justify-content: center; color: #d1d5db; font-size: 2em; }
+        :root { --primary: ${themeColor}; --bg: #f8fafc; }
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { font-family: 'Outfit', sans-serif; background: var(--bg); color: #1e293b; line-height: 1.5; overflow-x: hidden; }
+        
+        .glass { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.3); }
+        
+        header { 
+            background: linear-gradient(135deg, var(--primary), #000); 
+            color: white; padding: 40px 20px; text-align: center; position: relative;
+            border-bottom-left-radius: 40px; border-bottom-right-radius: 40px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1); margin-bottom: 20px;
+        }
+        .header-logo { width: 90px; height: 90px; border-radius: 50%; object-fit: cover; border: 4px solid rgba(255,255,255,0.2); margin-bottom: 15px; box-shadow: 0 8px 20px rgba(0,0,0,0.2); }
+        header h1 { font-size: 2.2rem; font-weight: 800; letter-spacing: -1px; margin-bottom: 5px; }
+        header p { opacity: 0.8; font-weight: 300; font-size: 1rem; }
+
+        .search-container { position: sticky; top: 15px; z-index: 100; padding: 0 20px; margin-top: -25px; }
+        .search-bar { 
+            width: 100%; padding: 16px 25px; border-radius: 20px; border: none; font-family: inherit;
+            font-size: 1rem; box-shadow: 0 10px 25px rgba(0,0,0,0.05); outline: none; transition: 0.3s;
+        }
+        .search-bar:focus { box-shadow: 0 10px 30px var(--primary)30; transform: scale(1.02); }
+
+        .container { padding: 20px; max-width: 1000px; margin: 0 auto; }
+        
+        .category-section { margin-bottom: 40px; animation: fadeIn 0.5s ease-out both; }
+        .category-title { 
+            font-size: 1.4rem; font-weight: 800; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;
+            color: var(--primary); text-transform: uppercase; letter-spacing: 1px;
+        }
+        .category-title::after { content: ''; flex: 1; height: 2px; background: linear-gradient(to right, var(--primary)40, transparent); }
+
+        .products-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 15px; }
+        
+        .product-card { 
+            background: white; border-radius: 24px; padding: 12px; transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.03); display: flex; flex-direction: column; cursor: pointer;
+            border: 1px solid #f1f5f9; position: relative; overflow: hidden;
+        }
+        .product-card:hover { transform: translateY(-8px); box-shadow: 0 20px 40px rgba(0,0,0,0.08); border-color: var(--primary)30; }
+        
+        .img-container { width: 100%; aspect-ratio: 1; border-radius: 18px; overflow: hidden; background: #f1f5f9; margin-bottom: 12px; position: relative; }
+        .product-img { width: 100%; height: 100%; object-fit: cover; transition: 0.6s; }
+        .product-card:hover .product-img { transform: scale(1.1); }
+        .no-img { display: flex; align-items: center; justify-content: center; height: 100%; color: #cbd5e1; font-size: 2.5rem; }
+
+        .product-info { flex: 1; display: flex; flex-direction: column; }
+        .product-name { font-weight: 600; font-size: 0.95rem; color: #334155; margin-bottom: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.2; }
+        .product-price { font-weight: 800; font-size: 1.2rem; color: var(--primary); margin-top: auto; }
+        
+        .order-btn { 
+            margin-top: 10px; width: 100%; padding: 8px; border-radius: 12px; border: none;
+            background: #25D36615; color: #25D366; font-weight: 700; font-size: 0.75rem;
+            text-transform: uppercase; letter-spacing: 0.5px; cursor: pointer; transition: 0.3s;
+            display: flex; align-items: center; justify-content: center; gap: 6px;
+        }
+        .product-card:hover .order-btn { background: #25D366; color: white; }
+
+        .empty-state { text-align: center; padding: 60px 20px; display: none; }
+        .empty-state i { font-size: 4rem; color: #cbd5e1; margin-bottom: 20px; }
+
+        footer { text-align: center; padding: 40px 20px; color: #94a3b8; font-size: 0.8rem; }
+        
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Floating Contact Button */
+        .fab-contact { 
+            position: fixed; bottom: 30px; right: 30px; background: #25D366; color: white;
+            width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            font-size: 1.8rem; box-shadow: 0 10px 30px rgba(37,211,102,0.4); text-decoration: none; z-index: 1000;
+            transition: 0.3s;
+        }
+        .fab-contact:hover { transform: scale(1.1) rotate(10deg); }
     </style>
 </head>
 <body>
-    <div class="header">
-        ${settings?.logo ? `<img src="${settings.logo}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;margin-bottom:10px;border:3px solid white;">` : ''}
-        <h1>📦 ${storeName}</h1>
-        <p>Catálogo de Productos</p>
+    <header>
+        ${logo ? `<img src="${logo}" class="header-logo">` : ''}
+        <h1>${storeName}</h1>
+        <p>Catálogo Digital de Productos</p>
+    </header>
+
+    <div class="search-container">
+        <input type="text" class="search-bar glass" placeholder="Buscar productos..." id="searchInput">
     </div>
-    
-    ${Object.entries(groupedProducts).map(([catName, prods]) => `
-        <div class="category">
-            <div class="category-title">🏷️ ${catName}</div>
-            <div class="products">
-                ${prods.map(p => `
-                    <div class="product">
-                        ${p.image
-                ? `<img src="${p.image}" class="product-img" alt="${p.name}">`
-                : `<div class="product-img no-img">📦</div>`
-            }
-                        <div class="product-name">${p.name}</div>
-                        <div class="product-price">L ${p.price.toFixed(2)}</div>
+
+    <div class="container" id="catalogContent">
+        ${Array.from(new Set(selectedProducts.map(p => p.categoryId))).map(catId => {
+            const cat = categories.find(c => c.id === catId);
+            const catProds = selectedProducts.filter(p => p.categoryId === catId);
+            return `
+                <section class="category-section" data-cat="${cat?.name || 'Otros'}">
+                    <h2 class="category-title">
+                        <i class="fas fa-tag"></i> ${cat?.name || 'Otros'}
+                    </h2>
+                    <div class="products-grid">
+                        ${catProds.map(p => `
+                            <div class="product-card" data-name="${p.name.toLowerCase()}" onclick="orderProduct('${p.name}', '${p.price.toFixed(2)}', '${p.code}')">
+                                <div class="img-container">
+                                    ${p.image ? `<img src="${p.image}" class="product-img" loading="lazy">` : `<div class="no-img"><i class="fas fa-box"></i></div>`}
+                                </div>
+                                <div class="product-info">
+                                    <h3 class="product-name">${p.name}</h3>
+                                    <p class="product-price">L ${p.price.toFixed(2)}</p>
+                                    <button class="order-btn">
+                                        <i class="fab fa-whatsapp"></i> Pedir Ahora
+                                    </button>
+                                </div>
+                            </div>
+                        `).join('')}
                     </div>
-                `).join('')}
-            </div>
-        </div>
-    `).join('')}
-    
-    ${phone ? `<a href="https://api.whatsapp.com/send?phone=${phone.replace(/\D/g, '')}" target="_blank" class="whatsapp-btn">💬 Pedir por WhatsApp</a>` : ''}
-    
-    <div class="footer">
-        <p>Generado desde ${storeName} • ${new Date().toLocaleDateString()}</p>
+                </section>
+            `;
+        }).join('')}
     </div>
+
+    <div id="emptyState" class="empty-state">
+        <i class="fas fa-search-minus"></i>
+        <h3>No encontramos lo que buscas</h3>
+        <p>Prueba con otros términos</p>
+    </div>
+
+    ${phone ? `<a href="https://api.whatsapp.com/send?phone=${phone.replace(/\D/g, '')}" class="fab-contact" target="_blank"><i class="fab fa-whatsapp"></i></a>` : ''}
+
+    <footer>
+        <p>© ${new Date().getFullYear()} ${storeName} • Catálogo Digital Interactivo</p>
+    </footer>
+
+    <script>
+        const searchInput = document.getElementById('searchInput');
+        const cards = document.querySelectorAll('.product-card');
+        const sections = document.querySelectorAll('.category-section');
+        const emptyState = document.getElementById('emptyState');
+
+        searchInput.addEventListener('input', (e) => {
+            const term = e.target.value.toLowerCase().trim();
+            let hasResults = false;
+
+            sections.forEach(section => {
+                const sectionCards = section.querySelectorAll('.product-card');
+                let sectionHasResults = false;
+
+                sectionCards.forEach(card => {
+                    const name = card.getAttribute('data-name');
+                    if (name.includes(term)) {
+                        card.style.display = 'flex';
+                        sectionHasResults = true;
+                        hasResults = true;
+                    } else {
+                        card.style.display = 'none';
+                    }
+                });
+
+                section.style.display = sectionHasResults ? 'block' : 'none';
+            });
+
+            emptyState.style.display = hasResults ? 'none' : 'block';
+        });
+
+        function orderProduct(name, price, code) {
+            const phone = '${phone.replace(/\D/g, '')}';
+            const message = encodeURIComponent('¡Hola! 👋 Me interesa este producto del catálogo:\\n\\n📦 *' + name + '*\\n💰 Precio: L ' + price + '\\n🔢 Código: ' + code + '\\n\\n¿Tienen disponibilidad?');
+            window.open('https://api.whatsapp.com/send?phone=' + phone + '&text=' + message, '_blank');
+        }
+    </script>
 </body>
 </html>`;
 
-        // Open catalog in new window using Blob for better reliability
-        const blob = new Blob([html], { type: 'text/html' });
-        const url = URL.createObjectURL(blob);
-        const win = window.open(url, '_blank');
+        // Create Blob and Open with more robust handling
+        try {
+            const blob = new Blob([html], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            const win = window.open(url, '_blank');
 
-        if (!win) {
-            showToast("La ventana emergente fue bloqueada por el navegador. Por favor permite las ventanas para esta página.", "warning");
-        }
-
-        // Also offer to share via WhatsApp with a text summary
-        const productList = Object.entries(groupedProducts).map(([cat, prods]) =>
-            `*${cat}*\n${prods.map(p => `• ${p.name}: L${p.price.toFixed(2)}`).join('\n')}`
-        ).join('\n\n');
-
-        let message = `🛍️ *Catálogo ${storeName}*\n\n${productList}\n\n📞 Contáctanos para hacer tu pedido!`;
-
-        // Truncate message if it's too long for a URL (safe limit around 1500 chars for wa.me)
-        if (message.length > 1500) {
-            message = message.substring(0, 1497) + '...';
-            console.warn("⚠️ Mensaje de WhatsApp truncado para evitar errores de URL.");
-        }
-
-        const encodedMessage = encodeURIComponent(message);
-
-        if (confirm('¿Deseas compartir también un resumen del catálogo por WhatsApp?')) {
-            window.open(`https://api.whatsapp.com/send?text=${encodedMessage}`, '_blank');
+            if (!win) {
+                // FALLBACK: Download and Alert
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Catalogo_${storeName.replace(/\s+/g, '_')}.html`;
+                a.click();
+                showToast("Ventanas bloqueadas por el navegador. El catálogo se ha descargado a tu equipo automáticamente.", "info");
+            }
+        } catch (err) {
+            console.error("Error generating catalog:", err);
+            showToast("Hubo un error al generar el catálogo.", "error");
         }
 
         setIsCatalogModalOpen(false);
@@ -285,7 +386,7 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
 
     const shareProductWhatsApp = (product: Product) => {
         const storeName = settings?.name || 'Mi Tienda';
-        const message = `🛍️ *¡Hola! Me interesa este producto en ${storeName}:*\n\n📦 *${product.name}*\n💰 Precio: L ${product.price.toFixed(2)}\n🔢 Código: ${product.code}\n\n¿Tienen disponibilidad?`;
+        const message = `🛍️ *¡Hola! Me interesa este producto:*\n\n📦 *${product.name}*\n💰 Precio: *L ${product.price.toFixed(2)}*\n🔢 Código: \`${product.code}\`\n\n_¿Tienen disponibilidad en ${storeName}?_`;
         const encodedMessage = encodeURIComponent(message);
         window.open(`https://api.whatsapp.com/send?text=${encodedMessage}`, '_blank');
     };
@@ -750,48 +851,63 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
                 </div>
             </Modal>
 
-            {/* Catalog Share Modal */}
-            <Modal isOpen={isCatalogModalOpen} onClose={() => setIsCatalogModalOpen(false)} title="Compartir Catálogo por WhatsApp" size="sm">
-                <div className="space-y-4">
-                    <p className="text-sm text-gray-600">Selecciona las categorías que deseas incluir en el catálogo:</p>
-
-                    <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                        <label className="flex items-center gap-3 p-3 bg-primary/5 rounded-xl cursor-pointer hover:bg-primary/10">
-                            <input
-                                type="checkbox"
-                                checked={selectedCategories.length === categories.length}
-                                onChange={(e) => setSelectedCategories(e.target.checked ? categories.map(c => c.id) : [])}
-                                className="w-5 h-5 rounded"
-                            />
-                            <span className="font-bold text-primary">Seleccionar Todas</span>
-                        </label>
-
-                        {categories.map(cat => (
-                            <label key={cat.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl cursor-pointer hover:bg-gray-100">
-                                <input
-                                    type="checkbox"
-                                    checked={selectedCategories.includes(cat.id)}
-                                    onChange={(e) => {
-                                        if (e.target.checked) {
-                                            setSelectedCategories([...selectedCategories, cat.id]);
-                                        } else {
-                                            setSelectedCategories(selectedCategories.filter(id => id !== cat.id));
-                                        }
-                                    }}
-                                    className="w-5 h-5 rounded"
-                                />
-                                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: cat.color }}></span>
-                                <span className="font-medium">{cat.name}</span>
-                                <span className="text-xs text-gray-400 ml-auto">
-                                    {products.filter(p => p.categoryId === cat.id && p.stock > 0).length} productos
-                                </span>
-                            </label>
-                        ))}
+            {/* Catalog Share Modal - Rediseño Premium */}
+            <Modal isOpen={isCatalogModalOpen} onClose={() => setIsCatalogModalOpen(false)} title="Generar Menú Digital" size="md">
+                <div className="space-y-6">
+                    <div className="bg-primary/5 p-4 rounded-2xl border border-primary/10">
+                        <p className="text-xs text-primary font-bold uppercase tracking-wider mb-1">Paso 1: Configuración</p>
+                        <p className="text-sm text-gray-600">Selecciona las categorías que tus clientes podrán ver en el catálogo interactivo.</p>
                     </div>
 
-                    <div className="border-t pt-4 flex gap-3">
+                    <div className="grid grid-cols-2 gap-3 max-h-[400px] overflow-y-auto p-1">
+                        <button
+                            onClick={() => setSelectedCategories(selectedCategories.length === categories.length ? [] : categories.map(c => c.id))}
+                            className={`flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all gap-2 ${selectedCategories.length === categories.length ? 'border-primary bg-primary/5 text-primary' : 'border-gray-100 bg-gray-50 text-gray-400 hover:border-gray-200'}`}
+                        >
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${selectedCategories.length === categories.length ? 'bg-primary text-white' : 'bg-gray-200'}`}>
+                                <i className={`fas ${selectedCategories.length === categories.length ? 'fa-check-double' : 'fa-list-ul'}`}></i>
+                            </div>
+                            <span className="font-bold text-xs">Todas</span>
+                        </button>
+
+                        {categories.map(cat => {
+                            const isSelected = selectedCategories.includes(cat.id);
+                            const productCount = products.filter(p => p.categoryId === cat.id && p.stock > 0).length;
+                            return (
+                                <button
+                                    key={cat.id}
+                                    onClick={() => {
+                                        if (isSelected) {
+                                            setSelectedCategories(selectedCategories.filter(id => id !== cat.id));
+                                        } else {
+                                            setSelectedCategories([...selectedCategories, cat.id]);
+                                        }
+                                    }}
+                                    className={`flex flex-col items-start p-4 rounded-2xl border-2 transition-all relative overflow-hidden group ${isSelected ? 'border-primary bg-primary/5' : 'border-gray-100 hover:border-gray-200'}`}
+                                >
+                                    <div className="flex items-center gap-2 mb-1 z-10">
+                                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: cat.color }}></span>
+                                        <span className={`font-bold text-xs ${isSelected ? 'text-primary' : 'text-gray-700'}`}>{cat.name}</span>
+                                    </div>
+                                    <span className="text-[10px] text-gray-400 z-10">{productCount} productos</span>
+
+                                    {isSelected && (
+                                        <div className="absolute top-2 right-2 text-primary">
+                                            <i className="fas fa-check-circle"></i>
+                                        </div>
+                                    )}
+
+                                    <div className="absolute -bottom-2 -right-2 opacity-5 group-hover:opacity-10 transition-opacity text-4xl">
+                                        <i className="fas fa-tag"></i>
+                                    </div>
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    <div className="flex gap-3 pt-2">
                         <Button
-                            variant="secondary"
+                            variant="ghost"
                             onClick={() => setIsCatalogModalOpen(false)}
                             className="flex-1"
                         >
@@ -800,10 +916,10 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
                         <Button
                             onClick={generateCatalogHTML}
                             disabled={selectedCategories.length === 0}
-                            className="flex-1 !bg-green-500 hover:!bg-green-600 !text-white font-bold"
+                            className="flex-[2] !bg-green-500 hover:!bg-green-600 !text-white font-black shadow-lg shadow-green-200 h-12 rounded-2xl"
                         >
-                            <i className="fab fa-whatsapp mr-2"></i>
-                            Generar Catálogo HTML
+                            <i className="fas fa-magic mr-2"></i>
+                            Crear Menú Digital ✨
                         </Button>
                     </div>
                 </div>
