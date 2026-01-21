@@ -57,6 +57,13 @@ class AppDatabase extends Dexie {
 const db_engine = new AppDatabase();
 
 class StorageService {
+  getLocalTodayISO() {
+    const d = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Tegucigalpa" }));
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
 
   // --- INITIALIZATION & MIGRATION ---
   async init() {
@@ -90,6 +97,38 @@ class StorageService {
         branchId: 'main-branch',
         active: true
       });
+    }
+
+    // Limpiar gastos duplicados al iniciar
+    await this.cleanupDuplicateExpenses();
+  }
+
+  async cleanupDuplicateExpenses() {
+    console.log("🔍 Iniciando limpieza de gastos duplicados...");
+    try {
+      const allExpenses = await db_engine.expenses.toArray();
+      const seen = new Set<string>();
+      const toDelete: string[] = [];
+
+      for (const exp of allExpenses) {
+        // Normalizar fecha (YYYY-MM-DD)
+        const normalizedDate = exp.date.substring(0, 10);
+        // Crear una clave única basada en el contenido
+        const key = `${normalizedDate}|${exp.amount}|${exp.categoryId}|${exp.description}`;
+
+        if (seen.has(key)) {
+          toDelete.push(exp.id);
+        } else {
+          seen.add(key);
+        }
+      }
+
+      if (toDelete.length > 0) {
+        console.log(`🗑️ Eliminando ${toDelete.length} gastos duplicados...`);
+        await db_engine.expenses.bulkDelete(toDelete);
+      }
+    } catch (err) {
+      console.warn("⚠️ Error durante la limpieza de gastos:", err);
     }
   }
 
@@ -462,7 +501,7 @@ class StorageService {
       await this.saveSettings(settings);
 
       const newSale: Sale = {
-        id: Date.now().toString(),
+        id: `sale-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
         folio,
         date: new Date().toISOString(),
         items: data.items || [],
@@ -641,9 +680,9 @@ class StorageService {
     const normalizedDate = e.date.substring(0, 10);
 
     // Check for potential duplicate before saving (same date, amount, category and description)
+    // We search for ANY record starting with the same date part
     const existing = await db_engine.expenses
-      .where('date').startsWith(normalizedDate)
-      .and(item => {
+      .filter(item => {
         const itemDate = item.date.substring(0, 10);
         return itemDate === normalizedDate &&
           item.amount === e.amount &&
@@ -674,7 +713,7 @@ class StorageService {
     return db_engine.fixedExpenses.toArray();
   }
   async saveFixedExpense(fe: FixedExpense): Promise<string> {
-    if (!fe.id) fe.id = Date.now().toString();
+    if (!fe.id) fe.id = `fe-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     await db_engine.fixedExpenses.put(fe);
     this.triggerAutoSync();
     return fe.id;
@@ -689,7 +728,7 @@ class StorageService {
   async addCreditPayment(creditId: string, payment: Omit<CreditPayment, 'id'>) {
     const c = await db_engine.credits.get(creditId);
     if (c) {
-      const p = { ...payment, id: Date.now().toString() };
+      const p = { ...payment, id: `pay-${Date.now()}-${Math.random().toString(36).substring(2, 7)}` };
       c.payments.push(p);
       c.paidAmount += payment.amount;
       if (c.paidAmount >= c.totalAmount - 0.1) c.status = 'paid';
@@ -928,8 +967,7 @@ class StorageService {
           if (table === db_engine.expenses) {
             const normalizedRemoteDate = remoteItem.date.substring(0, 10);
             const duplicateByContent = await table
-              .where('date').startsWith(normalizedRemoteDate)
-              .and((item: any) => {
+              .filter((item: any) => {
                 const itemDate = item.date.substring(0, 10);
                 return itemDate === normalizedRemoteDate &&
                   item.amount === remoteItem.amount &&

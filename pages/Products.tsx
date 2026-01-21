@@ -244,7 +244,7 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
         </div>
     `).join('')}
     
-    ${phone ? `<a href="https://wa.me/${phone.replace(/\D/g, '')}" class="whatsapp-btn">💬 Pedir por WhatsApp</a>` : ''}
+    ${phone ? `<a href="https://api.whatsapp.com/send?phone=${phone.replace(/\D/g, '')}" target="_blank" class="whatsapp-btn">💬 Pedir por WhatsApp</a>` : ''}
     
     <div class="footer">
         <p>Generado desde ${storeName} • ${new Date().toLocaleDateString()}</p>
@@ -264,12 +264,18 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
             `*${cat}*\n${prods.map(p => `• ${p.name}: L${p.price.toFixed(2)}`).join('\n')}`
         ).join('\n\n');
 
-        const message = encodeURIComponent(
-            `🛍️ *Catálogo ${storeName}*\n\n${productList}\n\n📞 Contáctanos para hacer tu pedido!`
-        );
+        let message = `🛍️ *Catálogo ${storeName}*\n\n${productList}\n\n📞 Contáctanos para hacer tu pedido!`;
+
+        // Truncate message if it's too long for a URL (safe limit around 1500 chars for wa.me)
+        if (message.length > 1500) {
+            message = message.substring(0, 1497) + '...';
+            console.warn("⚠️ Mensaje de WhatsApp truncado para evitar errores de URL.");
+        }
+
+        const encodedMessage = encodeURIComponent(message);
 
         if (confirm('¿Deseas compartir también un resumen del catálogo por WhatsApp?')) {
-            window.open(`https://wa.me/?text=${message}`, '_blank');
+            window.open(`https://api.whatsapp.com/send?text=${encodedMessage}`, '_blank');
         }
 
         setIsCatalogModalOpen(false);
@@ -494,7 +500,7 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
                             </select>
                         </div>
                         <div className="flex gap-2">
-                            <Button onClick={() => { setSelectedCategories(categories.map(c => c.id)); setIsCatalogModalOpen(true); }} variant="ghost" className="text-green-600 hover:bg-green-50">
+                            <Button onClick={() => { if (selectedCategories.length === 0) setSelectedCategories(categories.map(c => c.id)); setIsCatalogModalOpen(true); }} variant="ghost" className="text-green-600 hover:bg-green-50">
                                 <i className="fab fa-whatsapp mr-1"></i> Compartir Catálogo
                             </Button>
                             {isAdmin && <Button onClick={() => setIsScanModalOpen(true)} variant="secondary" icon="barcode">Stock Rápido</Button>}

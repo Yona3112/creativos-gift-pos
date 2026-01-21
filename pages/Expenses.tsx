@@ -14,14 +14,8 @@ export const Expenses: React.FC<ExpensesProps> = ({ user, onUpdate, settings }) 
     const [expenses, setExpenses] = useState<Expense[]>([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
 
-    // Helper for Honduras Time
-    const getLocalTodayISO = () => {
-        const d = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Tegucigalpa" }));
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    };
+    // Use Honduras Time from storageService
+    const getLocalTodayISO = () => db.getLocalTodayISO();
 
     const [formData, setFormData] = useState<Partial<Expense>>({
         categoryId: 'Otros',

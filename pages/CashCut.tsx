@@ -21,8 +21,12 @@ export const CashCut: React.FC = () => {
   const [adminPassword, setAdminPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
 
-  // Helper for Local Date (Fix UTC Bug in Cash Cut)
-  const getLocalDate = (d: Date = new Date()) => {
+  // Helper for Local Date using global db helper
+  const getLocalDate = () => db.getLocalTodayISO();
+
+  // Format date from ISO string to local display format
+  const formatDateForDisplay = (dateStr: string) => {
+    const d = new Date(dateStr);
     const offset = d.getTimezoneOffset() * 60000;
     return new Date(d.getTime() - offset).toISOString().split('T')[0];
   };
@@ -31,7 +35,7 @@ export const CashCut: React.FC = () => {
     const today = getLocalDate();
     const allSales = await db.getSales();
     const sales = allSales.filter(s => {
-      const saleLocal = getLocalDate(new Date(s.date));
+      const saleLocal = formatDateForDisplay(s.date);
       return saleLocal === today && s.status === 'active';
     });
 
@@ -89,7 +93,7 @@ export const CashCut: React.FC = () => {
 
   const confirmCashCut = async () => {
     const cut: ICashCut = {
-      id: Date.now().toString(),
+      id: `cut-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       date: new Date().toISOString(),
       userId: 'current',
       branchId: 'current',

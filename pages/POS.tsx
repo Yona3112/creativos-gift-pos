@@ -380,7 +380,7 @@ export const POS: React.FC<POSProps> = ({
     const handleSaveCustomer = async () => {
         const newCust = {
             ...newCustomerData,
-            id: Date.now().toString(),
+            id: `cust-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
             points: 0,
             totalSpent: 0,
             level: LoyaltyLevel.BRONZE,
@@ -399,7 +399,7 @@ export const POS: React.FC<POSProps> = ({
         const folio = await db.getNextQuoteNumber();
 
         const quote: Quote = {
-            id: Date.now().toString(),
+            id: `quote-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
             folio,
             date: new Date().toISOString(),
             customerId: selectedCustomer?.id,
