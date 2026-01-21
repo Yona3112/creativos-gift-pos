@@ -52,10 +52,9 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
             // Editing existing product
             setFormData({ ...product });
         } else {
-            // Creating new product - get sequential code
-            const autoCode = await db.getNextProductCode();
+            // Creating new product - Start with empty code to allow scanning
             setFormData({
-                name: '', code: autoCode, price: 0, cost: 0, stock: 0,
+                name: '', code: '', price: 0, cost: 0, stock: 0,
                 minStock: defaultCat?.defaultMinStock || 5,
                 categoryId: defaultCat?.id || '',
                 isTaxable: true,
@@ -63,6 +62,17 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
             });
         }
         setIsModalOpen(true);
+        // Focus code field after a short delay to allow scanner to input directly
+        setTimeout(() => {
+            const codeInput = document.getElementById('product-code-input');
+            if (codeInput) codeInput.focus();
+        }, 300);
+    };
+
+    const generateSequentialCode = async () => {
+        const autoCode = await db.getNextProductCodeSequential();
+        setFormData(prev => ({ ...prev, code: autoCode }));
+        showToast("Código secuencial generado", "info");
     };
 
     // NOTA: El precio siempre se guarda CON ISV incluido
@@ -148,7 +158,8 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
         e.preventDefault();
         if (!scanProduct) return;
 
-        await db.saveProduct({ ...scanProduct, stock: scanProduct.stock + scanQty } as Product, users[0]?.id || 'admin');
+        // Save updated product (including name changes if any)
+        await db.saveProduct({ ...scanProduct, stock: scanProduct.stock + scanQty } as Product, user?.id || 'admin');
 
         setScanProduct(null);
         setScanCode('');
@@ -546,8 +557,26 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
                         </div>
                         <div className="flex-1 space-y-3">
                             <Input label="Nombre" value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} required />
-                            <div className="flex gap-2">
-                                <Input label="Código" value={formData.code || ''} onChange={e => setFormData({ ...formData, code: e.target.value })} required className="flex-1" />
+                            <div className="flex gap-2 items-end">
+                                <div className="flex-1">
+                                    <Input
+                                        id="product-code-input"
+                                        label="Código (Escanear o Manual)"
+                                        value={formData.code || ''}
+                                        onChange={e => setFormData({ ...formData, code: e.target.value })}
+                                        required
+                                        placeholder="Escanee código de fábrica..."
+                                    />
+                                </div>
+                                <Button
+                                    type="button"
+                                    variant="secondary"
+                                    className="mb-0.5 px-3 h-11"
+                                    onClick={generateSequentialCode}
+                                    title="Generar código automático del sistema"
+                                >
+                                    <i className="fas fa-magic"></i>
+                                </Button>
                                 <div className="w-40 text-xs">
                                     <label className="block text-sm font-bold text-gray-700 mb-1">Categoría</label>
                                     <select className="w-full p-2.5 border rounded-xl bg-white text-sm" value={formData.categoryId} onChange={e => setFormData({ ...formData, categoryId: e.target.value })}>
@@ -627,9 +656,14 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
                                 <div className="w-16 h-16 bg-white rounded-lg flex items-center justify-center">
                                     {scanProduct.image ? <img src={scanProduct.image} className="w-full h-full object-cover rounded-lg" /> : <i className="fas fa-box text-blue-300 text-2xl"></i>}
                                 </div>
-                                <div>
-                                    <h3 className="font-bold text-gray-800">{scanProduct.name}</h3>
-                                    <p className="text-sm text-gray-500">Stock Actual: <span className="font-bold text-gray-800">{scanProduct.stock}</span></p>
+                                <div className="flex-1">
+                                    <Input
+                                        label="Nombre del Producto"
+                                        value={scanProduct.name}
+                                        onChange={e => setScanProduct({ ...scanProduct, name: e.target.value })}
+                                        className="font-bold border-blue-200 focus:border-blue-400 bg-white"
+                                    />
+                                    <p className="text-[10px] text-gray-500 mt-1">Stock Actual: <span className="font-bold text-gray-800">{scanProduct.stock}</span></p>
                                 </div>
                             </div>
 

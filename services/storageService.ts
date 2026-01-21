@@ -221,7 +221,7 @@ class StorageService {
   }
 
   // --- SEQUENTIAL CODE GENERATORS ---
-  async getNextProductCode(): Promise<string> {
+  async getNextProductCodeSequential(): Promise<string> {
     const settings = await this.getSettings();
     const nextNum = (settings.currentProductCode || 1);
     const code = `PROD${nextNum.toString().padStart(5, '0')}`;
@@ -632,7 +632,32 @@ class StorageService {
   // --- EXPENSES ---
   async getExpenses(): Promise<Expense[]> { return await db_engine.expenses.toArray(); }
   async saveExpense(e: Expense) {
-    if (!e.id) e.id = Date.now().toString();
+    if (!e.id) {
+      // Create a more unique ID to avoid collisions during sync
+      e.id = `exp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    }
+
+    // Normalize date for comparison (YYYY-MM-DD)
+    const normalizedDate = e.date.substring(0, 10);
+
+    // Check for potential duplicate before saving (same date, amount, category and description)
+    const existing = await db_engine.expenses
+      .where('date').startsWith(normalizedDate)
+      .and(item => {
+        const itemDate = item.date.substring(0, 10);
+        return itemDate === normalizedDate &&
+          item.amount === e.amount &&
+          item.categoryId === e.categoryId &&
+          item.description === e.description &&
+          item.id !== e.id;
+      })
+      .first();
+
+    if (existing) {
+      console.warn("⚠️ Detectado posible gasto duplicado, omitiendo guardado automático.");
+      return existing.id;
+    }
+
     await db_engine.expenses.put(e);
     const settings = await this.getSettings();
     if (settings.autoSync) this.triggerAutoSync();
@@ -898,7 +923,26 @@ class StorageService {
         const localItem = await table.get(remoteItem[idField]);
 
         if (!localItem) {
-          // Item doesn't exist locally, add it
+          // Item doesn't exist locally
+          // For expenses, do an extra check by content to avoid duplicates with different IDs
+          if (table === db_engine.expenses) {
+            const normalizedRemoteDate = remoteItem.date.substring(0, 10);
+            const duplicateByContent = await table
+              .where('date').startsWith(normalizedRemoteDate)
+              .and((item: any) => {
+                const itemDate = item.date.substring(0, 10);
+                return itemDate === normalizedRemoteDate &&
+                  item.amount === remoteItem.amount &&
+                  item.categoryId === remoteItem.categoryId &&
+                  item.description === remoteItem.description;
+              })
+              .first();
+
+            if (duplicateByContent) {
+              console.log(`⏭️ Omitiendo gasto duplicado por contenido: ${remoteItem.description}`);
+              continue;
+            }
+          }
           await table.put(remoteItem);
         } else {
           // Item exists locally - compare by date if available
@@ -910,7 +954,6 @@ class StorageService {
             if (new Date(remoteDate) > new Date(localDate)) {
               await table.put(remoteItem);
             }
-            // If local is newer, keep local (do nothing)
           } else {
             // If no dates available, remote data wins (user chose to restore/download)
             await table.put(remoteItem);
