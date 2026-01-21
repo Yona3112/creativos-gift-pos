@@ -66,6 +66,36 @@ export class SupabaseService {
         }
     }
 
+    /**
+     * Clear all records from a specific Supabase table
+     */
+    static async clearCloudTable(tableName: string): Promise<{ success: boolean; count: number }> {
+        const client = await this.getClient();
+        if (!client) {
+            throw new Error("Supabase no está configurado.");
+        }
+
+        try {
+            // First get all IDs
+            const { data: records, error: fetchError } = await client.from(tableName).select('id');
+            if (fetchError) throw fetchError;
+
+            if (!records || records.length === 0) {
+                return { success: true, count: 0 };
+            }
+
+            // Delete all records (Supabase requires a condition)
+            const { error: deleteError } = await client.from(tableName).delete().neq('id', '___impossible___');
+            if (deleteError) throw deleteError;
+
+            console.log(`🗑️ Eliminados ${records.length} registros de ${tableName} en Supabase`);
+            return { success: true, count: records.length };
+        } catch (e: any) {
+            console.error(`❌ Error limpiando ${tableName}:`, e);
+            throw new Error(`Error al limpiar ${tableName}: ${e.message}`);
+        }
+    }
+
     static async syncAll() {
         console.log("🔄 Iniciando sincronización con Supabase...");
         const client = await this.getClient();
