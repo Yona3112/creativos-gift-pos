@@ -44,6 +44,28 @@ export class SupabaseService {
         return true;
     }
 
+    /**
+     * Delete a record from a specific Supabase table
+     */
+    static async deleteFromTable(tableName: string, id: string) {
+        const client = await this.getClient();
+        if (!client) {
+            console.warn("⚠️ Supabase no configurado, eliminación local únicamente.");
+            return;
+        }
+
+        try {
+            const { error } = await client.from(tableName).delete().eq('id', id);
+            if (error) {
+                console.error(`❌ Error eliminando de ${tableName}:`, error);
+            } else {
+                console.log(`✅ Eliminado de ${tableName}: ${id}`);
+            }
+        } catch (e) {
+            console.warn(`⚠️ Error en deleteFromTable(${tableName}):`, e);
+        }
+    }
+
     static async syncAll() {
         console.log("🔄 Iniciando sincronización con Supabase...");
         const client = await this.getClient();

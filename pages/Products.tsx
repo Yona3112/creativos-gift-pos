@@ -500,7 +500,7 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
                             </select>
                         </div>
                         <div className="flex gap-2">
-                            <Button onClick={() => { if (selectedCategories.length === 0) setSelectedCategories(categories.map(c => c.id)); setIsCatalogModalOpen(true); }} variant="ghost" className="text-green-600 hover:bg-green-50">
+                            <Button onClick={() => { if (selectedCategories.length === 0) setSelectedCategories(categories.map(c => c.id)); setIsCatalogModalOpen(true); }} variant="secondary" className="!bg-green-500 !text-white hover:!bg-green-600">
                                 <i className="fab fa-whatsapp mr-1"></i> Compartir Catálogo
                             </Button>
                             {isAdmin && <Button onClick={() => setIsScanModalOpen(true)} variant="secondary" icon="barcode">Stock Rápido</Button>}

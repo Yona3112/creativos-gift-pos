@@ -705,7 +705,12 @@ class StorageService {
   async deleteExpense(id: string) {
     await db_engine.expenses.delete(id);
     const settings = await this.getSettings();
-    if (settings.autoSync) this.triggerAutoSync();
+    if (settings.autoSync) {
+      // Eliminar de la nube también
+      import('./supabaseService').then(({ SupabaseService }) => {
+        SupabaseService.deleteFromTable('expenses', id);
+      });
+    }
   }
 
   // --- GASTOS FIJOS (RECURRENTES) ---
