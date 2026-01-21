@@ -252,11 +252,13 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
 </body>
 </html>`;
 
-        // Open catalog in new window
-        const win = window.open('', '_blank');
-        if (win) {
-            win.document.write(html);
-            win.document.close();
+        // Open catalog in new window using Blob for better reliability
+        const blob = new Blob([html], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const win = window.open(url, '_blank');
+
+        if (!win) {
+            showToast("La ventana emergente fue bloqueada por el navegador. Por favor permite las ventanas para esta página.", "warning");
         }
 
         // Also offer to share via WhatsApp with a text summary
@@ -279,6 +281,13 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
         }
 
         setIsCatalogModalOpen(false);
+    };
+
+    const shareProductWhatsApp = (product: Product) => {
+        const storeName = settings?.name || 'Mi Tienda';
+        const message = `🛍️ *¡Hola! Me interesa este producto en ${storeName}:*\n\n📦 *${product.name}*\n💰 Precio: L ${product.price.toFixed(2)}\n🔢 Código: ${product.code}\n\n¿Tienen disponibilidad?`;
+        const encodedMessage = encodeURIComponent(message);
+        window.open(`https://api.whatsapp.com/send?text=${encodedMessage}`, '_blank');
     };
 
     const printBarcode = (product: Product) => {
@@ -533,6 +542,7 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
                                         <td className="px-2 py-0.5 text-center font-black text-xs">L {p.price.toFixed(2)}</td>
                                         <td className={`px-2 py-0.5 text-center font-black text-xs ${p.stock <= p.minStock ? 'text-red-600' : 'text-green-600'}`}>{p.stock}</td>
                                         <td className="px-2 py-0.5 text-right flex justify-end gap-0.5">
+                                            <Button size="sm" variant="ghost" onClick={() => shareProductWhatsApp(p)} icon="share-alt" className="h-7 w-7 p-0 text-green-500 hover:text-green-600" title="Compartir por WhatsApp"></Button>
                                             <Button size="sm" variant="ghost" onClick={() => printBarcode(p)} icon="print" className="h-7 w-7 p-0" title="Imprimir una etiqueta"></Button>
                                             <Button size="sm" variant="ghost" onClick={() => openLabelModal(p)} icon="copy" className="h-7 w-7 p-0 text-blue-500 hover:text-blue-600" title="Imprimir múltiples etiquetas"></Button>
                                             {isAdmin && <Button size="sm" variant="ghost" onClick={() => openModal(p)} icon="edit" className="h-7 w-7 p-0"></Button>}
@@ -790,10 +800,10 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
                         <Button
                             onClick={generateCatalogHTML}
                             disabled={selectedCategories.length === 0}
-                            className="flex-1 bg-green-600 hover:bg-green-700"
+                            className="flex-1 !bg-green-500 hover:!bg-green-600 !text-white font-bold"
                         >
                             <i className="fab fa-whatsapp mr-2"></i>
-                            Generar y Compartir
+                            Generar Catálogo HTML
                         </Button>
                     </div>
                 </div>
