@@ -16,6 +16,7 @@ export const CashCut: React.FC = () => {
   // Reversal State
   const [history, setHistory] = useState<ICashCut[]>([]);
   const [settings, setSettings] = useState<CompanySettings | null>(null);
+  const [todayCutExists, setTodayCutExists] = useState(false);
   const [revertModalOpen, setRevertModalOpen] = useState(false);
   const [revertCutId, setRevertCutId] = useState<string | null>(null);
   const [adminPassword, setAdminPassword] = useState('');
@@ -47,6 +48,10 @@ export const CashCut: React.FC = () => {
     setHistory(cuts.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
     const s = await db.getSettings();
     setSettings(s);
+
+    // Check if there's already a cut for today
+    const cutToday = cuts.find(c => formatDateForDisplay(c.date) === today);
+    setTodayCutExists(!!cutToday);
 
     const t = sales.reduce((acc, s) => {
       if (s.paymentMethod === 'Efectivo') acc.cash += s.total;
@@ -231,14 +236,21 @@ export const CashCut: React.FC = () => {
             </div>
           </div>
 
-          <Button
-            className="w-full mt-6 py-3 shadow-lg shadow-primary/20"
-            onClick={handleSave}
-            disabled={countedTotal === 0 && totals.cash > 0}
-            icon="lock"
-          >
-            Finalizar Turno y Cerrar Caja
-          </Button>
+          {todayCutExists ? (
+            <div className="w-full mt-6 py-4 px-4 bg-green-100 text-green-800 rounded-xl text-center font-bold border border-green-200">
+              <i className="fas fa-check-circle mr-2"></i>
+              Corte de caja ya realizado para hoy
+            </div>
+          ) : (
+            <Button
+              className="w-full mt-6 py-3 shadow-lg shadow-primary/20"
+              onClick={handleSave}
+              disabled={countedTotal === 0 && totals.cash > 0}
+              icon="lock"
+            >
+              Finalizar Turno y Cerrar Caja
+            </Button>
+          )}
         </Card>
       </div>
 

@@ -21,7 +21,7 @@ export const SARBooks: React.FC = () => {
         const load = async () => {
             const s = await db.getSales();
             const e = await db.getExpenses();
-            setSales(s.filter(sale => sale.status === 'active'));
+            setSales(s.filter(sale => sale.status === 'active' && sale.documentType === 'FACTURA'));
             setExpenses(e);
         };
         load();
