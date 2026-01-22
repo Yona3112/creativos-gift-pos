@@ -4,7 +4,7 @@ import {
   Product, Category, User, Sale, Customer, CompanySettings,
   Branch, CreditAccount, Promotion, Supplier, Consumable,
   CashCut, Quote, CreditNote, CreditPayment,
-  Expense, FixedExpense, InventoryMovement, MovementType, FulfillmentStatus, ShippingDetails, UserRole,
+  Expense, InventoryMovement, MovementType, FulfillmentStatus, ShippingDetails, UserRole,
   PriceHistoryEntry, PaymentDetails
 } from '../types';
 
@@ -25,7 +25,6 @@ class AppDatabase extends Dexie {
   cashCuts!: Table<CashCut>;
   creditNotes!: Table<CreditNote>;
   expenses!: Table<Expense>;
-  fixedExpenses!: Table<FixedExpense>;
   inventoryHistory!: Table<InventoryMovement>;
   priceHistory!: Table<PriceHistoryEntry>;
 
@@ -47,7 +46,6 @@ class AppDatabase extends Dexie {
       cashCuts: 'id, date',
       creditNotes: 'id, folio, status',
       expenses: 'id, date, categoryId',
-      fixedExpenses: 'id, active',
       inventoryHistory: '++id, productId, date, type',
       priceHistory: '++id, productId, date'
     });
@@ -104,38 +102,6 @@ class StorageService {
         branchId: 'main-branch',
         active: true
       });
-    }
-
-    // NOTA: La limpieza de duplicados ahora se ejecuta en restoreData()
-    // después de que los datos de la nube se han fusionado
-  }
-
-  async cleanupDuplicateExpenses() {
-    console.log("🔍 Iniciando limpieza de gastos duplicados...");
-    try {
-      const allExpenses = await db_engine.expenses.toArray();
-      const seen = new Set<string>();
-      const toDelete: string[] = [];
-
-      for (const exp of allExpenses) {
-        // Normalizar fecha (YYYY-MM-DD)
-        const normalizedDate = exp.date.substring(0, 10);
-        // Crear una clave única basada en el contenido
-        const key = `${normalizedDate}|${exp.amount}|${exp.categoryId}|${exp.description}`;
-
-        if (seen.has(key)) {
-          toDelete.push(exp.id);
-        } else {
-          seen.add(key);
-        }
-      }
-
-      if (toDelete.length > 0) {
-        console.log(`🗑️ Eliminando ${toDelete.length} gastos duplicados...`);
-        await db_engine.expenses.bulkDelete(toDelete);
-      }
-    } catch (err) {
-      console.warn("⚠️ Error durante la limpieza de gastos:", err);
     }
   }
 
@@ -677,63 +643,30 @@ class StorageService {
 
   // --- EXPENSES ---
   async getExpenses(): Promise<Expense[]> { return await db_engine.expenses.toArray(); }
+
   async saveExpense(e: Expense) {
     if (!e.id) {
-      // Create a more unique ID to avoid collisions during sync
       e.id = `exp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     }
-
-    // Normalize date for comparison (YYYY-MM-DD)
-    const normalizedDate = e.date.substring(0, 10);
-
-    // Check for potential duplicate before saving (same date, amount, category and description)
-    // We search for ANY record starting with the same date part
-    const existing = await db_engine.expenses
-      .filter(item => {
-        const itemDate = item.date.substring(0, 10);
-        return itemDate === normalizedDate &&
-          item.amount === e.amount &&
-          item.categoryId === e.categoryId &&
-          item.description === e.description &&
-          item.id !== e.id;
-      })
-      .first();
-
-    if (existing) {
-      console.warn("⚠️ Detectado posible gasto duplicado, omitiendo guardado automático.");
-      return existing.id;
-    }
-
+    // Normalize date to YYYY-MM-DD format
+    e.date = e.date.substring(0, 10);
     await db_engine.expenses.put(e);
     const settings = await this.getSettings();
     if (settings.autoSync) this.triggerAutoSync();
     return e.id;
   }
+
   async deleteExpense(id: string) {
     await db_engine.expenses.delete(id);
     const settings = await this.getSettings();
     if (settings.autoSync) {
-      // Eliminar de la nube también
       import('./supabaseService').then(({ SupabaseService }) => {
         SupabaseService.deleteFromTable('expenses', id);
       });
     }
   }
 
-  // --- GASTOS FIJOS (RECURRENTES) ---
-  async getFixedExpenses(): Promise<FixedExpense[]> {
-    return db_engine.fixedExpenses.toArray();
-  }
-  async saveFixedExpense(fe: FixedExpense): Promise<string> {
-    if (!fe.id) fe.id = `fe-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-    await db_engine.fixedExpenses.put(fe);
-    this.triggerAutoSync();
-    return fe.id;
-  }
-  async deleteFixedExpense(id: string): Promise<void> {
-    await db_engine.fixedExpenses.delete(id);
-    this.triggerAutoSync();
-  }
+
 
   // --- CREDITS ---
   async getCredits(): Promise<CreditAccount[]> { return await db_engine.credits.toArray(); }
@@ -907,7 +840,6 @@ class StorageService {
       cash_cuts: await db_engine.cashCuts.toArray(),
       credit_notes: await db_engine.creditNotes.toArray(),
       expenses: await db_engine.expenses.toArray(),
-      fixedExpenses: await db_engine.fixedExpenses.toArray(),
       inventoryHistory: await db_engine.inventoryHistory.toArray(),
       priceHistory: await db_engine.priceHistory.toArray(),
       settings: await db_engine.settings.get('main')
@@ -1027,16 +959,15 @@ class StorageService {
     if (data.cash_cuts) await mergeTable(db_engine.cashCuts, data.cash_cuts);
     if (data.credit_notes) await mergeTable(db_engine.creditNotes, data.credit_notes);
     if (data.expenses) {
-      // Normalizar fechas de expenses al formato YYYY-MM-DD
-      const normalizedExpenses = data.expenses.map((exp: any) => ({
-        ...exp,
-        date: exp.date.substring(0, 10) // Convertir 2026-01-18T00:00:00+00:00 a 2026-01-18
-      }));
-      await mergeTable(db_engine.expenses, normalizedExpenses);
-      // Limpiar duplicados DESPUÉS de fusionar datos de la nube
-      await this.cleanupDuplicateExpenses();
+      // Simple merge: just add new expenses from cloud
+      for (const exp of data.expenses) {
+        exp.date = exp.date.substring(0, 10); // Normalize to YYYY-MM-DD
+        const existing = await db_engine.expenses.get(exp.id);
+        if (!existing) {
+          await db_engine.expenses.put(exp);
+        }
+      }
     }
-    if (data.fixedExpenses) await mergeTable(db_engine.fixedExpenses, data.fixedExpenses);
     if (data.inventoryHistory) await mergeTable(db_engine.inventoryHistory, data.inventoryHistory);
     if (data.priceHistory) await mergeTable(db_engine.priceHistory, data.priceHistory);
 
@@ -1323,7 +1254,6 @@ class StorageService {
       db_engine.categories,
       db_engine.customers,
       db_engine.expenses,
-      db_engine.fixedExpenses,
       db_engine.credits,
       db_engine.creditNotes,
       db_engine.cashCuts,
