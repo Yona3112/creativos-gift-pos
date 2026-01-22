@@ -263,6 +263,14 @@ export const POS: React.FC<POSProps> = ({
         else setCart([...cart, { ...product, quantity: 1 }]);
     };
 
+    const shareProductWhatsApp = (e: React.MouseEvent, product: Product) => {
+        e.stopPropagation(); // Don't add to cart when sharing
+        const storeName = settings?.name || 'Mi Tienda';
+        const message = `🛍️ *¡Hola! Me interesa este producto:*\n\n📦 *${product.name}*\n${product.description ? `📝 _${product.description}_\n` : ''}💰 Precio: *L ${product.price.toFixed(2)}*\n🔢 Código: \`${product.code}\`\n\n_¿Tienen disponibilidad en ${storeName}?_`;
+        const encodedMessage = encodeURIComponent(message);
+        window.open(`https://api.whatsapp.com/send?text=${encodedMessage}`, '_blank');
+    };
+
     const removeFromCart = (id: string) => {
         setCart(cart.filter(item => item.id !== id));
     };
@@ -333,6 +341,8 @@ export const POS: React.FC<POSProps> = ({
                 branchId: branchId,
                 documentType,
                 fulfillmentStatus: (isImmediateDelivery ? 'delivered' : 'pending') as FulfillmentStatus,
+                total,
+                pointsMonetaryValue: pointsDiscount > 0 ? pointsDiscount : undefined,
                 pointsUsed: pointsUsed > 0 ? pointsUsed : undefined,
                 isOrder,
                 deposit: grossPayToday,
@@ -370,6 +380,9 @@ export const POS: React.FC<POSProps> = ({
             setCreditNoteMax(0);
             playBeep('success');
             onSaleComplete();
+
+            // Refocus search for next sale
+            setTimeout(() => { searchInputRef.current?.focus(); }, 100);
         } catch (e: any) {
             showToast(e.message || "Error al procesar venta", "error");
         } finally {
@@ -527,7 +540,16 @@ export const POS: React.FC<POSProps> = ({
                             <h3 className="font-bold text-gray-800 text-xs line-clamp-2 mb-1 flex-1">{p.name}</h3>
                             <div className="flex justify-between items-center mt-auto">
                                 <p className="font-black text-primary text-sm">L {p.price.toFixed(2)}</p>
-                                <i className="fas fa-plus-circle text-primary opacity-0 group-hover:opacity-100 transition-opacity"></i>
+                                <div className="flex gap-1">
+                                    <button
+                                        onClick={(e) => shareProductWhatsApp(e, p)}
+                                        className="w-7 h-7 flex items-center justify-center rounded-lg bg-green-50 text-green-500 hover:bg-green-500 hover:text-white transition-all transform active:scale-90"
+                                        title="Compartir por WhatsApp"
+                                    >
+                                        <i className="fab fa-whatsapp text-sm"></i>
+                                    </button>
+                                    <i className="fas fa-plus-circle text-primary opacity-0 group-hover:opacity-100 transition-opacity ml-1"></i>
+                                </div>
                             </div>
                         </div>
                     ))}

@@ -57,6 +57,13 @@ class AppDatabase extends Dexie {
 const db_engine = new AppDatabase();
 
 class StorageService {
+  getLocalNowISO() {
+    // Returns a full ISO string (YYYY-MM-DDTHH:mm:ss.sssZ) adjusted for Honduras time
+    // but represented as if it were UTC to avoid automatic shifts by components
+    const d = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Tegucigalpa" }));
+    return d.toISOString();
+  }
+
   getLocalTodayISO() {
     const d = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Tegucigalpa" }));
     const year = d.getFullYear();
@@ -334,7 +341,7 @@ class StorageService {
         newPrice: product.price,
         oldCost: existing.cost,
         newCost: product.cost,
-        date: new Date().toISOString(),
+        date: this.getLocalNowISO(),
         userId
       });
     }
@@ -379,7 +386,7 @@ class StorageService {
     await db_engine.inventoryHistory.add({
       ...move,
       id: Date.now().toString() + Math.random().toString(36).substring(2, 7),
-      date: new Date().toISOString()
+      date: this.getLocalNowISO()
     });
   }
 
@@ -503,7 +510,7 @@ class StorageService {
       const newSale: Sale = {
         id: `sale-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
         folio,
-        date: new Date().toISOString(),
+        date: this.getLocalNowISO(),
         items: data.items || [],
         subtotal: data.subtotal || 0,
         taxAmount: data.taxAmount || 0,
@@ -551,7 +558,7 @@ class StorageService {
       if (data.creditData) {
         const initialPayments = data.creditData.downPayment > 0 ? [{
           id: Date.now().toString() + '-down',
-          date: new Date().toISOString(),
+          date: this.getLocalNowISO(),
           amount: data.creditData.downPayment,
           method: 'Efectivo',
           note: 'Prima / Enganche inicial'
@@ -566,7 +573,7 @@ class StorageService {
           paidAmount: data.creditData.downPayment || 0,
           status: (data.creditData.downPayment >= data.creditData.totalWithInterest - 0.1) ? 'paid' : 'pending',
           dueDate: new Date(Date.now() + (data.creditData.term * 30 * 24 * 60 * 60 * 1000)).toISOString(),
-          createdAt: new Date().toISOString(),
+          createdAt: this.getLocalNowISO(),
           payments: initialPayments as CreditPayment[],
           interestRate: data.creditData.rate,
           termMonths: data.creditData.term,
@@ -644,7 +651,7 @@ class StorageService {
               originalTotal: refundable,
               remainingAmount: 0, // Ya devuelto
               reason: 'Devolución en Efectivo',
-              date: new Date().toISOString(),
+              date: this.getLocalNowISO(),
               status: 'used' // Marcada como usada porque ya se devolvió el dinero
             });
           } else {
@@ -657,7 +664,7 @@ class StorageService {
               originalTotal: refundable,
               remainingAmount: refundable,
               reason: 'Anulación de Venta',
-              date: new Date().toISOString(),
+              date: this.getLocalNowISO(),
               status: 'active'
             });
           }
@@ -733,7 +740,7 @@ class StorageService {
   async addCreditPayment(creditId: string, payment: Omit<CreditPayment, 'id'>) {
     const c = await db_engine.credits.get(creditId);
     if (c) {
-      const p = { ...payment, id: `pay-${Date.now()}-${Math.random().toString(36).substring(2, 7)}` };
+      const p = { ...payment, id: `pay-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`, date: this.getLocalNowISO() };
       c.payments.push(p);
       c.paidAmount += payment.amount;
       if (c.paidAmount >= c.totalAmount - 0.1) c.status = 'paid';
@@ -1097,7 +1104,7 @@ class StorageService {
       c.status = 'paid';
       c.payments.push({
         id: Date.now().toString(),
-        date: new Date().toISOString(),
+        date: this.getLocalNowISO(),
         amount: details.finalAmount,
         method: 'Efectivo',
         note: `Liquidación anticipada. Ahorro: L ${details.savings.toFixed(2)}`
@@ -1125,6 +1132,7 @@ class StorageService {
 
   async saveCashCut(cut: CashCut) {
     if (!cut.id) cut.id = Date.now().toString();
+    if (!cut.date) cut.date = this.getLocalNowISO();
     await db_engine.cashCuts.put(cut);
     const settings = await this.getSettings();
     if (settings.autoSync) this.triggerAutoSync();
@@ -1156,7 +1164,6 @@ class StorageService {
     };
 
     const today = getLocalDate(new Date());
-    const yesterday = getLocalDate(new Date(Date.now() - 86400000));
 
     const lastCut = await this.getLastCashCut();
     const lastCutDate = lastCut ? getLocalDate(new Date(lastCut.date)) : null;
@@ -1277,7 +1284,67 @@ class StorageService {
     return sale;
   }
 
-  // --- PRINTING HELPER ---
+  async clearTransactionalData(): Promise<void> {
+    await db_engine.sales.clear();
+    await db_engine.expenses.clear();
+    await db_engine.credits.clear();
+    await db_engine.creditNotes.clear();
+    await db_engine.cashCuts.clear();
+    await db_engine.quotes.clear();
+    await db_engine.inventoryHistory.clear();
+  }
+
+  async purgeOldData(years: number): Promise<{ sales: number, history: number }> {
+    const cutoffDate = new Date();
+    cutoffDate.setFullYear(cutoffDate.getFullYear() - years);
+    const cutoffStr = cutoffDate.toISOString();
+
+    const oldSales = await db_engine.sales.where('date').below(cutoffStr).toArray();
+    const oldHistory = await db_engine.inventoryHistory.where('date').below(cutoffStr).toArray();
+
+    await db_engine.sales.bulkDelete(oldSales.map(s => s.id));
+    await db_engine.inventoryHistory.bulkDelete(oldHistory.map(h => h.id));
+
+    return {
+      sales: oldSales.length,
+      history: oldHistory.length
+    };
+  }
+
+  async fullSystemReset(): Promise<void> {
+    const tables = [
+      db_engine.sales,
+      db_engine.products,
+      db_engine.categories,
+      db_engine.customers,
+      db_engine.expenses,
+      db_engine.fixedExpenses,
+      db_engine.credits,
+      db_engine.creditNotes,
+      db_engine.cashCuts,
+      db_engine.quotes,
+      db_engine.inventoryHistory,
+      db_engine.priceHistory,
+      db_engine.promotions,
+      db_engine.suppliers,
+      db_engine.consumables
+    ];
+
+    for (const table of tables) {
+      if (table) await table.clear();
+    }
+  }
+
+  async updateExpenseDate(id: string, date: string) {
+    const exp = await db_engine.expenses.get(id);
+    if (exp) {
+      exp.date = date;
+      await db_engine.expenses.put(exp);
+      const settings = await this.getSettings();
+      if (settings.autoSync) this.triggerAutoSync();
+    }
+  }
+
   async generateTicketHTML(sale: Sale, customer?: Customer): Promise<string> {
     const settings = await this.getSettings();
     const isFiscal = sale.documentType === 'FACTURA';
@@ -1366,10 +1433,8 @@ class StorageService {
             ${settings.warrantyPolicy ? `<p><strong>Garantía:</strong> ${settings.warrantyPolicy}</p>` : ''}
             ${settings.returnPolicy ? `<p><strong>Devoluciones:</strong> ${settings.returnPolicy}</p>` : ''}
           </div>
-          <div class="hr"></div>
+          <hr/>
           <p>${isFiscal ? 'ORIGINAL: CLIENTE / COPIA: EMISOR' : 'ESTE NO ES UN DOCUMENTO FISCAL'}</p>
-          <p style="font-size: 8px; margin-top: 5px;">"La factura es beneficio de todos, ¡exíjala!"</p>
-          <p style="font-size: 8px;">SAR-HONDURAS VIGENTE 2026</p>
         </div>
       </body>
       </html>
@@ -1379,7 +1444,6 @@ class StorageService {
   async generateCreditContractHTML(sale: Sale, customer: Customer, settings: CompanySettings): Promise<string> {
     const today = new Date().toLocaleDateString('es-HN', { day: 'numeric', month: 'long', year: 'numeric' });
     const amount = sale.total - (sale.paymentDetails?.credit || 0);
-    const monthlyPayment = sale.paymentDetails?.credit ? (sale.total - (sale.paymentDetails.credit)) : 0; // Simplified for template
 
     return `
       <html>
@@ -1485,7 +1549,6 @@ class StorageService {
   async generatePaymentPlanHTML(sale: Sale): Promise<string> {
     if (!sale.isOrder && sale.paymentMethod !== 'Crédito') return "Este documento solo aplica para ventas al crédito.";
 
-    // Simple logic to calculate installments if they aren't pre-calculated
     const installments = [];
     const principal = sale.total - (sale.deposit || 0);
     const months = (sale as any).creditData?.term || 1;
@@ -1548,60 +1611,6 @@ class StorageService {
       </body>
       </html>
     `;
-  }
-  async clearTransactionalData(): Promise<void> {
-    await db_engine.sales.clear();
-    await db_engine.expenses.clear();
-    await db_engine.credits.clear();
-    await db_engine.creditNotes.clear();
-    await db_engine.cashCuts.clear();
-    await db_engine.quotes.clear();
-    await db_engine.inventoryHistory.clear();
-  }
-
-  async purgeOldData(years: number): Promise<{ sales: number, history: number }> {
-    const cutoffDate = new Date();
-    cutoffDate.setFullYear(cutoffDate.getFullYear() - years);
-    const cutoffStr = cutoffDate.toISOString();
-
-    const oldSales = await db_engine.sales.where('date').below(cutoffStr).toArray();
-    const oldHistory = await db_engine.inventoryHistory.where('date').below(cutoffStr).toArray();
-
-    await db_engine.sales.bulkDelete(oldSales.map(s => s.id));
-    await db_engine.inventoryHistory.bulkDelete(oldHistory.map(h => h.id));
-
-    return {
-      sales: oldSales.length,
-      history: oldHistory.length
-    };
-  }
-
-  async fullSystemReset(): Promise<void> {
-    const tables = [
-      db_engine.sales,
-      db_engine.products,
-      db_engine.categories,
-      db_engine.customers,
-      db_engine.expenses,
-      db_engine.fixedExpenses,
-      db_engine.credits,
-      db_engine.creditNotes,
-      db_engine.cashCuts,
-      db_engine.quotes,
-      db_engine.inventoryHistory,
-      db_engine.priceHistory,
-      db_engine.promotions,
-      db_engine.suppliers,
-      db_engine.consumables
-    ];
-
-    for (const table of tables) {
-      if (table) await table.clear();
-    }
-
-    // Reset some settings to default if necessary, but keep CAI/Branch info?
-    // User asked to clean products/customers/sales/orders.
-    // We keep settings and users to avoid lockout.
   }
 }
 

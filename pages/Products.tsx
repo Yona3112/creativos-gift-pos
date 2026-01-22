@@ -297,6 +297,7 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
                                 </div>
                                 <div class="product-info">
                                     <h3 class="product-name">${p.name}</h3>
+                                    ${p.description ? `<p style="font-size: 0.7rem; color: #64748b; margin-top: -4px; margin-bottom: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.1;">${p.description}</p>` : ''}
                                     <p class="product-price">L ${p.price.toFixed(2)}</p>
                                     <button class="order-btn">
                                         <i class="fab fa-whatsapp"></i> Pedir Ahora
@@ -386,7 +387,7 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
 
     const shareProductWhatsApp = (product: Product) => {
         const storeName = settings?.name || 'Mi Tienda';
-        const message = `🛍️ *¡Hola! Me interesa este producto:*\n\n📦 *${product.name}*\n💰 Precio: *L ${product.price.toFixed(2)}*\n🔢 Código: \`${product.code}\`\n\n_¿Tienen disponibilidad en ${storeName}?_`;
+        const message = `🛍️ *¡Hola! Me interesa este producto:*\n\n📦 *${product.name}*\n${product.description ? `📝 _${product.description}_\n` : ''}💰 Precio: *L ${product.price.toFixed(2)}*\n🔢 Código: \`${product.code}\`\n\n_¿Tienen disponibilidad en ${storeName}?_`;
         const encodedMessage = encodeURIComponent(message);
         window.open(`https://api.whatsapp.com/send?text=${encodedMessage}`, '_blank');
     };
@@ -674,6 +675,16 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
                         </div>
                         <div className="flex-1 space-y-3">
                             <Input label="Nombre" value={formData.name || ''} onChange={e => setFormData({ ...formData, name: e.target.value })} required />
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-1">Descripción del Producto / Arreglo</label>
+                                <textarea
+                                    className="w-full p-3 rounded-xl border border-gray-200 outline-none focus:border-primary bg-white text-sm"
+                                    rows={2}
+                                    value={formData.description || ''}
+                                    onChange={e => setFormData({ ...formData, description: e.target.value })}
+                                    placeholder="Ej: 12 rosas rojas, tarjeta gratis, etc."
+                                />
+                            </div>
                             <div className="flex gap-2 items-end">
                                 <div className="flex-1">
                                     <Input

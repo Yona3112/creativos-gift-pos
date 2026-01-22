@@ -240,7 +240,19 @@ export interface CompanySettings {
   legalCity?: string;
   darkMode?: boolean;
   enableBeep?: boolean;
+  currentSeason?: string;
 }
+
+export const SEASONS = [
+  { id: 'default', name: 'Original', color: '#6366F1' },
+  { id: 'valentine', name: 'Día del Amor', color: '#e62e8a' },
+  { id: 'mother', name: 'Día de la Madre', color: '#ff69b4' },
+  { id: 'father', name: 'Día del Padre', color: '#3b82f6' },
+  { id: 'independence', name: 'Independencia', color: '#0ea5e9' },
+  { id: 'yellow_flowers', name: 'Flores Amarillas', color: '#facc15' },
+  { id: 'christmas', name: 'Navidad', color: '#dc2626' },
+  { id: 'halloween', name: 'Temporada Spooky', color: '#ea580c' }
+];
 
 export interface CashCut {
   id: string;

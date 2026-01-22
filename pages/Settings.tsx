@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { db } from '../services/storageService';
-import { CompanySettings, LoyaltyLevel, Product, Sale, User, UserRole } from '../types';
+import { CompanySettings, LoyaltyLevel, Product, Sale, User, UserRole, SEASONS } from '../types';
 import { Button, Input, Card, Alert, Modal, Badge, ConfirmDialog, showToast } from '../components/UIComponents';
 import { createClient } from '@supabase/supabase-js';
 import { SupabaseService } from '../services/supabaseService';
@@ -283,6 +283,26 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
                   />
                   <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                 </label>
+              </div>
+
+              <div className="mt-6 pt-6 border-t border-gray-100">
+                <label className="block text-sm font-bold text-gray-700 mb-2">Temporada / Temática del Negocio</label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {SEASONS.map(season => (
+                    <button
+                      key={season.id}
+                      type="button"
+                      onClick={() => {
+                        setSettings(prev => prev ? ({ ...prev, currentSeason: season.id, themeColor: season.color }) : null);
+                        showToast(`Temporada cambiada a ${season.name}`, "info");
+                      }}
+                      className={`p-3 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${settings.currentSeason === season.id ? 'border-primary bg-primary text-white' : 'border-gray-100 bg-gray-50 text-gray-600 hover:border-gray-200'}`}
+                    >
+                      <div className="w-4 h-4 rounded-full border border-white" style={{ backgroundColor: season.color }}></div>
+                      <span className="text-xs font-bold leading-tight text-center">{season.name}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </section>
