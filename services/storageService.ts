@@ -1145,7 +1145,12 @@ class StorageService {
   async deleteCashCut(id: string): Promise<void> {
     await db_engine.cashCuts.delete(id);
     const settings = await this.getSettings();
-    if (settings.autoSync) this.triggerAutoSync();
+    if (settings.autoSync) {
+      import('./supabaseService').then(({ SupabaseService }) => {
+        SupabaseService.deleteFromTable('cash_cuts', id);
+      });
+      this.triggerAutoSync();
+    }
   }
 
   async getLastCashCut(): Promise<CashCut | null> {
