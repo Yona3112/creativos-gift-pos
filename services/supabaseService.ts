@@ -167,7 +167,7 @@ export class SupabaseService {
                 'logo', 'themeColor', 'whatsappNumber', 'masterPassword', 'supabaseUrl', 'supabaseKey',
                 'autoSync', 'lastBackupDate', 'logoObjectFit', 'thanksMessage', 'warrantyPolicy', 'returnPolicy',
                 'barcodeWidth', 'barcodeHeight', 'showLogoOnBarcode', 'barcodeLogoSize', 'legalOwnerName', 'legalCity',
-                'darkMode', 'enableBeep'
+                'darkMode', 'enableBeep', 'currentSeason'
             ];
 
             const settingsToSync: any = { id: 'main' };
