@@ -17,6 +17,7 @@ export const CashCut: React.FC = () => {
   const [history, setHistory] = useState<ICashCut[]>([]);
   const [settings, setSettings] = useState<CompanySettings | null>(null);
   const [todayCutExists, setTodayCutExists] = useState(false);
+  const [todayCutData, setTodayCutData] = useState<ICashCut | null>(null);
   const [revertModalOpen, setRevertModalOpen] = useState(false);
   const [revertCutId, setRevertCutId] = useState<string | null>(null);
   const [adminPassword, setAdminPassword] = useState('');
@@ -52,6 +53,7 @@ export const CashCut: React.FC = () => {
     // Check if there's already a cut for today
     const cutToday = cuts.find(c => formatDateForDisplay(c.date) === today);
     setTodayCutExists(!!cutToday);
+    setTodayCutData(cutToday || null);
 
     const t = sales.reduce((acc, s) => {
       if (s.paymentMethod === 'Efectivo') acc.cash += s.total;
@@ -205,51 +207,85 @@ export const CashCut: React.FC = () => {
           </Card>
         </div>
 
-        {/* Money Counting */}
-        <Card title="Arqueo de Efectivo" className="shadow-md h-fit">
-          <div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-6">
-            <Input label="L 500" type="number" min="0" value={denominations.bill500} onChange={e => setDenominations({ ...denominations, bill500: parseInt(e.target.value) || 0 })} />
-            <Input label="L 200" type="number" min="0" value={denominations.bill200} onChange={e => setDenominations({ ...denominations, bill200: parseInt(e.target.value) || 0 })} />
-            <Input label="L 100" type="number" min="0" value={denominations.bill100} onChange={e => setDenominations({ ...denominations, bill100: parseInt(e.target.value) || 0 })} />
-            <Input label="L 50" type="number" min="0" value={denominations.bill50} onChange={e => setDenominations({ ...denominations, bill50: parseInt(e.target.value) || 0 })} />
-            <Input label="L 20" type="number" min="0" value={denominations.bill20} onChange={e => setDenominations({ ...denominations, bill20: parseInt(e.target.value) || 0 })} />
-            <Input label="L 10" type="number" min="0" value={denominations.bill10} onChange={e => setDenominations({ ...denominations, bill10: parseInt(e.target.value) || 0 })} />
-            <Input label="L 5" type="number" min="0" value={denominations.bill5} onChange={e => setDenominations({ ...denominations, bill5: parseInt(e.target.value) || 0 })} />
-            <Input label="L 2" type="number" min="0" value={denominations.bill2} onChange={e => setDenominations({ ...denominations, bill2: parseInt(e.target.value) || 0 })} />
-            <Input label="L 1" type="number" min="0" value={denominations.bill1} onChange={e => setDenominations({ ...denominations, bill1: parseInt(e.target.value) || 0 })} />
-            <Input label="Monedas (Total)" type="number" min="0" step="0.01" value={denominations.coins} onChange={e => setDenominations({ ...denominations, coins: parseFloat(e.target.value) || 0 })} />
-          </div>
+        {/* Money Counting or Cut Summary */}
+        <Card title={todayCutExists ? "Resumen del Corte de Hoy" : "Arqueo de Efectivo"} className="shadow-md h-fit">
+          {todayCutExists && todayCutData ? (
+            /* Mostrar resumen del corte ya realizado */
+            <div className="space-y-4">
+              <div className="bg-green-50 p-4 rounded-xl border border-green-200 text-center">
+                <i className="fas fa-check-circle text-green-600 text-3xl mb-2"></i>
+                <p className="text-green-800 font-bold text-lg">Corte de caja realizado</p>
+                <p className="text-green-600 text-sm">{new Date(todayCutData.date).toLocaleString()}</p>
+              </div>
 
-          <div className="bg-slate-50 p-5 rounded-xl border border-slate-100 space-y-3">
-            <div className="flex justify-between text-sm text-gray-600">
-              <span>Efectivo Contado:</span>
-              <span className="font-mono font-bold">L {countedTotal.toFixed(2)}</span>
-            </div>
-            <div className="flex justify-between text-sm text-gray-600">
-              <span>Efectivo Sistema:</span>
-              <span className="font-mono font-bold">L {totals.cash.toFixed(2)}</span>
-            </div>
-            <div className="h-px bg-gray-200 my-1"></div>
-            <div className={`flex justify-between text-xl font-bold ${difference < -0.99 ? 'text-red-500' : difference > 0.99 ? 'text-blue-500' : 'text-green-600'}`}>
-              <span>Diferencia:</span>
-              <span>{difference > 0 ? '+' : ''}L {difference.toFixed(2)}</span>
-            </div>
-          </div>
+              <div className="bg-slate-50 p-5 rounded-xl border border-slate-100 space-y-3">
+                <div className="flex justify-between text-sm text-gray-600">
+                  <span>Ventas Totales:</span>
+                  <span className="font-mono font-bold">L {todayCutData.totalSales.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-sm text-gray-600">
+                  <span>Efectivo Sistema:</span>
+                  <span className="font-mono font-bold">L {todayCutData.cashExpected.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-sm text-gray-600">
+                  <span>Efectivo Contado:</span>
+                  <span className="font-mono font-bold">L {todayCutData.cashCounted.toFixed(2)}</span>
+                </div>
+                <div className="h-px bg-gray-200 my-1"></div>
+                <div className={`flex justify-between text-xl font-bold ${todayCutData.difference < -0.99 ? 'text-red-500' : todayCutData.difference > 0.99 ? 'text-blue-500' : 'text-green-600'}`}>
+                  <span>Diferencia:</span>
+                  <span>{todayCutData.difference > 0 ? '+' : ''}L {todayCutData.difference.toFixed(2)}</span>
+                </div>
+              </div>
 
-          {todayCutExists ? (
-            <div className="w-full mt-6 py-4 px-4 bg-green-100 text-green-800 rounded-xl text-center font-bold border border-green-200">
-              <i className="fas fa-check-circle mr-2"></i>
-              Corte de caja ya realizado para hoy
+              <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 flex items-start gap-2 text-sm">
+                <i className="fas fa-info-circle text-amber-600 mt-0.5"></i>
+                <p className="text-amber-800">
+                  Para realizar un nuevo corte, primero debe revertir el corte actual desde el historial (requiere contraseña administrativa).
+                </p>
+              </div>
             </div>
           ) : (
-            <Button
-              className="w-full mt-6 py-3 shadow-lg shadow-primary/20"
-              onClick={handleSave}
-              disabled={countedTotal === 0 && totals.cash > 0}
-              icon="lock"
-            >
-              Finalizar Turno y Cerrar Caja
-            </Button>
+            /* Mostrar campos de conteo cuando NO hay corte */
+            <>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-6">
+                <Input label="L 500" type="number" min="0" value={denominations.bill500} onChange={e => setDenominations({ ...denominations, bill500: parseInt(e.target.value) || 0 })} />
+                <Input label="L 200" type="number" min="0" value={denominations.bill200} onChange={e => setDenominations({ ...denominations, bill200: parseInt(e.target.value) || 0 })} />
+                <Input label="L 100" type="number" min="0" value={denominations.bill100} onChange={e => setDenominations({ ...denominations, bill100: parseInt(e.target.value) || 0 })} />
+                <Input label="L 50" type="number" min="0" value={denominations.bill50} onChange={e => setDenominations({ ...denominations, bill50: parseInt(e.target.value) || 0 })} />
+                <Input label="L 20" type="number" min="0" value={denominations.bill20} onChange={e => setDenominations({ ...denominations, bill20: parseInt(e.target.value) || 0 })} />
+                <Input label="L 10" type="number" min="0" value={denominations.bill10} onChange={e => setDenominations({ ...denominations, bill10: parseInt(e.target.value) || 0 })} />
+                <Input label="L 5" type="number" min="0" value={denominations.bill5} onChange={e => setDenominations({ ...denominations, bill5: parseInt(e.target.value) || 0 })} />
+                <Input label="L 2" type="number" min="0" value={denominations.bill2} onChange={e => setDenominations({ ...denominations, bill2: parseInt(e.target.value) || 0 })} />
+                <Input label="L 1" type="number" min="0" value={denominations.bill1} onChange={e => setDenominations({ ...denominations, bill1: parseInt(e.target.value) || 0 })} />
+                <Input label="Monedas (Total)" type="number" min="0" step="0.01" value={denominations.coins} onChange={e => setDenominations({ ...denominations, coins: parseFloat(e.target.value) || 0 })} />
+              </div>
+
+              <div className="bg-slate-50 p-5 rounded-xl border border-slate-100 space-y-3">
+                <div className="flex justify-between text-sm text-gray-600">
+                  <span>Efectivo Contado:</span>
+                  <span className="font-mono font-bold">L {countedTotal.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-sm text-gray-600">
+                  <span>Efectivo Sistema:</span>
+                  <span className="font-mono font-bold">L {totals.cash.toFixed(2)}</span>
+                </div>
+                <div className="h-px bg-gray-200 my-1"></div>
+                <div className={`flex justify-between text-xl font-bold ${difference < -0.99 ? 'text-red-500' : difference > 0.99 ? 'text-blue-500' : 'text-green-600'}`}>
+                  <span>Diferencia:</span>
+                  <span>{difference > 0 ? '+' : ''}L {difference.toFixed(2)}</span>
+                </div>
+              </div>
+
+              <Button
+                className="w-full mt-6 py-3 shadow-lg shadow-primary/20"
+                onClick={handleSave}
+                disabled={countedTotal === 0 && totals.cash > 0}
+                icon="lock"
+              >
+                Finalizar Turno y Cerrar Caja
+              </Button>
+            </>
           )}
         </Card>
       </div>
