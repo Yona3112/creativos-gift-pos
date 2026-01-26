@@ -76,9 +76,13 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                 return;
             }
 
-            await db.updateSaleStatus(order.id, newStatus);
-            refresh();
-            if (onUpdate) onUpdate();
+            try {
+                await db.updateSaleStatus(order.id, newStatus);
+                refresh();
+                if (onUpdate) onUpdate();
+            } catch (e: any) {
+                showToast(e.message || 'Error al actualizar estado', 'error');
+            }
         }
     };
 
@@ -112,32 +116,37 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
     const handleSaveUpdate = async () => {
         if (!selectedOrder) return;
 
-        const isShipping = !!(editForm.shippingCompany || editForm.tracking);
-        const details: ShippingDetails = {
-            company: editForm.shippingCompany,
-            trackingNumber: editForm.tracking,
-            notes: editForm.notes,
-            method: isShipping ? 'shipping' : (selectedOrder.shippingDetails?.method || 'pickup')
-        };
+        try {
+            const isShipping = !!(editForm.shippingCompany || editForm.tracking);
+            const details: ShippingDetails = {
+                company: editForm.shippingCompany,
+                trackingNumber: editForm.tracking,
+                notes: editForm.notes,
+                method: isShipping ? 'shipping' : (selectedOrder.shippingDetails?.method || 'pickup')
+            };
 
-        // Check for rollback (from delivered or any previous state)
-        const workflow: FulfillmentStatus[] = ['pending', 'production', 'ready', 'shipped', 'delivered'];
-        const oldIndex = workflow.indexOf(selectedOrder.fulfillmentStatus || 'pending');
-        const newIndex = workflow.indexOf(editForm.status);
+            // Check for rollback (from delivered or any previous state)
+            const workflow: FulfillmentStatus[] = ['pending', 'production', 'ready', 'shipped', 'delivered'];
+            const oldIndex = workflow.indexOf(selectedOrder.fulfillmentStatus || 'pending');
+            const newIndex = workflow.indexOf(editForm.status);
 
-        if (newIndex < oldIndex) {
-            setPendingRollback({ order: selectedOrder, newStatus: editForm.status, details });
-            setAdminPassword('');
-            setIsAdminModalOpen(true);
+            if (newIndex < oldIndex) {
+                setPendingRollback({ order: selectedOrder, newStatus: editForm.status, details });
+                setAdminPassword('');
+                setIsAdminModalOpen(true);
+                setIsEditModalOpen(false);
+                return;
+            }
+
+            await db.updateSaleStatus(selectedOrder.id, editForm.status, details);
+
             setIsEditModalOpen(false);
-            return;
+            showToast('Pedido actualizado correctamente', 'success');
+            refresh();
+            if (onUpdate) onUpdate();
+        } catch (e: any) {
+            showToast(e.message || 'Error al actualizar pedido', 'error');
         }
-
-        await db.updateSaleStatus(selectedOrder.id, editForm.status, details);
-
-        setIsEditModalOpen(false);
-        refresh();
-        if (onUpdate) onUpdate();
     };
 
     const handleCompletePayment = async () => {
@@ -289,6 +298,14 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                                                     </div>
                                                 ) : null}
 
+                                                {/* Warning: payment required before shipping */}
+                                                {(order.balance || 0) > 0 && (col.id === 'ready' || col.id === 'production') ? (
+                                                    <div className="mb-2 text-[9px] font-bold text-amber-700 bg-amber-100 px-1.5 py-1 rounded border border-amber-300 flex items-center gap-1">
+                                                        <i className="fas fa-exclamation-triangle"></i>
+                                                        <span>Pago requerido para enviar</span>
+                                                    </div>
+                                                ) : null}
+
                                                 <div className="flex items-center justify-between border-t pt-1.5 mt-auto gap-2">
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); handleQuickStatusUpdate(order, 'prev'); }}
@@ -367,9 +384,13 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                                                         return;
                                                     }
 
-                                                    await db.updateSaleStatus(order.id, newStatus);
-                                                    refresh();
-                                                    if (onUpdate) onUpdate();
+                                                    try {
+                                                        await db.updateSaleStatus(order.id, newStatus);
+                                                        refresh();
+                                                        if (onUpdate) onUpdate();
+                                                    } catch (e: any) {
+                                                        showToast(e.message || 'Error al actualizar estado', 'error');
+                                                    }
                                                 }}
                                                 className="w-4 h-4 accent-green-600"
                                             />

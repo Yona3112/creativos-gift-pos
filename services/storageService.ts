@@ -1145,13 +1145,19 @@ class StorageService {
 
   async updateSaleStatus(id: string, status: FulfillmentStatus, shippingDetails?: Partial<ShippingDetails>) {
     const sale = await db_engine.sales.get(id);
-    if (sale) {
-      sale.fulfillmentStatus = status;
-      if (shippingDetails) sale.shippingDetails = { ...sale.shippingDetails, ...shippingDetails } as ShippingDetails;
-      await db_engine.sales.put(sale);
-      const settings = await this.getSettings();
-      if (settings.autoSync) this.triggerAutoSync();
+    if (!sale) throw new Error("Pedido no encontrado");
+
+    // VALIDATION: Cannot advance to shipped/delivered if balance > 0
+    const unpaidBlockedStatuses: FulfillmentStatus[] = ['shipped', 'delivered'];
+    if (unpaidBlockedStatuses.includes(status) && (sale.balance || 0) > 0) {
+      throw new Error(`No se puede marcar como "${status === 'shipped' ? 'Enviado' : 'Entregado'}" hasta completar el pago. Saldo pendiente: L ${(sale.balance || 0).toFixed(2)}`);
     }
+
+    sale.fulfillmentStatus = status;
+    if (shippingDetails) sale.shippingDetails = { ...sale.shippingDetails, ...shippingDetails } as ShippingDetails;
+    await db_engine.sales.put(sale);
+    const settings = await this.getSettings();
+    if (settings.autoSync) this.triggerAutoSync();
   }
 
   async deleteBranch(id: string) {
