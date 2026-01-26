@@ -656,18 +656,29 @@ export const POS: React.FC<POSProps> = ({
             </div>
 
             {/* BARRA FLOTANTE MÓVIL */}
-            <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t p-3 flex items-center justify-between shadow-[0_-5px_15px_rgba(0,0,0,0.1)] z-[55]">
-                <div onClick={() => setIsCartOpen(true)} className="flex items-center gap-3 cursor-pointer">
-                    <div className="relative">
-                        <i className="fas fa-shopping-cart text-2xl text-primary"></i>
-                        <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">{totalItems}</span>
+            <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t p-2 shadow-[0_-5px_15px_rgba(0,0,0,0.1)] z-[55]">
+                {/* Customer Selection Button - Mobile */}
+                <button
+                    onClick={() => setIsCartOpen(true)}
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 mb-2 bg-gray-100 rounded-xl text-sm font-bold text-gray-700"
+                >
+                    <i className="fas fa-user text-primary"></i>
+                    <span className="truncate">{selectedCustomer?.name || 'Seleccionar Cliente'}</span>
+                    <i className="fas fa-chevron-right text-gray-400 text-xs ml-auto"></i>
+                </button>
+                <div className="flex items-center justify-between">
+                    <div onClick={() => setIsCartOpen(true)} className="flex items-center gap-3 cursor-pointer">
+                        <div className="relative">
+                            <i className="fas fa-shopping-cart text-2xl text-primary"></i>
+                            <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">{totalItems}</span>
+                        </div>
+                        <div>
+                            <p className="text-[10px] text-gray-400 font-black uppercase leading-none">Total</p>
+                            <p className="text-lg font-black text-gray-800 leading-none">L {total.toFixed(2)}</p>
+                        </div>
                     </div>
-                    <div>
-                        <p className="text-[10px] text-gray-400 font-black uppercase leading-none">Total</p>
-                        <p className="text-lg font-black text-gray-800 leading-none">L {total.toFixed(2)}</p>
-                    </div>
+                    <Button onClick={() => setIsPaymentModalOpen(true)} disabled={cart.length === 0} className="px-8">Cobrar</Button>
                 </div>
-                <Button onClick={() => setIsPaymentModalOpen(true)} disabled={cart.length === 0} className="px-8">Cobrar</Button>
             </div>
 
             {/* MODAL DE COBRO */}
