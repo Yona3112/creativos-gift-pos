@@ -142,6 +142,11 @@ export interface ShippingDetails {
   shippingCost?: number;
   address?: string;
   notes?: string;
+  guideFile?: string;           // Base64 del archivo de guía (PDF o imagen)
+  guideFileType?: 'pdf' | 'image'; // Tipo de archivo de la guía
+  guideFileName?: string;       // Nombre original del archivo
+  productionImages?: string[];  // Hasta 3 imágenes para contexto de producción
+  isLocalDelivery?: boolean;    // Entrega local (no requiere guía)
 }
 
 export interface Sale {

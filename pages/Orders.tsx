@@ -25,7 +25,12 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
         shippingCompany: string;
         tracking: string;
         notes: string;
-    }>({ status: 'pending', shippingCompany: '', tracking: '', notes: '' });
+        guideFile: string;
+        guideFileType: 'pdf' | 'image' | '';
+        guideFileName: string;
+        productionImages: string[];
+        isLocalDelivery: boolean;
+    }>({ status: 'pending', shippingCompany: '', tracking: '', notes: '', guideFile: '', guideFileType: '', guideFileName: '', productionImages: [], isLocalDelivery: false });
 
     // Admin Password Modal State
     const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
@@ -76,6 +81,18 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                 return;
             }
 
+            // Validación: requiere guía para avanzar a shipped/delivered (a menos que sea entrega local)
+            if (['shipped', 'delivered'].includes(newStatus)) {
+                const hasGuide = !!order.shippingDetails?.guideFile;
+                const isLocal = !!order.shippingDetails?.isLocalDelivery;
+
+                if (!hasGuide && !isLocal) {
+                    showToast('Debes subir una guía de envío o marcar como entrega local', 'warning');
+                    openEditModal(order);
+                    return;
+                }
+            }
+
             try {
                 await db.updateSaleStatus(order.id, newStatus);
                 refresh();
@@ -108,22 +125,125 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
             status: order.fulfillmentStatus || 'pending',
             shippingCompany: order.shippingDetails?.company || '',
             tracking: order.shippingDetails?.trackingNumber || '',
-            notes: order.shippingDetails?.notes || ''
+            notes: order.shippingDetails?.notes || '',
+            guideFile: order.shippingDetails?.guideFile || '',
+            guideFileType: order.shippingDetails?.guideFileType || '',
+            guideFileName: order.shippingDetails?.guideFileName || '',
+            productionImages: order.shippingDetails?.productionImages || [],
+            isLocalDelivery: order.shippingDetails?.isLocalDelivery || false
         });
         setIsEditModalOpen(true);
+    };
+
+    // Handler para subir guía (PDF o imagen)
+    const handleGuideUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const isPdf = file.type === 'application/pdf';
+        const isImage = file.type.startsWith('image/');
+
+        if (!isPdf && !isImage) {
+            showToast('Solo se permiten archivos PDF o imágenes (JPG, PNG)', 'error');
+            return;
+        }
+
+        if (file.size > 5 * 1024 * 1024) {
+            showToast('El archivo no debe superar 5MB', 'error');
+            return;
+        }
+
+        try {
+            if (isPdf) {
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    setEditForm(prev => ({
+                        ...prev,
+                        guideFile: ev.target?.result as string,
+                        guideFileType: 'pdf',
+                        guideFileName: file.name
+                    }));
+                };
+                reader.readAsDataURL(file);
+            } else {
+                const compressed = await db.compressImage(file);
+                setEditForm(prev => ({
+                    ...prev,
+                    guideFile: compressed,
+                    guideFileType: 'image',
+                    guideFileName: file.name
+                }));
+            }
+            showToast('Guía cargada correctamente', 'success');
+        } catch (err) {
+            showToast('Error al cargar el archivo', 'error');
+        }
+    };
+
+    // Handler para subir imágenes de producción
+    const handleProductionImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (!files) return;
+
+        const currentCount = editForm.productionImages.length;
+        const remaining = 3 - currentCount;
+
+        if (remaining <= 0) {
+            showToast('Máximo 3 imágenes de producción', 'warning');
+            return;
+        }
+
+        const toProcess: File[] = Array.from(files).slice(0, remaining) as File[];
+        const newImages: string[] = [];
+
+        for (const file of toProcess) {
+            if (!file.type.startsWith('image/')) continue;
+            try {
+                const compressed = await db.compressImage(file);
+                newImages.push(compressed);
+            } catch (err) {
+                console.error('Error compressing image', err);
+            }
+        }
+
+        setEditForm(prev => ({
+            ...prev,
+            productionImages: [...prev.productionImages, ...newImages]
+        }));
+        showToast(`${newImages.length} imagen(es) agregada(s)`, 'success');
+    };
+
+    const removeProductionImage = (index: number) => {
+        setEditForm(prev => ({
+            ...prev,
+            productionImages: prev.productionImages.filter((_, i) => i !== index)
+        }));
     };
 
     const handleSaveUpdate = async () => {
         if (!selectedOrder) return;
 
         try {
-            const isShipping = !!(editForm.shippingCompany || editForm.tracking);
+            const isShipping = !!(editForm.shippingCompany || editForm.tracking) && !editForm.isLocalDelivery;
             const details: ShippingDetails = {
                 company: editForm.shippingCompany,
                 trackingNumber: editForm.tracking,
                 notes: editForm.notes,
-                method: isShipping ? 'shipping' : (selectedOrder.shippingDetails?.method || 'pickup')
+                method: isShipping ? 'shipping' : 'pickup',
+                guideFile: editForm.guideFile || undefined,
+                guideFileType: editForm.guideFileType || undefined,
+                guideFileName: editForm.guideFileName || undefined,
+                productionImages: editForm.productionImages.length > 0 ? editForm.productionImages : undefined,
+                isLocalDelivery: editForm.isLocalDelivery
             };
+
+            // Validación: requiere guía para avanzar a shipped/delivered (a menos que sea entrega local)
+            if (['shipped', 'delivered'].includes(editForm.status)) {
+                if (!editForm.guideFile && !editForm.isLocalDelivery) {
+                    showToast('Debes subir una guía de envío o activar "Entrega Local"', 'warning');
+                    return;
+                }
+            }
 
             // Check for rollback (from delivered or any previous state)
             const workflow: FulfillmentStatus[] = ['pending', 'production', 'ready', 'shipped', 'delivered'];
@@ -220,6 +340,17 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
         }
     };
 
+    const getCardColor = (status?: FulfillmentStatus) => {
+        switch (status) {
+            case 'pending': return 'bg-yellow-50 border-yellow-200';
+            case 'production': return 'bg-blue-50 border-blue-200';
+            case 'ready': return 'bg-green-50 border-green-200';
+            case 'shipped': return 'bg-purple-50 border-purple-200';
+            case 'delivered': return 'bg-gray-100 border-gray-300';
+            default: return 'bg-white border-gray-200';
+        }
+    };
+
     return (
         <div className="space-y-6 h-[calc(100vh-140px)] flex flex-col">
             <div className="flex flex-col sm:flex-row justify-between items-center gap-4 shrink-0">
@@ -271,62 +402,24 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                                         </div>
                                         <span className="bg-white/50 px-2 py-0.5 rounded text-xs font-black">{colOrders.length}</span>
                                     </div>
-                                    <div className="flex-1 overflow-y-auto space-y-2 p-1 pb-10 scrollbar-thin">
+                                    <div className="flex-1 overflow-y-auto space-y-1 p-0.5 pb-10 scrollbar-thin">
                                         {colOrders.map(order => (
-                                            <div key={order.id} className="bg-white p-2.5 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-all group relative">
-                                                <div className="flex justify-between items-start mb-1.5">
-                                                    <span className="font-mono text-[10px] font-bold text-gray-500 bg-gray-100 px-1 rounded">{order.folio}</span>
-                                                    <span className="text-[10px] font-bold text-gray-400 flex items-center gap-1">
-                                                        <i className="far fa-clock"></i> {timeAgo(order.date)}
-                                                    </span>
+                                            <div key={order.id} className={`p-1.5 rounded border shadow-sm hover:shadow transition-all ${getCardColor(order.fulfillmentStatus)}`}>
+                                                <div className="flex justify-between items-center text-[8px]">
+                                                    <span className="font-mono font-bold text-gray-600 bg-white/50 px-0.5 rounded">{order.folio}</span>
+                                                    <div className="flex items-center gap-0.5 text-gray-500">
+                                                        {order.shippingDetails?.isLocalDelivery && <span className="font-bold bg-green-200 text-green-700 px-0.5 rounded">L</span>}
+                                                        {order.shippingDetails?.guideFile && <i className="fas fa-file-alt text-sky-500"></i>}
+                                                        <i className="far fa-clock"></i>{timeAgo(order.date)}
+                                                    </div>
                                                 </div>
-                                                <h4 className="font-bold text-gray-800 text-[13px] mb-0.5 leading-tight">{getCustomerName(order.customerId)}</h4>
-                                                <p className="text-[11px] text-gray-500 line-clamp-2 mb-2 bg-gray-50 p-1.5 rounded-md">
-                                                    {order.items.map(i => `${i.quantity} ${i.name}`).join(', ')}
-                                                </p>
-                                                {order.balance && order.balance > 0 ? (
-                                                    <div className="mb-2 text-[10px] font-bold text-red-500 bg-red-50/50 px-1.5 py-0.5 rounded border border-red-100 flex justify-between">
-                                                        <span>Debe:</span>
-                                                        <span>L {order.balance.toFixed(2)}</span>
-                                                    </div>
-                                                ) : null}
-
-                                                {order.shippingDetails?.notes ? (
-                                                    <div className="mb-2 text-[10px] bg-amber-50 text-amber-800 p-1 rounded border border-amber-100 flex gap-1">
-                                                        <i className="fas fa-sticky-note mt-0.5 scale-90"></i>
-                                                        <span className="line-clamp-2 leading-tight">{order.shippingDetails.notes}</span>
-                                                    </div>
-                                                ) : null}
-
-                                                {/* Warning: payment required before shipping */}
-                                                {(order.balance || 0) > 0 && (col.id === 'ready' || col.id === 'production') ? (
-                                                    <div className="mb-2 text-[9px] font-bold text-amber-700 bg-amber-100 px-1.5 py-1 rounded border border-amber-300 flex items-center gap-1">
-                                                        <i className="fas fa-exclamation-triangle"></i>
-                                                        <span>Pago requerido para enviar</span>
-                                                    </div>
-                                                ) : null}
-
-                                                <div className="flex items-center justify-between border-t pt-1.5 mt-auto gap-2">
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); handleQuickStatusUpdate(order, 'prev'); }}
-                                                        disabled={col.id === 'pending'}
-                                                        className="w-6 h-6 rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 disabled:opacity-30 flex items-center justify-center transition-colors shadow-sm"
-                                                    >
-                                                        <i className="fas fa-chevron-left text-[10px]"></i>
-                                                    </button>
-                                                    <button
-                                                        onClick={() => openEditModal(order)}
-                                                        className="flex-1 text-[11px] font-bold text-primary hover:bg-indigo-50 py-1 rounded transition-colors"
-                                                    >
-                                                        Gestionar
-                                                    </button>
-
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); handleQuickStatusUpdate(order, 'next'); }}
-                                                        className="w-7 h-7 rounded-full bg-primary text-white hover:bg-indigo-700 shadow-md flex items-center justify-center transition-colors"
-                                                    >
-                                                        <i className={`fas fa-${col.id === 'shipped' ? 'check' : 'chevron-right'} text-xs`}></i>
-                                                    </button>
+                                                <h4 className="font-bold text-gray-800 text-[10px] leading-tight truncate">{getCustomerName(order.customerId)}</h4>
+                                                <p className="text-[8px] text-gray-600 truncate">{order.items.map(i => `${i.quantity} ${i.name}`).join(', ')}</p>
+                                                {order.balance && order.balance > 0 && <p className="text-[8px] font-bold text-red-600">Debe: L {order.balance.toFixed(2)}</p>}
+                                                <div className="flex items-center justify-between mt-1 gap-0.5">
+                                                    <button onClick={(e) => { e.stopPropagation(); handleQuickStatusUpdate(order, 'prev'); }} disabled={col.id === 'pending'} className="w-4 h-4 rounded-full bg-white/60 text-gray-500 disabled:opacity-30 flex items-center justify-center text-[7px]"><i className="fas fa-chevron-left"></i></button>
+                                                    <button onClick={() => openEditModal(order)} className="flex-1 text-[8px] font-bold text-primary hover:bg-white/50 py-0.5 rounded">Gestionar</button>
+                                                    <button onClick={(e) => { e.stopPropagation(); handleQuickStatusUpdate(order, 'next'); }} disabled={col.id === 'delivered'} className="w-4 h-4 rounded-full bg-primary text-white disabled:opacity-30 flex items-center justify-center text-[7px]"><i className="fas fa-chevron-right"></i></button>
                                                 </div>
                                             </div>
                                         ))}
@@ -444,9 +537,125 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                             <i className="fas fa-truck"></i> Datos de Envío
                         </h4>
                         <div className="grid grid-cols-2 gap-3">
-                            <Input label="Empresa de Envío" placeholder="Ej: Cargo Expreso" value={editForm.shippingCompany} onChange={e => setEditForm({ ...editForm, shippingCompany: e.target.value })} style={{ background: 'white' }} />
-                            <Input label="No. de Guía / Tracking" placeholder="Ej: 12345678" value={editForm.tracking} onChange={e => setEditForm({ ...editForm, tracking: e.target.value })} style={{ background: 'white' }} />
+                            <Input label="Empresa de Envío" placeholder="Ej: Cargo Expreso" value={editForm.shippingCompany} onChange={e => setEditForm({ ...editForm, shippingCompany: e.target.value })} style={{ background: 'white' }} disabled={editForm.isLocalDelivery} />
+                            <Input label="No. de Guía / Tracking" placeholder="Ej: 12345678" value={editForm.tracking} onChange={e => setEditForm({ ...editForm, tracking: e.target.value })} style={{ background: 'white' }} disabled={editForm.isLocalDelivery} />
                         </div>
+
+                        {/* Toggle Entrega Local */}
+                        <div className={`flex items-center justify-between p-3 rounded-xl border-2 transition-all ${editForm.isLocalDelivery ? 'bg-green-100 border-green-400' : 'bg-white border-gray-200'}`}>
+                            <div className="flex items-center gap-3">
+                                <i className={`fas fa-${editForm.isLocalDelivery ? 'store' : 'shipping-fast'} text-xl ${editForm.isLocalDelivery ? 'text-green-600' : 'text-gray-400'}`}></i>
+                                <div>
+                                    <p className={`font-bold text-sm ${editForm.isLocalDelivery ? 'text-green-800' : 'text-gray-700'}`}>Entrega Local</p>
+                                    <p className="text-[10px] text-gray-500">El cliente recoge en tienda (no requiere guía)</p>
+                                </div>
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    className="sr-only peer"
+                                    checked={editForm.isLocalDelivery}
+                                    onChange={e => setEditForm({ ...editForm, isLocalDelivery: e.target.checked })}
+                                />
+                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
+                            </label>
+                        </div>
+                    </div>
+
+                    {/* Sección de Guía de Envío (PDF o Imagen) */}
+                    {['ready', 'shipped', 'delivered'].includes(editForm.status) && (
+                        <div className="bg-sky-50 p-4 rounded-xl border border-sky-100 space-y-3">
+                            <h4 className="font-bold text-sky-900 text-sm uppercase flex items-center gap-2">
+                                <i className="fas fa-file-alt"></i> Guía de Envío
+                            </h4>
+
+                            {editForm.guideFile ? (
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between bg-white p-2 rounded-lg border border-sky-200">
+                                        <div className="flex items-center gap-2">
+                                            <i className={`fas fa-${editForm.guideFileType === 'pdf' ? 'file-pdf text-red-500' : 'image text-blue-500'} text-xl`}></i>
+                                            <span className="text-sm font-medium text-gray-700 truncate max-w-[200px]">{editForm.guideFileName || 'Guía cargada'}</span>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            {editForm.guideFileType === 'pdf' ? (
+                                                <a
+                                                    href={editForm.guideFile}
+                                                    download={editForm.guideFileName || 'guia.pdf'}
+                                                    className="text-xs bg-sky-100 text-sky-700 px-2 py-1 rounded font-bold hover:bg-sky-200 transition-colors"
+                                                >
+                                                    <i className="fas fa-download mr-1"></i>Descargar
+                                                </a>
+                                            ) : (
+                                                <button
+                                                    onClick={() => window.open(editForm.guideFile, '_blank')}
+                                                    className="text-xs bg-sky-100 text-sky-700 px-2 py-1 rounded font-bold hover:bg-sky-200 transition-colors"
+                                                >
+                                                    <i className="fas fa-eye mr-1"></i>Ver
+                                                </button>
+                                            )}
+                                            <button
+                                                onClick={() => setEditForm({ ...editForm, guideFile: '', guideFileType: '', guideFileName: '' })}
+                                                className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded font-bold hover:bg-red-200 transition-colors"
+                                            >
+                                                <i className="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    {editForm.guideFileType === 'image' && (
+                                        <img src={editForm.guideFile} alt="Guía" className="w-full max-h-48 object-contain rounded-lg border border-sky-200" />
+                                    )}
+                                </div>
+                            ) : (
+                                <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-sky-300 rounded-xl cursor-pointer hover:bg-sky-100 transition-colors">
+                                    <i className="fas fa-cloud-upload-alt text-2xl text-sky-400 mb-2"></i>
+                                    <span className="text-sm text-sky-700 font-medium">Click para subir guía</span>
+                                    <span className="text-[10px] text-sky-500">PDF o Imagen (JPG, PNG) • Máx 5MB</span>
+                                    <input
+                                        type="file"
+                                        className="hidden"
+                                        accept=".pdf,image/*"
+                                        onChange={handleGuideUpload}
+                                    />
+                                </label>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Sección de Imágenes de Producción */}
+                    <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 space-y-3">
+                        <h4 className="font-bold text-amber-900 text-sm uppercase flex items-center gap-2">
+                            <i className="fas fa-images"></i> Imágenes de Producción
+                            <span className="text-[10px] font-normal text-amber-600 ml-auto">{editForm.productionImages.length}/3</span>
+                        </h4>
+
+                        <div className="grid grid-cols-3 gap-2">
+                            {editForm.productionImages.map((img, idx) => (
+                                <div key={idx} className="relative group">
+                                    <img src={img} alt={`Producción ${idx + 1}`} className="w-full h-20 object-cover rounded-lg border border-amber-200" />
+                                    <button
+                                        onClick={() => removeProductionImage(idx)}
+                                        className="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white rounded-full text-[10px] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                                    >
+                                        <i className="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            ))}
+
+                            {editForm.productionImages.length < 3 && (
+                                <label className="flex flex-col items-center justify-center h-20 border-2 border-dashed border-amber-300 rounded-lg cursor-pointer hover:bg-amber-100 transition-colors">
+                                    <i className="fas fa-plus text-amber-400"></i>
+                                    <span className="text-[9px] text-amber-600 mt-1">Agregar</span>
+                                    <input
+                                        type="file"
+                                        className="hidden"
+                                        accept="image/*"
+                                        multiple
+                                        onChange={handleProductionImageUpload}
+                                    />
+                                </label>
+                            )}
+                        </div>
+                        <p className="text-[10px] text-amber-600">Sube imágenes de referencia para producción (bocetos, inspiración, etc.)</p>
                     </div>
 
                     <div>
