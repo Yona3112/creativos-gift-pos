@@ -59,7 +59,7 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
         setSettings(await db.getSettings());
     };
 
-    const getCustomerName = (id?: string) => customers.find(c => c.id === id)?.name || 'Consumidor Final';
+    const getCustomerName = (order: Sale) => order.customerName || customers.find(c => c.id === order.customerId)?.name || 'Consumidor Final';
 
     const handleQuickStatusUpdate = async (order: Sale, direction: 'next' | 'prev') => {
         const workflow: FulfillmentStatus[] = ['pending', 'production', 'ready', 'shipped', 'delivered'];
@@ -311,7 +311,7 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
             const matchStatus = statusFilter === 'all' ? true : s.fulfillmentStatus === statusFilter;
             const matchDate = dateFilter ? s.date.startsWith(dateFilter) : true;
 
-            const customerName = getCustomerName(s.customerId);
+            const customerName = getCustomerName(s);
             const matchSearch =
                 (s.folio || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (customerName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -413,7 +413,7 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                                                         <i className="far fa-clock"></i>{timeAgo(order.date)}
                                                     </div>
                                                 </div>
-                                                <h4 className="font-bold text-gray-800 text-[10px] leading-tight truncate">{getCustomerName(order.customerId)}</h4>
+                                                <h4 className="font-bold text-gray-800 text-[10px] leading-tight truncate">{getCustomerName(order)}</h4>
                                                 <p className="text-[8px] text-gray-600 truncate">{order.items.map(i => `${i.quantity} ${i.name}`).join(', ')}</p>
                                                 {order.balance && order.balance > 0 && <p className="text-[8px] font-bold text-red-600">Debe: L {order.balance.toFixed(2)}</p>}
                                                 <div className="flex items-center justify-between mt-1 gap-0.5">
@@ -448,7 +448,7 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                                             {getStatusBadge(order.fulfillmentStatus)}
                                             <span className="text-xs text-gray-400">{new Date(order.date).toLocaleString()}</span>
                                         </div>
-                                        <div className="font-bold text-lg text-gray-900">{getCustomerName(order.customerId)}</div>
+                                        <div className="font-bold text-lg text-gray-900">{getCustomerName(order)}</div>
                                         <div className="text-sm text-gray-500 mt-1">{order.items.map(i => `${i.quantity}x ${i.name}`).join(', ')}</div>
                                     </div>
 

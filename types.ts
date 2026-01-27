@@ -162,6 +162,7 @@ export interface Sale {
   paymentMethod: 'Efectivo' | 'Tarjeta' | 'Transferencia' | 'Mixto' | 'Crédito';
   paymentDetails?: PaymentDetails;
   customerId?: string;
+  customerName?: string;  // Persist customer name to avoid lookup issues
   userId: string;
   branchId: string;
   status: 'active' | 'cancelled';

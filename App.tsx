@@ -226,6 +226,12 @@ function App() {
             await SupabaseService.pullAll();
             console.log("✅ Datos descargados de la nube");
 
+            // Fix any duplicate folios after pulling data from cloud
+            const fixResult = await db.fixDuplicateFolios();
+            if (fixResult.fixed > 0) {
+              console.log(`🔧 Corregidos ${fixResult.fixed} folios duplicados`);
+            }
+
             // Recargar datos locales después del pull
             await refreshData(false);
           } catch (pullErr) {

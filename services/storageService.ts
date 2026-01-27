@@ -232,10 +232,51 @@ class StorageService {
     }
   }
 
-  // --- SEQUENTIAL CODE GENERATORS ---
-  async getNextProductCodeSequential(): Promise<string> {
+  // --- SEQUENTIAL CODE GENERATORS WITH RECALCULATION ---
+
+  // Recalculate next product code by scanning existing products
+  private async recalculateNextProductCode(): Promise<number> {
+    const products = await db_engine.products.toArray();
     const settings = await this.getSettings();
-    const nextNum = (settings.currentProductCode || 1);
+
+    let maxCode = settings.currentProductCode || 1;
+
+    for (const product of products) {
+      if (product.code?.toUpperCase().startsWith('PROD')) {
+        const numStr = product.code.toUpperCase().replace('PROD', '').replace('-', '');
+        const num = parseInt(numStr, 10);
+        if (!isNaN(num) && num >= maxCode) {
+          maxCode = num + 1;
+        }
+      }
+    }
+
+    return maxCode;
+  }
+
+  // Recalculate next ticket number by scanning existing sales
+  private async recalculateNextTicketNumber(): Promise<number> {
+    const sales = await db_engine.sales.toArray();
+    const settings = await this.getSettings();
+
+    let maxTicket = settings.currentTicketNumber || 1;
+
+    for (const sale of sales) {
+      if (sale.folio?.startsWith('T-')) {
+        const numStr = sale.folio.replace('T-', '');
+        const num = parseInt(numStr, 10);
+        if (!isNaN(num) && num >= maxTicket) {
+          maxTicket = num + 1;
+        }
+      }
+    }
+
+    return maxTicket;
+  }
+
+  async getNextProductCodeSequential(): Promise<string> {
+    const nextNum = await this.recalculateNextProductCode();
+    const settings = await this.getSettings();
     const code = `PROD${nextNum.toString().padStart(5, '0')}`;
     // Increment and save for next use
     settings.currentProductCode = nextNum + 1;
@@ -467,7 +508,7 @@ class StorageService {
         settings.currentInvoiceNumber++;
         folio = `${startParts[0]}-${startParts[1]}-${startParts[2]}-${nextNum.toString().padStart(8, '0')}`;
       } else {
-        const nextNum = settings.currentTicketNumber || 1;
+        const nextNum = await this.recalculateNextTicketNumber();
         settings.currentTicketNumber = nextNum + 1;
         folio = `T-${nextNum.toString().padStart(6, '0')}`;
       }
@@ -485,6 +526,7 @@ class StorageService {
         paymentMethod: data.paymentMethod || 'Efectivo',
         paymentDetails: data.paymentDetails,
         customerId: data.customerId,
+        customerName: data.customerName,
         userId: data.userId || 'admin',
         branchId: data.branchId || 'main',
         status: 'active',
@@ -550,6 +592,62 @@ class StorageService {
       if (settings.autoSync) this.triggerAutoSync();
       return newSale;
     });
+  }
+
+  // Fix duplicate folios in existing orders/sales
+  async fixDuplicateFolios(): Promise<{ fixed: number, details: string[] }> {
+    const sales = await db_engine.sales.toArray();
+    const folioMap = new Map<string, Sale[]>();
+
+    // Group sales by folio
+    for (const sale of sales) {
+      if (!sale.folio) continue;
+      const existing = folioMap.get(sale.folio) || [];
+      existing.push(sale);
+      folioMap.set(sale.folio, existing);
+    }
+
+    const settings = await this.getSettings();
+    let maxTicket = settings.currentTicketNumber || 1;
+    const details: string[] = [];
+    let fixed = 0;
+
+    // Find max ticket number first
+    for (const sale of sales) {
+      if (sale.folio?.startsWith('T-')) {
+        const numStr = sale.folio.replace('T-', '');
+        const num = parseInt(numStr, 10);
+        if (!isNaN(num) && num >= maxTicket) {
+          maxTicket = num + 1;
+        }
+      }
+    }
+
+    // Fix duplicates
+    for (const [folio, duplicates] of folioMap.entries()) {
+      if (duplicates.length > 1 && folio.startsWith('T-')) {
+        // Keep the first one, reassign the rest
+        for (let i = 1; i < duplicates.length; i++) {
+          const sale = duplicates[i];
+          const newFolio = `T-${maxTicket.toString().padStart(6, '0')}`;
+          const oldFolio = sale.folio;
+          sale.folio = newFolio;
+          await db_engine.sales.put(sale);
+          maxTicket++;
+          fixed++;
+          details.push(`${oldFolio} → ${newFolio} (${sale.id})`);
+        }
+      }
+    }
+
+    // Update settings with new max
+    if (fixed > 0) {
+      settings.currentTicketNumber = maxTicket;
+      await this.saveSettings(settings);
+      console.log(`🔧 Fixed ${fixed} duplicate folios:`, details);
+    }
+
+    return { fixed, details };
   }
 
   async cancelSale(saleId: string, userId: string = 'system', refundType: 'cash' | 'creditNote' = 'creditNote') {

@@ -337,6 +337,7 @@ export const POS: React.FC<POSProps> = ({
                         paymentMethod === 'Transferencia' ? { transfer: grossPayToday - (creditNoteValid ? creditNoteAmount : 0), transferRef: paymentDetails.transferRef, bank: paymentDetails.bank, creditNote: creditNoteValid ? creditNoteAmount : 0, creditNoteReference: creditNoteFolio } :
                             paymentDetails, // For Mixed and Credit
                 customerId: selectedCustomer?.id,
+                customerName: selectedCustomer?.name || 'Consumidor Final',
                 userId: user?.id || 'admin',
                 branchId: branchId,
                 documentType,
