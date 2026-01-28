@@ -318,3 +318,6 @@ ALTER TABLE sales ADD COLUMN IF NOT EXISTS "balance" NUMERIC DEFAULT 0;
 -- Dark mode support
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS "darkMode" BOOLEAN DEFAULT false;
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS "enableBeep" BOOLEAN DEFAULT true;
+
+-- Customer name directly in sales (for print/display when customer not synced)
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS "customerName" TEXT;
