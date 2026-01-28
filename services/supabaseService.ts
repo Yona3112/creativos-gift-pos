@@ -131,20 +131,36 @@ export class SupabaseService {
             if (table.data && table.data.length > 0) {
                 console.log(`📤 Sincronizando ${table.name}: ${table.data.length} registros...`);
 
-                // Handle tables with unique constraints specially
-                let upsertOptions: any = {};
-                if (table.name === 'users') {
-                    // Users have unique email constraint, use onConflict to update by id
-                    upsertOptions = { onConflict: 'id', ignoreDuplicates: true };
-                }
+                try {
+                    // Handle users table specially due to unique email constraint
+                    if (table.name === 'users') {
+                        let successCount = 0;
+                        for (const user of table.data) {
+                            try {
+                                const { error } = await client.from('users').upsert(user, { onConflict: 'id' });
+                                if (!error) successCount++;
+                            } catch (e) {
+                                // Skip problematic users silently
+                            }
+                        }
+                        console.log(`✅ users sincronizado: ${successCount}/${table.data.length}`);
+                        results['users'] = `Sincronizado (${successCount}/${table.data.length})`;
+                        continue;
+                    }
 
-                const { error, data: responseData } = await client.from(table.name).upsert(table.data, upsertOptions);
-                if (error) {
-                    console.error(`❌ Error en ${table.name}:`, error);
-                    results[table.name] = `Error: ${error.message}`;
-                } else {
-                    console.log(`✅ ${table.name} sincronizado`);
-                    results[table.name] = 'Sincronizado';
+                    // Normal upsert for other tables
+                    const { error, data: responseData } = await client.from(table.name).upsert(table.data);
+                    if (error) {
+                        console.error(`❌ Error en ${table.name}:`, error);
+                        results[table.name] = `Error: ${error.message}`;
+                    } else {
+                        console.log(`✅ ${table.name} sincronizado`);
+                        results[table.name] = 'Sincronizado';
+                    }
+                } catch (tableError: any) {
+                    console.error(`❌ Exception en ${table.name}:`, tableError);
+                    results[table.name] = `Exception: ${tableError.message}`;
+                    // Continue with next table, don't break the entire sync
                 }
             } else {
                 console.log(`⏭️ ${table.name}: sin datos para sincronizar`);
