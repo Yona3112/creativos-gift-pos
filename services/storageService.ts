@@ -479,6 +479,11 @@ class StorageService {
   // --- SALES ---
   async getSales(): Promise<Sale[]> { return await db_engine.sales.toArray(); }
 
+  // Insert a sale from cloud sync (without triggering autoSync back to cloud)
+  async insertSaleFromCloud(sale: Sale): Promise<void> {
+    await db_engine.sales.put(sale);
+  }
+
   async createSale(data: Partial<Sale> & { creditData?: any }): Promise<Sale> {
     return await db_engine.transaction('rw', [db_engine.sales, db_engine.products, db_engine.inventoryHistory, db_engine.customers, db_engine.settings, db_engine.credits], async () => {
       const settings = await this.getSettings();

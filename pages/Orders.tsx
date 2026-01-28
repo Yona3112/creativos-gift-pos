@@ -64,11 +64,12 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
         const pollFromCloud = async () => {
             try {
                 const currentSettings = await db.getSettings();
-                if (!currentSettings?.supabaseUrl || !currentSettings?.supabaseKey || !currentSettings?.autoSync) {
-                    return; // Skip polling if Supabase not configured or autoSync disabled
+                // Only need Supabase configured, no autoSync flag required
+                if (!currentSettings?.supabaseUrl || !currentSettings?.supabaseKey) {
+                    return; // Skip polling if Supabase not configured
                 }
 
-                // Pull only sales data from Supabase
+                // Pull sales data from Supabase
                 const { SupabaseService } = await import('../services/supabaseService');
                 const client = await SupabaseService.getClient();
                 if (!client) return;
@@ -80,28 +81,41 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                 }
 
                 if (cloudSales && isMounted.current) {
-                    // Merge cloud sales into local DB (only update existing, don't create new)
+                    let hasChanges = false;
+
+                    // Get fresh local sales
+                    const localSales = await db.getSales();
+
                     for (const cloudSale of cloudSales) {
-                        const localSale = sales.find(s => s.id === cloudSale.id);
-                        if (localSale && cloudSale.fulfillmentStatus !== localSale.fulfillmentStatus) {
+                        const localSale = localSales.find(s => s.id === cloudSale.id);
+
+                        if (!localSale) {
+                            // NEW ORDER from cloud - insert it locally
+                            await db.insertSaleFromCloud(cloudSale);
+                            hasChanges = true;
+                            console.log("📥 Nuevo pedido descargado:", cloudSale.folio);
+                        } else if (cloudSale.fulfillmentStatus !== localSale.fulfillmentStatus) {
                             // Status changed in cloud, update local
                             await db.updateSaleStatus(cloudSale.id, cloudSale.fulfillmentStatus, cloudSale.shippingDetails);
+                            hasChanges = true;
                         }
                     }
 
-                    // Refresh UI
-                    if (isMounted.current) {
+                    // Refresh UI if there were changes
+                    if (hasChanges && isMounted.current) {
                         await refresh();
-                        setLastSync(new Date().toLocaleTimeString());
                     }
+                    setLastSync(new Date().toLocaleTimeString());
                 }
             } catch (e) {
                 console.warn("⚠️ Polling exception:", e);
             }
         };
 
-        // Start polling
+        // Start polling immediately and then every 30 seconds
+        pollFromCloud(); // Run immediately on mount
         pollInterval = setInterval(pollFromCloud, 30000); // Every 30 seconds
+
 
         return () => {
             if (pollInterval) clearInterval(pollInterval);
