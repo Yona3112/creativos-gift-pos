@@ -25,6 +25,7 @@ export const POS: React.FC<POSProps> = ({
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState<string>('all');
     const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+    const [isConsumidorFinal, setIsConsumidorFinal] = useState(false);
     const [customerSearch, setCustomerSearch] = useState('');
     const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
 
@@ -175,7 +176,13 @@ export const POS: React.FC<POSProps> = ({
         if (loadedQuote) {
             setCart(loadedQuote.items);
             const cust = customers.find(c => c.id === loadedQuote.customerId);
-            if (cust) setSelectedCustomer(cust);
+            if (cust) {
+                setSelectedCustomer(cust);
+                setIsConsumidorFinal(false);
+            } else if (loadedQuote.customerName === 'Consumidor Final') {
+                setIsConsumidorFinal(true);
+                setSelectedCustomer(null);
+            }
             setGlobalDiscount(loadedQuote.discount?.toString() || '');
             if (onQuoteProcessed) onQuoteProcessed();
         }
@@ -335,7 +342,13 @@ export const POS: React.FC<POSProps> = ({
     const handleCheckout = async () => {
         if (cart.length === 0 || isProcessing) return;
 
-        // Validación crítica: ventas a crédito requieren cliente
+        // Validación crítica: Debe seleccionar un cliente o Consumidor Final
+        if (!selectedCustomer && !isConsumidorFinal) {
+            showToast('Debe seleccionar un cliente o Consumidor Final para continuar.', 'warning');
+            return;
+        }
+
+        // Validación crítica: ventas a crédito requieren cliente real
         if (paymentMethod === 'Crédito' && !selectedCustomer) {
             showToast('Debe seleccionar un cliente para ventas a crédito.', 'warning');
             return;
@@ -359,7 +372,7 @@ export const POS: React.FC<POSProps> = ({
                         paymentMethod === 'Transferencia' ? { transfer: grossPayToday - (creditNoteValid ? creditNoteAmount : 0), transferRef: paymentDetails.transferRef, bank: paymentDetails.bank, creditNote: creditNoteValid ? creditNoteAmount : 0, creditNoteReference: creditNoteFolio } :
                             paymentDetails, // For Mixed and Credit
                 customerId: selectedCustomer?.id,
-                customerName: selectedCustomer?.name || 'Consumidor Final',
+                customerName: selectedCustomer?.name || (isConsumidorFinal ? 'Consumidor Final' : undefined),
                 userId: user?.id || 'admin',
                 branchId: branchId,
                 documentType,
@@ -392,6 +405,7 @@ export const POS: React.FC<POSProps> = ({
 
             setCart([]);
             setSelectedCustomer(null);
+            setIsConsumidorFinal(false);
             setGlobalDiscount('');
             setReceivedAmount('');
             setDepositAmount('');
@@ -425,6 +439,7 @@ export const POS: React.FC<POSProps> = ({
         } as Customer;
         await db.saveCustomer(newCust);
         setSelectedCustomer(newCust);
+        setIsConsumidorFinal(false);
         setIsNewCustomerModalOpen(false);
         if (onRefreshData) onRefreshData();
     };
@@ -440,6 +455,7 @@ export const POS: React.FC<POSProps> = ({
             folio,
             date: new Date().toISOString(),
             customerId: selectedCustomer?.id,
+            customerName: selectedCustomer?.name || (isConsumidorFinal ? 'Consumidor Final' : undefined),
             items: cart,
             subtotal,
             taxAmount,
@@ -456,6 +472,7 @@ export const POS: React.FC<POSProps> = ({
         // Clear cart and close modal
         setCart([]);
         setSelectedCustomer(null);
+        setIsConsumidorFinal(false);
         setGlobalDiscount('');
         setIsQuoteModalOpen(false);
 
@@ -592,15 +609,15 @@ export const POS: React.FC<POSProps> = ({
                         <div className="relative flex-1">
                             <Input
                                 icon="search"
-                                placeholder={selectedCustomer ? selectedCustomer.name : "Buscar cliente..."}
+                                placeholder={isConsumidorFinal ? "Consumidor Final" : (selectedCustomer ? selectedCustomer.name : "Seleccionar cliente...")}
                                 value={customerSearch}
                                 onChange={e => setCustomerSearch(e.target.value)}
                                 onFocus={() => setShowCustomerDropdown(true)}
                                 className="!py-2"
                             />
-                            {selectedCustomer && (
+                            {(selectedCustomer || isConsumidorFinal) && (
                                 <button
-                                    onClick={() => { setSelectedCustomer(null); setCustomerSearch(''); }}
+                                    onClick={() => { setSelectedCustomer(null); setIsConsumidorFinal(false); setCustomerSearch(''); }}
                                     className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500"
                                 >
                                     <i className="fas fa-times"></i>
@@ -609,15 +626,16 @@ export const POS: React.FC<POSProps> = ({
                             {showCustomerDropdown && (
                                 <div className="absolute top-full left-0 right-0 bg-white rounded-xl shadow-lg border mt-1 z-50 max-h-48 overflow-y-auto">
                                     <button
-                                        onClick={() => { setSelectedCustomer(null); setShowCustomerDropdown(false); setCustomerSearch(''); }}
-                                        className="w-full p-3 text-left text-sm hover:bg-gray-50 border-b font-medium text-gray-500"
+                                        onClick={() => { setSelectedCustomer(null); setIsConsumidorFinal(true); setShowCustomerDropdown(false); setCustomerSearch(''); }}
+                                        className="w-full p-3 text-left text-sm hover:bg-primary/5 border-b font-bold text-primary flex items-center justify-between"
                                     >
-                                        <i className="fas fa-user-slash mr-2"></i>Consumidor Final
+                                        <span><i className="fas fa-user-check mr-2"></i>Consumidor Final</span>
+                                        <Badge variant="primary" className="text-[10px]">Opción Rápida</Badge>
                                     </button>
                                     {getFilteredCustomers().map(c => (
                                         <button
                                             key={c.id}
-                                            onClick={() => { setSelectedCustomer(c); setShowCustomerDropdown(false); setCustomerSearch(''); }}
+                                            onClick={() => { setSelectedCustomer(c); setIsConsumidorFinal(false); setShowCustomerDropdown(false); setCustomerSearch(''); }}
                                             className="w-full p-3 text-left text-sm hover:bg-primary/5 flex justify-between items-center"
                                         >
                                             <div>
@@ -638,8 +656,10 @@ export const POS: React.FC<POSProps> = ({
                     {selectedCustomer && (
                         <div className="flex flex-col gap-2 p-2 bg-primary/5 rounded-xl border border-primary/10">
                             <div className="flex justify-between items-center">
-                                <span className="text-xs font-bold text-primary">Puntos: {selectedCustomer.points}</span>
-                                <Badge variant="info" className="text-[10px]">{selectedCustomer.level}</Badge>
+                                <span className="text-xs font-bold text-primary">
+                                    {selectedCustomer ? `Puntos: ${selectedCustomer.points}` : 'Cliente Seleccionado'}
+                                </span>
+                                <Badge variant="info" className="text-[10px]">{selectedCustomer?.level || 'General'}</Badge>
                             </div>
                             {selectedCustomer.points > 0 && (
                                 <div className="flex items-center gap-2">
@@ -712,8 +732,8 @@ export const POS: React.FC<POSProps> = ({
                         <Button variant="secondary" className="flex-1" disabled={cart.length === 0} onClick={() => setIsQuoteModalOpen(true)}>
                             <i className="fas fa-file-alt mr-2"></i>Cotizar
                         </Button>
-                        <Button className="flex-1 py-4" disabled={cart.length === 0} onClick={() => setIsPaymentModalOpen(true)}>
-                            <i className="fas fa-cash-register mr-2"></i>Cobrar
+                        <Button className="flex-1 py-4" disabled={cart.length === 0 || (!selectedCustomer && !isConsumidorFinal)} onClick={() => setIsPaymentModalOpen(true)}>
+                            <i className="fas fa-cash-register mr-2"></i>{(!selectedCustomer && !isConsumidorFinal) ? 'Elija Cliente' : 'Cobrar'}
                         </Button>
                     </div>
                 </div>
@@ -727,7 +747,9 @@ export const POS: React.FC<POSProps> = ({
                     className="w-full flex items-center justify-center gap-2 px-3 py-2 mb-2 bg-gray-100 rounded-xl text-sm font-bold text-gray-700"
                 >
                     <i className="fas fa-user text-primary"></i>
-                    <span className="truncate">{selectedCustomer?.name || 'Seleccionar Cliente'}</span>
+                    <span className={`truncate ${(!selectedCustomer && !isConsumidorFinal) ? 'text-red-500' : ''}`}>
+                        {selectedCustomer?.name || (isConsumidorFinal ? 'Consumidor Final' : 'Seleccionar Cliente')}
+                    </span>
                     <i className="fas fa-chevron-right text-gray-400 text-xs ml-auto"></i>
                 </button>
                 <div className="flex items-center justify-between">
@@ -741,7 +763,9 @@ export const POS: React.FC<POSProps> = ({
                             <p className="text-lg font-black text-gray-800 leading-none">L {total.toFixed(2)}</p>
                         </div>
                     </div>
-                    <Button onClick={() => setIsPaymentModalOpen(true)} disabled={cart.length === 0} className="px-8">Cobrar</Button>
+                    <Button onClick={() => setIsPaymentModalOpen(true)} disabled={cart.length === 0 || (!selectedCustomer && !isConsumidorFinal)} className="px-8">
+                        {(!selectedCustomer && !isConsumidorFinal) ? 'Falta Cliente' : 'Cobrar'}
+                    </Button>
                 </div>
             </div>
 
