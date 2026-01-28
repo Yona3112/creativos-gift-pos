@@ -25,6 +25,8 @@ export const POS: React.FC<POSProps> = ({
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState<string>('all');
     const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+    const [customerSearch, setCustomerSearch] = useState('');
+    const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
 
     // Cash Cut Blocking State
     const [cashCutBlocked, setCashCutBlocked] = useState(false);
@@ -106,6 +108,26 @@ export const POS: React.FC<POSProps> = ({
 
     const totalDiscount = Number(((parseFloat(globalDiscount) || 0) + pointsDiscount).toFixed(2));
     const total = Math.max(0, Number((totalWithTax - totalDiscount).toFixed(2)));
+
+    // Customer search and filter function
+    const getFilteredCustomers = () => {
+        const term = customerSearch.toLowerCase().trim();
+        if (term) {
+            // Search by name, RTN, DNI, or phone
+            return customers
+                .filter(c =>
+                    c.name?.toLowerCase().includes(term) ||
+                    c.rtn?.toLowerCase().includes(term) ||
+                    c.dni?.toLowerCase().includes(term) ||
+                    c.phone?.includes(term)
+                )
+                .slice(0, 5); // Max 5 results when searching
+        }
+        // No search term: show top 5 buyers by totalSpent
+        return [...customers]
+            .sort((a, b) => (b.totalSpent || 0) - (a.totalSpent || 0))
+            .slice(0, 5);
+    };
 
     // Calculate profit margin and detect negative margins
     const marginAnalysis = useMemo(() => {
@@ -567,10 +589,50 @@ export const POS: React.FC<POSProps> = ({
 
                 <div className="p-4 border-b space-y-2">
                     <div className="flex gap-2">
-                        <select className="flex-1 p-3 rounded-xl bg-gray-100 text-sm font-bold border-none outline-none" value={selectedCustomer?.id || ''} onChange={e => setSelectedCustomer(customers.find(c => c.id === e.target.value) || null)}>
-                            <option value="">Consumidor Final</option>
-                            {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                        </select>
+                        <div className="relative flex-1">
+                            <Input
+                                icon="search"
+                                placeholder={selectedCustomer ? selectedCustomer.name : "Buscar cliente..."}
+                                value={customerSearch}
+                                onChange={e => setCustomerSearch(e.target.value)}
+                                onFocus={() => setShowCustomerDropdown(true)}
+                                className="!py-2"
+                            />
+                            {selectedCustomer && (
+                                <button
+                                    onClick={() => { setSelectedCustomer(null); setCustomerSearch(''); }}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500"
+                                >
+                                    <i className="fas fa-times"></i>
+                                </button>
+                            )}
+                            {showCustomerDropdown && (
+                                <div className="absolute top-full left-0 right-0 bg-white rounded-xl shadow-lg border mt-1 z-50 max-h-48 overflow-y-auto">
+                                    <button
+                                        onClick={() => { setSelectedCustomer(null); setShowCustomerDropdown(false); setCustomerSearch(''); }}
+                                        className="w-full p-3 text-left text-sm hover:bg-gray-50 border-b font-medium text-gray-500"
+                                    >
+                                        <i className="fas fa-user-slash mr-2"></i>Consumidor Final
+                                    </button>
+                                    {getFilteredCustomers().map(c => (
+                                        <button
+                                            key={c.id}
+                                            onClick={() => { setSelectedCustomer(c); setShowCustomerDropdown(false); setCustomerSearch(''); }}
+                                            className="w-full p-3 text-left text-sm hover:bg-primary/5 flex justify-between items-center"
+                                        >
+                                            <div>
+                                                <span className="font-bold text-gray-800">{c.name}</span>
+                                                {c.phone && <span className="text-[10px] text-gray-400 ml-2">{c.phone}</span>}
+                                            </div>
+                                            <span className="text-[10px] text-primary font-bold">L {(c.totalSpent || 0).toFixed(0)}</span>
+                                        </button>
+                                    ))}
+                                    {getFilteredCustomers().length === 0 && customerSearch && (
+                                        <div className="p-3 text-center text-gray-400 text-sm">No encontrado</div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
                         <Button variant="secondary" onClick={() => setIsNewCustomerModalOpen(true)}><i className="fas fa-user-plus"></i></Button>
                     </div>
                     {selectedCustomer && (
