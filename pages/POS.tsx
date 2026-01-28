@@ -374,6 +374,7 @@ export const POS: React.FC<POSProps> = ({
             setReceivedAmount('');
             setDepositAmount('');
             setIsPaymentModalOpen(false);
+            setIsCartOpen(false);  // Close cart overlay after sale
             // Reset credit note state
             setCreditNoteFolio('');
             setCreditNoteAmount(0);
@@ -1009,8 +1010,9 @@ export const POS: React.FC<POSProps> = ({
                     <div className="flex flex-col gap-3">
                         <Button className="w-full py-4 text-lg" icon="print" onClick={async () => {
                             if (lastSale) {
-                                // Generate ticket HTML for both copies
-                                const htmlOriginal = await db.generateTicketHTML(lastSale, selectedCustomer || undefined);
+                                // Use customer name stored in sale record (not selectedCustomer which is null)
+                                const customer = lastSale.customerName ? { name: lastSale.customerName } as Customer : undefined;
+                                const htmlOriginal = await db.generateTicketHTML(lastSale, customer);
 
                                 // Print Customer Copy (ORIGINAL)
                                 const winCliente = window.open('', '', 'width=400,height=600');

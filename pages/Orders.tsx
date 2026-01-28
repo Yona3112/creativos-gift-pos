@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Sale, Customer, FulfillmentStatus, ShippingDetails, CompanySettings, PaymentDetails } from '../types';
 import { Card, Button, Input, Badge, Modal, showToast } from '../components/UIComponents';
 import { db } from '../services/storageService';
@@ -16,6 +16,7 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
     const [viewMode, setViewMode] = useState<'board' | 'list'>('board');
     const [statusFilter, setStatusFilter] = useState<FulfillmentStatus | 'all'>('all');
     const [dateFilter, setDateFilter] = useState('');
+    const [lastSync, setLastSync] = useState<string>('');
 
     // Edit Modal State
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -48,9 +49,64 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
     const [generateInvoice, setGenerateInvoice] = useState(true); // Default to Invoice when completing
     const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
+    // Polling ref to track if component is mounted
+    const isMounted = useRef(true);
+
     useEffect(() => {
         refresh();
+        return () => { isMounted.current = false; };
     }, []);
+
+    // Polling: Auto-refresh orders every 30 seconds from Supabase
+    useEffect(() => {
+        let pollInterval: any = null;
+
+        const pollFromCloud = async () => {
+            try {
+                const currentSettings = await db.getSettings();
+                if (!currentSettings?.supabaseUrl || !currentSettings?.supabaseKey || !currentSettings?.autoSync) {
+                    return; // Skip polling if Supabase not configured or autoSync disabled
+                }
+
+                // Pull only sales data from Supabase
+                const { SupabaseService } = await import('../services/supabaseService');
+                const client = await SupabaseService.getClient();
+                if (!client) return;
+
+                const { data: cloudSales, error } = await client.from('sales').select('*');
+                if (error) {
+                    console.warn("⚠️ Polling error:", error.message);
+                    return;
+                }
+
+                if (cloudSales && isMounted.current) {
+                    // Merge cloud sales into local DB (only update existing, don't create new)
+                    for (const cloudSale of cloudSales) {
+                        const localSale = sales.find(s => s.id === cloudSale.id);
+                        if (localSale && cloudSale.fulfillmentStatus !== localSale.fulfillmentStatus) {
+                            // Status changed in cloud, update local
+                            await db.updateSaleStatus(cloudSale.id, cloudSale.fulfillmentStatus, cloudSale.shippingDetails);
+                        }
+                    }
+
+                    // Refresh UI
+                    if (isMounted.current) {
+                        await refresh();
+                        setLastSync(new Date().toLocaleTimeString());
+                    }
+                }
+            } catch (e) {
+                console.warn("⚠️ Polling exception:", e);
+            }
+        };
+
+        // Start polling
+        pollInterval = setInterval(pollFromCloud, 30000); // Every 30 seconds
+
+        return () => {
+            if (pollInterval) clearInterval(pollInterval);
+        };
+    }, [sales]);
 
     const refresh = async () => {
         const allSales = await db.getSales();
@@ -356,6 +412,11 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
             <div className="flex flex-col sm:flex-row justify-between items-center gap-4 shrink-0">
                 <div className="flex items-center gap-3">
                     <h1 className="text-2xl font-bold text-gray-800">Gestión de Pedidos</h1>
+                    {lastSync && (
+                        <span className="text-[10px] text-gray-400 bg-gray-100 px-2 py-1 rounded-full flex items-center gap-1">
+                            <i className="fas fa-sync-alt text-green-500"></i> {lastSync}
+                        </span>
+                    )}
                     <div className="bg-gray-100 p-1 rounded-lg flex">
                         <button
                             onClick={() => setViewMode('board')}
