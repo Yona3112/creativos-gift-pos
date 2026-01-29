@@ -545,7 +545,8 @@ class StorageService {
         shippingDetails: data.shippingDetails,
         isOrder: data.isOrder,
         deposit: data.deposit,
-        balance: data.balance
+        balance: data.balance,
+        updatedAt: this.getLocalNowISO() // Set initial timestamp
       };
 
       await db_engine.sales.add(newSale);
@@ -1119,11 +1120,31 @@ class StorageService {
       }
     };
 
+    const mergeSalesWithTimestampCheck = async (remoteSales: Sale[]) => {
+      for (const remoteSale of remoteSales) {
+        const localSale = await db_engine.sales.get(remoteSale.id);
+        if (!localSale) {
+          await db_engine.sales.put(remoteSale);
+          console.log(`📥 Nuevo pedido descargado: ${remoteSale.folio}`);
+        } else {
+          const remoteUpdatedAt = remoteSale.updatedAt ? new Date(remoteSale.updatedAt).getTime() : 0;
+          const localUpdatedAt = localSale.updatedAt ? new Date(localSale.updatedAt).getTime() : 0;
+
+          if (remoteUpdatedAt > localUpdatedAt) {
+            await db_engine.sales.put(remoteSale);
+            console.log(`☁️ Pedido actualizado desde nube: ${remoteSale.folio}`);
+          } else {
+            console.log(`🔒 Pedido local ${localSale.folio} conservado (más reciente o igual)`);
+          }
+        }
+      }
+    };
+
     // Use smart merge for products
     if (data.products) await mergeProductsWithInventoryCheck(data.products);
     if (data.categories) await mergeTable(db_engine.categories, data.categories);
     if (data.customers) await mergeTable(db_engine.customers, data.customers);
-    if (data.sales) await mergeTable(db_engine.sales, data.sales);
+    if (data.sales) await mergeSalesWithTimestampCheck(data.sales);
     if (data.users) await mergeTable(db_engine.users, data.users);
     if (data.branches) await mergeTable(db_engine.branches, data.branches);
     if (data.credits) await mergeTable(db_engine.credits, data.credits);
@@ -1330,6 +1351,10 @@ class StorageService {
 
     sale.fulfillmentStatus = status;
     if (shippingDetails) sale.shippingDetails = { ...sale.shippingDetails, ...shippingDetails } as ShippingDetails;
+
+    // CRITICAL: Update timestamp for sync
+    sale.updatedAt = this.getLocalNowISO();
+
     await db_engine.sales.put(sale);
     const settings = await this.getSettings();
     if (settings.autoSync) this.triggerAutoSync();
@@ -1393,6 +1418,9 @@ class StorageService {
     // Actualizar detalles de pago (append note or merge)
     // Simple merge for now
     sale.paymentDetails = { ...sale.paymentDetails, ...paymentDetails };
+
+    // CRITICAL: Update timestamp for sync
+    sale.updatedAt = this.getLocalNowISO();
 
     await db_engine.sales.put(sale);
     const settings = await this.getSettings();

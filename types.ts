@@ -176,6 +176,7 @@ export interface Sale {
   isOrder?: boolean;
   deposit?: number;
   balance?: number;
+  updatedAt?: string; // Timestamp for sync tracking
 }
 
 export interface CreditNote {

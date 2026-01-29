@@ -158,9 +158,9 @@ export class SupabaseService {
                         results[table.name] = 'Sincronizado';
                     }
                 } catch (tableError: any) {
-                    console.error(`❌ Exception en ${table.name}:`, tableError);
-                    results[table.name] = `Exception: ${tableError.message}`;
-                    // Continue with next table, don't break the entire sync
+                    console.error(`❌ Fallo crítico sincronizando tabla ${table.name}:`, tableError);
+                    results[table.name] = `Fallo: ${tableError.message || 'Error desconocido'}`;
+                    // Sigue con la siguiente tabla en lugar de detener todo el proceso
                 }
             } else {
                 console.log(`⏭️ ${table.name}: sin datos para sincronizar`);
