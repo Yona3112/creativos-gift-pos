@@ -108,14 +108,9 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                             const localTime = localSale.updatedAt ? new Date(localSale.updatedAt).getTime() : 0;
 
                             if (cloudTime > localTime) {
-                                if (cloudSale.fulfillmentStatus !== localSale.fulfillmentStatus ||
-                                    JSON.stringify(cloudSale.shippingDetails) !== JSON.stringify(localSale.shippingDetails) ||
-                                    cloudSale.balance !== localSale.balance) {
-
-                                    await db.insertSaleFromCloud(cloudSale);
-                                    hasChanges = true;
-                                    console.log(`☁️ Pedido actualizado desde nube: ${cloudSale.folio}`);
-                                }
+                                await db.insertSaleFromCloud(cloudSale);
+                                hasChanges = true;
+                                console.log(`☁️ Pedido actualizado automáticamente: ${cloudSale.folio}`);
                             }
                         }
                     }
@@ -139,7 +134,7 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
             if (pollInterval) clearInterval(pollInterval);
         };
 
-    }, [sales]);
+    }, []); // Empty dependency array: run once on mount
 
     const handleManualSync = async () => {
         if (isSyncing) return;
