@@ -17,6 +17,7 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
     const [statusFilter, setStatusFilter] = useState<FulfillmentStatus | 'all'>('all');
     const [dateFilter, setDateFilter] = useState('');
     const [lastSync, setLastSync] = useState<string>('');
+    const [isSyncing, setIsSyncing] = useState(false);
 
     // Edit Modal State
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -101,10 +102,22 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                             await db.insertSaleFromCloud(cloudSale);
                             hasChanges = true;
                             console.log("📥 Nuevo pedido descargado:", cloudSale.folio);
+                        } else {
+                            // SMART SYNC: Update only if cloud is newer
+                            const cloudTime = cloudSale.updatedAt ? new Date(cloudSale.updatedAt).getTime() : 0;
+                            const localTime = localSale.updatedAt ? new Date(localSale.updatedAt).getTime() : 0;
+
+                            if (cloudTime > localTime) {
+                                if (cloudSale.fulfillmentStatus !== localSale.fulfillmentStatus ||
+                                    JSON.stringify(cloudSale.shippingDetails) !== JSON.stringify(localSale.shippingDetails) ||
+                                    cloudSale.balance !== localSale.balance) {
+
+                                    await db.insertSaleFromCloud(cloudSale);
+                                    hasChanges = true;
+                                    console.log(`☁️ Pedido actualizado desde nube: ${cloudSale.folio}`);
+                                }
+                            }
                         }
-                        // REMOVED: No longer overwrite local status from cloud
-                        // This prevents the 30-second revert issue
-                        // Users can manually refresh if they need to pull changes from other devices
                     }
 
                     // Refresh UI if there were changes
@@ -118,15 +131,42 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
             }
         };
 
-        // Start polling immediately and then every 30 seconds
-        pollFromCloud(); // Run immediately on mount
-        pollInterval = setInterval(pollFromCloud, 30000); // Every 30 seconds
-
+        // Start polling immediately and then every 10 seconds
+        pollFromCloud();
+        pollInterval = setInterval(pollFromCloud, 10000);
 
         return () => {
             if (pollInterval) clearInterval(pollInterval);
         };
+
     }, [sales]);
+
+    const handleManualSync = async () => {
+        if (isSyncing) return;
+        setIsSyncing(true);
+        try {
+            console.log("🔄 Iniciando sincronización manual...");
+            const { SupabaseService } = await import('../services/supabaseService');
+            const sett = await db.getSettings();
+            if (sett.supabaseUrl && sett.supabaseKey) {
+                await SupabaseService.syncAll();
+                await refresh();
+                showToast("Sincronización completada", "success");
+            } else {
+                showToast("Supabase no configurado", "warning");
+            }
+        } catch (e) {
+            console.error("❌ Error en sync manual:", e);
+            showToast("Fallo al sincronizar", "error");
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
+    // Force sync on module mount
+    useEffect(() => {
+        handleManualSync();
+    }, []);
 
     const refresh = async () => {
         const allSales = await db.getSales();
@@ -511,6 +551,14 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                             title="Vista Lista"
                         >
                             <i className="fas fa-list"></i>
+                        </button>
+                        <button
+                            onClick={handleManualSync}
+                            disabled={isSyncing}
+                            className={`ml-2 p-2 rounded-md text-sm font-bold transition-all ${isSyncing ? 'bg-primary/10 text-primary animate-spin-slow' : 'bg-green-50 text-green-600 hover:bg-green-100'}`}
+                            title="Sincronizar ahora"
+                        >
+                            <i className={`fas fa-${isSyncing ? 'sync-alt' : 'cloud-download-alt'}`}></i>
                         </button>
                     </div>
                 </div>
