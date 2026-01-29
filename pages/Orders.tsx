@@ -70,6 +70,11 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                 return;
             }
 
+            // OPTIMIZATION: Don't poll if the tab is not visible (minimized or in background)
+            if (document.visibilityState !== 'visible') {
+                return;
+            }
+
             try {
                 const currentSettings = await db.getSettings();
                 // Only need Supabase configured, no autoSync flag required
@@ -77,12 +82,20 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                     return; // Skip polling if Supabase not configured
                 }
 
-                // Pull sales data from Supabase
                 const { SupabaseService } = await import('../services/supabaseService');
                 const client = await SupabaseService.getClient();
                 if (!client) return;
 
-                const { data: cloudSales, error } = await client.from('sales').select('*');
+                // OPTIMIZATION: Only fetch orders modified in the last 15 days
+                // This significantly reduces data egress (consumption)
+                const cutoff = new Date();
+                cutoff.setDate(cutoff.getDate() - 15);
+                const cutoffStr = cutoff.toISOString();
+
+                const { data: cloudSales, error } = await client
+                    .from('sales')
+                    .select('*')
+                    .gte('updatedAt', cutoffStr);
                 if (error) {
                     console.warn("⚠️ Polling error:", error.message);
                     return;
