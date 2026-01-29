@@ -130,9 +130,24 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
 
     const refresh = async () => {
         const allSales = await db.getSales();
-        setSales(allSales.filter(s => s.status === 'active'));
+        setSales([...allSales.filter(s => s.status === 'active')]); // Create new array to force re-render
         setCustomers(await db.getCustomers());
         setSettings(await db.getSettings());
+    };
+
+    // Optimistic UI update - update local state immediately without waiting for DB
+    const updateOrderInState = (orderId: string, newStatus: FulfillmentStatus, newShippingDetails?: ShippingDetails) => {
+        setSales(prevSales =>
+            prevSales.map(sale =>
+                sale.id === orderId
+                    ? {
+                        ...sale,
+                        fulfillmentStatus: newStatus,
+                        shippingDetails: newShippingDetails || sale.shippingDetails
+                    }
+                    : sale
+            )
+        );
     };
 
     const getCustomerName = (order: Sale) => order.customerName || customers.find(c => c.id === order.customerId)?.name || 'Consumidor Final';
@@ -171,24 +186,31 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
 
             try {
                 console.log(`📤 Cambio rápido: ${order.folio} ${order.fulfillmentStatus} → ${newStatus}`);
+
+                // OPTIMISTIC UI UPDATE: Show change immediately
+                updateOrderInState(order.id, newStatus);
+
                 await db.updateSaleStatus(order.id, newStatus);
 
-                // IMMEDIATE SYNC: Push to cloud right away
-                try {
-                    const settings = await db.getSettings();
-                    if (settings.supabaseUrl && settings.supabaseKey) {
-                        const { SupabaseService } = await import('../services/supabaseService');
-                        await SupabaseService.syncAll();
-                        console.log('☁️ Sincronizado con nube');
+                // BACKGROUND SYNC: Push to cloud (don't await - let it happen in background)
+                (async () => {
+                    try {
+                        const settings = await db.getSettings();
+                        if (settings.supabaseUrl && settings.supabaseKey) {
+                            const { SupabaseService } = await import('../services/supabaseService');
+                            await SupabaseService.syncAll();
+                            console.log('☁️ Sincronizado con nube');
+                        }
+                    } catch (syncErr) {
+                        console.warn('⚠️ Sync pendiente:', syncErr);
                     }
-                } catch (syncErr) {
-                    console.warn('⚠️ Sync pendiente:', syncErr);
-                }
+                })();
 
                 showToast(`${order.folio}: ${newStatus}`, 'success');
-                refresh();
                 if (onUpdate) onUpdate();
             } catch (e: any) {
+                // Revert optimistic update on error
+                refresh();
                 showToast(e.message || 'Error al actualizar estado', 'error');
             }
         }
@@ -198,12 +220,14 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
         if (!pendingRollback || !settings) return;
 
         if (adminPassword === settings.masterPassword) {
+            // OPTIMISTIC UI UPDATE
+            updateOrderInState(pendingRollback.order.id, pendingRollback.newStatus, pendingRollback.details);
+
             await db.updateSaleStatus(pendingRollback.order.id, pendingRollback.newStatus, pendingRollback.details);
             setIsAdminModalOpen(false);
             setPendingRollback(null);
             setAdminPassword('');
             showToast('Estado actualizado correctamente', 'success');
-            refresh();
             if (onUpdate) onUpdate();
         } else {
             showToast('Contraseña incorrecta', 'error');
@@ -352,26 +376,31 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
             console.log(`📤 Guardando pedido ${selectedOrder.folio}: ${selectedOrder.fulfillmentStatus} → ${editForm.status}`);
             console.log(`📦 Guía: ${editForm.guideFile ? 'SÍ' : 'NO'}, Local: ${editForm.isLocalDelivery ? 'SÍ' : 'NO'}`);
 
+            // OPTIMISTIC UI UPDATE: Show change immediately
+            updateOrderInState(selectedOrder.id, editForm.status, details);
+            setIsEditModalOpen(false);
+
             await db.updateSaleStatus(selectedOrder.id, editForm.status, details);
 
-            // IMMEDIATE SYNC: Push changes to cloud right away to prevent conflicts
-            try {
-                const settings = await db.getSettings();
-                if (settings.supabaseUrl && settings.supabaseKey) {
-                    const { SupabaseService } = await import('../services/supabaseService');
-                    await SupabaseService.syncAll();
-                    console.log('☁️ Cambio sincronizado con la nube');
+            // BACKGROUND SYNC: Push to cloud (don't await - let it happen in background)
+            (async () => {
+                try {
+                    const settings = await db.getSettings();
+                    if (settings.supabaseUrl && settings.supabaseKey) {
+                        const { SupabaseService } = await import('../services/supabaseService');
+                        await SupabaseService.syncAll();
+                        console.log('☁️ Cambio sincronizado con la nube');
+                    }
+                } catch (syncErr) {
+                    console.warn('⚠️ No se pudo sincronizar (se reintentará después):', syncErr);
                 }
-            } catch (syncErr) {
-                console.warn('⚠️ No se pudo sincronizar (se reintentará después):', syncErr);
-            }
+            })();
 
-            setIsEditModalOpen(false);
             showToast(`Pedido actualizado: ${selectedOrder.fulfillmentStatus} → ${editForm.status}`, 'success');
-            refresh();
             if (onUpdate) onUpdate();
         } catch (e: any) {
             console.error('❌ Error guardando pedido:', e);
+            refresh(); // Revert on error
             showToast(e.message || 'Error al actualizar pedido', 'error');
         }
     };
