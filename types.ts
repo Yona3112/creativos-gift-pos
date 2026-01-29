@@ -38,6 +38,7 @@ export interface Product {
   isTaxable: boolean;
   providerId?: string;
   active?: boolean;
+  updatedAt?: string;  // Timestamp for sync tracking (updated on stock changes)
 }
 
 export interface PriceHistoryEntry {

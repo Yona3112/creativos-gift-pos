@@ -464,6 +464,64 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
                 </Button>
               </div>
 
+              {/* INVENTORY REPAIR SECTION */}
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+                  <i className="fas fa-tools mr-2"></i>Reparación de Inventario
+                </h3>
+                <p className="text-xs text-gray-500 mb-3">
+                  Si el inventario no coincide después de usar múltiples dispositivos, usa estas herramientas:
+                </p>
+                <div className="grid grid-cols-1 gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    icon="sync-alt"
+                    onClick={async () => {
+                      try {
+                        showToast("Reconciliando inventario...", "info");
+                        const result = await db.reconcileStockFromMovements();
+                        if (result.fixed > 0) {
+                          showToast(`✅ ${result.fixed} productos corregidos`, "success");
+                          console.log("📦 Productos corregidos:", result.details);
+                        } else {
+                          showToast("Todo está sincronizado ✓", "success");
+                        }
+                        if (onUpdate) onUpdate();
+                      } catch (e: any) {
+                        showToast(e.message || "Error al reconciliar", "error");
+                      }
+                    }}
+                  >
+                    Reconciliar Stock
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    icon="cloud-upload-alt"
+                    onClick={async () => {
+                      try {
+                        showToast("Subiendo inventario a la nube...", "info");
+                        const result = await db.forcePushProductsToCloud();
+                        if (result.success) {
+                          showToast(`☁️ ${result.count} productos sincronizados`, "success");
+                        } else {
+                          showToast("Error al sincronizar", "error");
+                        }
+                        if (onUpdate) onUpdate();
+                      } catch (e: any) {
+                        showToast(e.message || "Error al subir", "error");
+                      }
+                    }}
+                  >
+                    Forzar Subida a Nube
+                  </Button>
+                </div>
+                <p className="text-[10px] text-gray-400 mt-2 text-center">
+                  💡 Usa "Reconciliar" primero, luego "Forzar Subida" si el problema persiste
+                </p>
+              </div>
+
               <button onClick={() => setShowPurgeConfirm(true)} className="w-full text-center text-xs text-red-500 hover:text-red-700 hover:underline mt-4">
                 Herramientas de Mantenimiento Avanzado
               </button>

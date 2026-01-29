@@ -374,6 +374,8 @@ class StorageService {
       if (p) {
         const prev = p.stock;
         p.stock -= item.quantity;
+        // CRITICAL: Update the product's updatedAt timestamp so sync knows local is newer
+        p.updatedAt = this.getLocalNowISO();
         await db_engine.products.put(p);
         await this.recordMovement({
           productId: item.id,
@@ -1047,8 +1049,78 @@ class StorageService {
       }
     };
 
-    // Merge each table intelligently instead of replacing
-    if (data.products) await mergeTable(db_engine.products, data.products);
+    // SMART PRODUCT MERGE: Check inventory movements to preserve local stock if there are recent sales
+    const mergeProductsWithInventoryCheck = async (remoteProducts: any[]) => {
+      if (!remoteProducts || remoteProducts.length === 0) return;
+
+      // Get all local inventory movements from the last 7 days
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      const recentMovements = await db_engine.inventoryHistory
+        .filter((m: any) => new Date(m.date) > sevenDaysAgo)
+        .toArray();
+
+      // Create a map of productId -> most recent movement date
+      const productMovementMap = new Map<string, Date>();
+      for (const movement of recentMovements) {
+        const existing = productMovementMap.get(movement.productId);
+        const movementDate = new Date(movement.date);
+        if (!existing || movementDate > existing) {
+          productMovementMap.set(movement.productId, movementDate);
+        }
+      }
+
+      for (const remoteProduct of remoteProducts) {
+        const localProduct = await db_engine.products.get(remoteProduct.id);
+
+        if (!localProduct) {
+          // Product doesn't exist locally, add it
+          await db_engine.products.put(remoteProduct);
+          console.log(`➕ Nuevo producto desde nube: ${remoteProduct.name}`);
+        } else {
+          // Product exists locally - check if we have recent inventory movements
+          const lastLocalMovement = productMovementMap.get(remoteProduct.id);
+          const remoteUpdatedAt = remoteProduct.updatedAt ? new Date(remoteProduct.updatedAt) : null;
+          const localUpdatedAt = localProduct.updatedAt ? new Date(localProduct.updatedAt) : null;
+
+          // If there are recent local inventory movements for this product
+          if (lastLocalMovement) {
+            // And the remote product was updated BEFORE our last movement
+            if (!remoteUpdatedAt || lastLocalMovement > remoteUpdatedAt) {
+              // Preserve local stock but update other fields from remote
+              const preservedStock = localProduct.stock;
+              const merged = { ...remoteProduct, stock: preservedStock, updatedAt: localProduct.updatedAt };
+              await db_engine.products.put(merged);
+              console.log(`🔒 Preservado stock local de "${localProduct.name}": ${preservedStock} (mov. local más reciente)`);
+              continue;
+            }
+          }
+
+          // Standard date comparison for products without recent movements
+          if (remoteUpdatedAt && localUpdatedAt) {
+            if (remoteUpdatedAt > localUpdatedAt) {
+              await db_engine.products.put(remoteProduct);
+              console.log(`☁️ Actualizado desde nube: ${remoteProduct.name}`);
+            } else {
+              console.log(`📱 Conservado local (más reciente): ${localProduct.name}`);
+            }
+          } else if (remoteUpdatedAt && !localUpdatedAt) {
+            // Remote has date, local doesn't - but preserve local stock if we have movements
+            if (lastLocalMovement) {
+              const merged = { ...remoteProduct, stock: localProduct.stock };
+              await db_engine.products.put(merged);
+              console.log(`🔄 Merge: datos de nube + stock local para "${localProduct.name}"`);
+            } else {
+              await db_engine.products.put(remoteProduct);
+            }
+          }
+          // If neither has dates, keep local (don't overwrite potentially newer local data)
+        }
+      }
+    };
+
+    // Use smart merge for products
+    if (data.products) await mergeProductsWithInventoryCheck(data.products);
     if (data.categories) await mergeTable(db_engine.categories, data.categories);
     if (data.customers) await mergeTable(db_engine.customers, data.customers);
     if (data.sales) await mergeTable(db_engine.sales, data.sales);
@@ -1655,6 +1727,94 @@ class StorageService {
       </body>
       </html>
     `;
+  }
+
+  /**
+   * RECONCILE STOCK FROM SALES HISTORY
+   * Recalculates the correct stock for all products based on:
+   * 1. The current stock in cloud (as initial baseline)
+   * 2. All local inventory movements (sales, purchases, adjustments)
+   * 
+   * Use this to fix stock discrepancies after sync issues.
+   */
+  async reconcileStockFromMovements(): Promise<{ fixed: number; details: string[] }> {
+    const details: string[] = [];
+    let fixed = 0;
+
+    try {
+      // Get all products
+      const products = await db_engine.products.toArray();
+
+      // Get all inventory movements
+      const allMovements = await db_engine.inventoryHistory.toArray();
+
+      // Group movements by product
+      const movementsByProduct = new Map<string, any[]>();
+      for (const movement of allMovements) {
+        const existing = movementsByProduct.get(movement.productId) || [];
+        existing.push(movement);
+        movementsByProduct.set(movement.productId, existing);
+      }
+
+      for (const product of products) {
+        const movements = movementsByProduct.get(product.id) || [];
+
+        if (movements.length === 0) continue;
+
+        // Sort movements by date
+        movements.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+        // The newest movement should have the correct newStock
+        const latestMovement = movements[movements.length - 1];
+        const expectedStock = latestMovement.newStock;
+
+        if (product.stock !== expectedStock) {
+          const oldStock = product.stock;
+          product.stock = expectedStock;
+          product.updatedAt = this.getLocalNowISO();
+          await db_engine.products.put(product);
+
+          details.push(`${product.name}: ${oldStock} → ${expectedStock}`);
+          fixed++;
+        }
+      }
+
+      // Trigger sync after reconciliation
+      const settings = await this.getSettings();
+      if (settings.autoSync) this.triggerAutoSync();
+
+      console.log(`✅ Reconciliación completada: ${fixed} productos corregidos`);
+      return { fixed, details };
+    } catch (e: any) {
+      console.error('❌ Error en reconciliación:', e);
+      throw e;
+    }
+  }
+
+  /**
+   * FORCE PUSH: Upload all local products to cloud with current stock
+   * Use this to make the cloud match your local data (phone wins)
+   */
+  async forcePushProductsToCloud(): Promise<{ success: boolean; count: number }> {
+    try {
+      const products = await db_engine.products.toArray();
+
+      // Mark all products with current timestamp
+      for (const p of products) {
+        p.updatedAt = this.getLocalNowISO();
+        await db_engine.products.put(p);
+      }
+
+      // Force sync
+      const { SupabaseService } = await import('./supabaseService');
+      await SupabaseService.syncAll();
+
+      console.log(`☁️ Force push: ${products.length} productos subidos a la nube`);
+      return { success: true, count: products.length };
+    } catch (e: any) {
+      console.error('❌ Error en force push:', e);
+      return { success: false, count: 0 };
+    }
   }
 }
 

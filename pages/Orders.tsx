@@ -62,6 +62,12 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
         let pollInterval: any = null;
 
         const pollFromCloud = async () => {
+            // GUARD: Don't poll while user is editing an order - prevents losing unsaved changes
+            if (isEditModalOpen || isAdminModalOpen || isPayModalOpen) {
+                console.log("⏸️ Polling pausado - modal abierto");
+                return;
+            }
+
             try {
                 const currentSettings = await db.getSettings();
                 // Only need Supabase configured, no autoSync flag required
@@ -95,9 +101,22 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                             hasChanges = true;
                             console.log("📥 Nuevo pedido descargado:", cloudSale.folio);
                         } else if (cloudSale.fulfillmentStatus !== localSale.fulfillmentStatus) {
+                            // SMART SYNC: Only update if cloud is genuinely newer
+                            // Compare dates to prevent cloud from overwriting recent local changes
+                            const cloudDate = new Date(cloudSale.date).getTime();
+                            const localDate = new Date(localSale.date).getTime();
+
+                            // If local was modified more recently (within last 5 minutes), skip cloud update
+                            const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
+                            if (localDate > fiveMinutesAgo && localDate > cloudDate) {
+                                console.log(`🔒 Preservando estado local de ${localSale.folio} (cambio reciente)`);
+                                continue;
+                            }
+
                             // Status changed in cloud, update local
                             await db.updateSaleStatus(cloudSale.id, cloudSale.fulfillmentStatus, cloudSale.shippingDetails);
                             hasChanges = true;
+                            console.log(`☁️ Estado actualizado desde nube: ${cloudSale.folio} -> ${cloudSale.fulfillmentStatus}`);
                         }
                     }
 
@@ -164,7 +183,22 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
             }
 
             try {
+                console.log(`📤 Cambio rápido: ${order.folio} ${order.fulfillmentStatus} → ${newStatus}`);
                 await db.updateSaleStatus(order.id, newStatus);
+
+                // IMMEDIATE SYNC: Push to cloud right away
+                try {
+                    const settings = await db.getSettings();
+                    if (settings.supabaseUrl && settings.supabaseKey) {
+                        const { SupabaseService } = await import('../services/supabaseService');
+                        await SupabaseService.syncAll();
+                        console.log('☁️ Sincronizado con nube');
+                    }
+                } catch (syncErr) {
+                    console.warn('⚠️ Sync pendiente:', syncErr);
+                }
+
+                showToast(`${order.folio}: ${newStatus}`, 'success');
                 refresh();
                 if (onUpdate) onUpdate();
             } catch (e: any) {
@@ -328,13 +362,29 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                 return;
             }
 
+            console.log(`📤 Guardando pedido ${selectedOrder.folio}: ${selectedOrder.fulfillmentStatus} → ${editForm.status}`);
+            console.log(`📦 Guía: ${editForm.guideFile ? 'SÍ' : 'NO'}, Local: ${editForm.isLocalDelivery ? 'SÍ' : 'NO'}`);
+
             await db.updateSaleStatus(selectedOrder.id, editForm.status, details);
 
+            // IMMEDIATE SYNC: Push changes to cloud right away to prevent conflicts
+            try {
+                const settings = await db.getSettings();
+                if (settings.supabaseUrl && settings.supabaseKey) {
+                    const { SupabaseService } = await import('../services/supabaseService');
+                    await SupabaseService.syncAll();
+                    console.log('☁️ Cambio sincronizado con la nube');
+                }
+            } catch (syncErr) {
+                console.warn('⚠️ No se pudo sincronizar (se reintentará después):', syncErr);
+            }
+
             setIsEditModalOpen(false);
-            showToast('Pedido actualizado correctamente', 'success');
+            showToast(`Pedido actualizado: ${selectedOrder.fulfillmentStatus} → ${editForm.status}`, 'success');
             refresh();
             if (onUpdate) onUpdate();
         } catch (e: any) {
+            console.error('❌ Error guardando pedido:', e);
             showToast(e.message || 'Error al actualizar pedido', 'error');
         }
     };

@@ -40,7 +40,8 @@ CREATE TABLE IF NOT EXISTS products (
   "providerId" TEXT,
   image TEXT,
   active BOOLEAN DEFAULT true,
-  "isTaxable" BOOLEAN DEFAULT true
+  "isTaxable" BOOLEAN DEFAULT true,
+  "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Customers
@@ -321,3 +322,12 @@ ALTER TABLE settings ADD COLUMN IF NOT EXISTS "enableBeep" BOOLEAN DEFAULT true;
 
 -- Customer name directly in sales (for print/display when customer not synced)
 ALTER TABLE sales ADD COLUMN IF NOT EXISTS "customerName" TEXT;
+
+-- CRITICAL: Product sync tracking - required for multi-device inventory sync
+ALTER TABLE products ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+
+-- ================================================
+-- IMPORTANT: Run this in Supabase SQL Editor NOW
+-- to fix inventory sync issues:
+-- ================================================
+-- ALTER TABLE products ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW();
