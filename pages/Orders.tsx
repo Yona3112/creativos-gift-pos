@@ -58,6 +58,7 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
     }, []);
 
     // Polling: Auto-refresh orders every 30 seconds from Supabase
+    // IMPORTANT: This polling ONLY adds NEW orders, it does NOT overwrite local status changes
     useEffect(() => {
         let pollInterval: any = null;
 
@@ -100,24 +101,10 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                             await db.insertSaleFromCloud(cloudSale);
                             hasChanges = true;
                             console.log("📥 Nuevo pedido descargado:", cloudSale.folio);
-                        } else if (cloudSale.fulfillmentStatus !== localSale.fulfillmentStatus) {
-                            // SMART SYNC: Only update if cloud is genuinely newer
-                            // Compare dates to prevent cloud from overwriting recent local changes
-                            const cloudDate = new Date(cloudSale.date).getTime();
-                            const localDate = new Date(localSale.date).getTime();
-
-                            // If local was modified more recently (within last 5 minutes), skip cloud update
-                            const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
-                            if (localDate > fiveMinutesAgo && localDate > cloudDate) {
-                                console.log(`🔒 Preservando estado local de ${localSale.folio} (cambio reciente)`);
-                                continue;
-                            }
-
-                            // Status changed in cloud, update local
-                            await db.updateSaleStatus(cloudSale.id, cloudSale.fulfillmentStatus, cloudSale.shippingDetails);
-                            hasChanges = true;
-                            console.log(`☁️ Estado actualizado desde nube: ${cloudSale.folio} -> ${cloudSale.fulfillmentStatus}`);
                         }
+                        // REMOVED: No longer overwrite local status from cloud
+                        // This prevents the 30-second revert issue
+                        // Users can manually refresh if they need to pull changes from other devices
                     }
 
                     // Refresh UI if there were changes
