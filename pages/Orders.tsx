@@ -77,75 +77,14 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
 
             try {
                 const currentSettings = await db.getSettings();
-                // Only need Supabase configured, no autoSync flag required
-                if (!currentSettings?.supabaseUrl || !currentSettings?.supabaseKey) {
-                    return; // Skip polling if Supabase not configured
-                }
+                if (!currentSettings?.supabaseUrl || !currentSettings?.supabaseKey) return;
 
                 const { SupabaseService } = await import('../services/supabaseService');
-                const client = await SupabaseService.getClient();
-                if (!client) return;
+                const changed = await SupabaseService.pullDelta();
 
-                // REDUCED SCOPE: Only 7 days to minimize query time
-                const cutoff = new Date();
-                cutoff.setDate(cutoff.getDate() - 7);
-                const cutoffStr = cutoff.toISOString();
-
-                // SIMPLIFIED QUERY: Just fetch recent sales to avoid Supabase timeout
-                // The .or() query was causing 500 errors on free tier
-                const { data: cloudSales, error } = await client
-                    .from('sales')
-                    .select('*')
-                    .gte('date', cutoffStr)
-                    .order('date', { ascending: false })
-                    .limit(50);
-                if (error) {
-                    console.warn("⚠️ Polling error:", error.message);
-                    return;
-                }
-
-                if (cloudSales && isMounted.current) {
-                    let hasChanges = false;
-
-                    // Get fresh local sales
-                    const localSales = await db.getSales();
-                    console.log(`🔍 Polling: ${cloudSales.length} ventas en nube, ${localSales.length} locales`);
-
-                    for (const cloudSale of cloudSales) {
-                        const localSale = localSales.find(s => s.id === cloudSale.id);
-
-                        if (!localSale) {
-                            // NEW ORDER from cloud - insert it locally
-                            await db.insertSaleFromCloud(cloudSale);
-                            hasChanges = true;
-                            console.log("📥 Nuevo pedido descargado:", cloudSale.folio);
-                        } else {
-                            // AGGRESSIVE SYNC: Update if:
-                            // 1. Cloud has updatedAt and it's newer than local
-                            // 2. OR Cloud has updatedAt but local doesn't (cloud was updated after column was added)
-                            // 3. OR fulfillmentStatus is different (status changed on another device)
-                            const cloudTime = cloudSale.updatedAt ? new Date(cloudSale.updatedAt).getTime() : 0;
-                            const localTime = localSale.updatedAt ? new Date(localSale.updatedAt).getTime() : 0;
-                            const statusDifferent = cloudSale.fulfillmentStatus !== localSale.fulfillmentStatus;
-
-                            const shouldUpdate =
-                                (cloudTime > localTime) ||  // Cloud is newer
-                                (cloudTime > 0 && localTime === 0) ||  // Cloud has timestamp, local doesn't
-                                (statusDifferent && cloudTime >= localTime);  // Status different and cloud is same age or newer
-
-                            if (shouldUpdate) {
-                                await db.insertSaleFromCloud(cloudSale);
-                                hasChanges = true;
-                                console.log(`☁️ Actualizado automáticamente: ${cloudSale.folio} (${localSale.fulfillmentStatus || 'pending'} → ${cloudSale.fulfillmentStatus || 'pending'})`);
-                            }
-                        }
-                    }
-
-                    // Refresh UI if there were changes
-                    if (hasChanges && isMounted.current) {
-                        await refresh();
-                        console.log("🔄 UI actualizada con cambios de la nube");
-                    }
+                if (changed && changed > 0 && isMounted.current) {
+                    await refresh();
+                    console.log(`🔄 Delta Sync: ${changed} cambios aplicados`);
                     setLastSync(new Date().toLocaleTimeString());
                 }
             } catch (e) {
@@ -153,9 +92,9 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
             }
         };
 
-        // Start polling immediately and then every 30 seconds (reduced from 10s)
+        // Start polling immediately and then every 60 seconds (optimized from 30s)
         pollFromCloud();
-        pollInterval = setInterval(pollFromCloud, 30000);
+        pollInterval = setInterval(pollFromCloud, 60000);
 
         return () => {
             if (pollInterval) clearInterval(pollInterval);

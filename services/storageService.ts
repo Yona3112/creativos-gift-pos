@@ -353,6 +353,7 @@ class StorageService {
       });
     }
 
+    product.updatedAt = this.getLocalNowISO(); // Update timestamp
     await db_engine.products.put(product);
     const settings = await this.getSettings();
     if (settings.autoSync) this.triggerAutoSync();
@@ -362,6 +363,7 @@ class StorageService {
     const p = await db_engine.products.get(id);
     if (p) {
       p.active = false;
+      p.updatedAt = this.getLocalNowISO();
       await db_engine.products.put(p);
       const settings = await this.getSettings();
       if (settings.autoSync) this.triggerAutoSync();
@@ -395,7 +397,8 @@ class StorageService {
     await db_engine.inventoryHistory.add({
       ...move,
       id: Date.now().toString() + Math.random().toString(36).substring(2, 7),
-      date: this.getLocalNowISO()
+      date: this.getLocalNowISO(),
+      updatedAt: this.getLocalNowISO()
     });
   }
 
@@ -439,6 +442,7 @@ class StorageService {
   async saveCategory(cat: Category) {
     if (!cat.id) cat.id = Date.now().toString();
     if (cat.active === undefined) cat.active = true;
+    cat.updatedAt = this.getLocalNowISO();
     await db_engine.categories.put(cat);
     const settings = await this.getSettings();
     if (settings.autoSync) this.triggerAutoSync();
@@ -448,6 +452,7 @@ class StorageService {
     const cat = await db_engine.categories.get(id);
     if (cat) {
       cat.active = false;
+      cat.updatedAt = this.getLocalNowISO();
       await db_engine.categories.put(cat);
       const settings = await this.getSettings();
       if (settings.autoSync) this.triggerAutoSync();
@@ -464,6 +469,7 @@ class StorageService {
     if (!c.id) {
       c.id = Date.now().toString() + Math.random().toString(36).substring(2, 7);
     }
+    c.updatedAt = this.getLocalNowISO();
     await db_engine.customers.put(c);
     const settings = await this.getSettings();
     if (settings.autoSync) this.triggerAutoSync();
@@ -472,6 +478,7 @@ class StorageService {
     const c = await db_engine.customers.get(id);
     if (c) {
       c.active = false;
+      c.updatedAt = this.getLocalNowISO();
       await db_engine.customers.put(c);
       const settings = await this.getSettings();
       if (settings.autoSync) this.triggerAutoSync();
@@ -756,6 +763,7 @@ class StorageService {
     }
     // Normalize date to YYYY-MM-DD format
     e.date = e.date.substring(0, 10);
+    e.updatedAt = this.getLocalNowISO();
     await db_engine.expenses.put(e);
     const settings = await this.getSettings();
     if (settings.autoSync) this.triggerAutoSync();
@@ -783,6 +791,7 @@ class StorageService {
       c.payments.push(p);
       c.paidAmount += payment.amount;
       if (c.paidAmount >= c.totalAmount - 0.1) c.status = 'paid';
+      c.updatedAt = this.getLocalNowISO();
       await db_engine.credits.put(c);
       const settings = await this.getSettings();
       if (settings.autoSync) this.triggerAutoSync();
@@ -820,6 +829,7 @@ class StorageService {
   async saveSupplier(s: Supplier) {
     if (!s.id) s.id = Date.now().toString();
     if (s.active === undefined) s.active = true;
+    s.updatedAt = this.getLocalNowISO();
     await db_engine.suppliers.put(s);
     const settings = await this.getSettings();
     if (settings.autoSync) this.triggerAutoSync();
@@ -840,6 +850,7 @@ class StorageService {
   async saveConsumable(c: Consumable) {
     if (!c.id) c.id = Date.now().toString();
     if (c.active === undefined) c.active = true;
+    c.updatedAt = this.getLocalNowISO();
     await db_engine.consumables.put(c);
     const settings = await this.getSettings();
     if (settings.autoSync) this.triggerAutoSync();
@@ -856,6 +867,7 @@ class StorageService {
   async getPromotions() { return await db_engine.promotions.toArray(); }
   async savePromotion(p: Promotion) {
     if (!p.id) p.id = Date.now().toString();
+    p.updatedAt = this.getLocalNowISO();
     await db_engine.promotions.put(p);
     const settings = await this.getSettings();
     if (settings.autoSync) this.triggerAutoSync();
@@ -883,7 +895,7 @@ class StorageService {
         u.password = existing.password;
       }
     }
-
+    u.updatedAt = this.getLocalNowISO();
     await db_engine.users.put(u);
     const settings = await this.getSettings();
     if (settings.autoSync) this.triggerAutoSync();
@@ -903,6 +915,7 @@ class StorageService {
   }
   async saveBranch(b: Branch) {
     if (!b.id) b.id = Date.now().toString();
+    b.updatedAt = this.getLocalNowISO();
     await db_engine.branches.put(b);
     const settings = await this.getSettings();
     if (settings.autoSync) this.triggerAutoSync();
@@ -914,6 +927,7 @@ class StorageService {
   }
   async saveQuote(q: Quote) {
     if (!q.id) q.id = Date.now().toString();
+    q.updatedAt = this.getLocalNowISO();
     await db_engine.quotes.put(q);
     const settings = await this.getSettings();
     if (settings.autoSync) this.triggerAutoSync();
@@ -1260,6 +1274,7 @@ class StorageService {
   async saveCashCut(cut: CashCut) {
     if (!cut.id) cut.id = Date.now().toString();
     if (!cut.date) cut.date = this.getLocalNowISO();
+    cut.updatedAt = this.getLocalNowISO();
     await db_engine.cashCuts.put(cut);
     const settings = await this.getSettings();
     if (settings.autoSync) this.triggerAutoSync();
@@ -1335,6 +1350,7 @@ class StorageService {
     if (nc) {
       nc.remainingAmount = 0;
       nc.status = 'used';
+      nc.updatedAt = this.getLocalNowISO();
       await db_engine.creditNotes.put(nc);
     }
   }

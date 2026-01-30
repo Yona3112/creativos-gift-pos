@@ -12,6 +12,7 @@ export interface User {
   branchId: string;
   password?: string;
   active: boolean;
+  updatedAt?: string;
 }
 
 export interface Branch {
@@ -21,6 +22,7 @@ export interface Branch {
   phone?: string;
   manager?: string;
   active: boolean;
+  updatedAt?: string;
 }
 
 export interface Product {
@@ -61,6 +63,7 @@ export interface Expense {
   categoryId: 'Alquiler' | 'Servicios' | 'Sueldos' | 'Publicidad' | 'Insumos' | 'Transporte' | 'Otros';
   paymentMethod: 'Efectivo' | 'Tarjeta' | 'Transferencia';
   userId: string;
+  updatedAt?: string;
 }
 
 // FixedExpense removed - feature was not used and caused sync issues
@@ -79,6 +82,7 @@ export interface InventoryMovement {
   reason: string;
   userId: string;
   referenceId?: string; // Folio de venta o factura de compra
+  updatedAt?: string;
 }
 
 export interface Category {
@@ -88,6 +92,7 @@ export interface Category {
   icon: string;
   defaultMinStock?: number;
   active?: boolean;
+  updatedAt?: string;
 }
 
 export enum LoyaltyLevel {
@@ -112,6 +117,7 @@ export interface Customer {
   level: LoyaltyLevel;
   totalSpent: number;
   active?: boolean;
+  updatedAt?: string;
 }
 
 export interface CartItem extends Product {
@@ -191,6 +197,7 @@ export interface CreditNote {
   reason: string;
   date: string;
   status: 'active' | 'used';
+  updatedAt?: string;
 }
 
 export interface Quote extends Omit<Sale, 'id' | 'folio' | 'cai' | 'paymentMethod' | 'status'> {
@@ -231,6 +238,7 @@ export interface CompanySettings {
   supabaseKey?: string;
   autoSync?: boolean;
   lastBackupDate?: string | null;
+  lastCloudSync?: string | null; // Timestamp of the last successful full or delta sync
   logoObjectFit?: 'cover' | 'contain';
   thanksMessage?: string;
   warrantyPolicy?: string;
@@ -271,6 +279,7 @@ export interface CashCut {
     bill20: number; bill10: number; bill5: number; bill2: number;
     bill1: number; coins: number;
   };
+  updatedAt?: string;
 }
 
 export interface Supplier {
@@ -282,6 +291,7 @@ export interface Supplier {
   rtn?: string;
   address?: string;
   active?: boolean;
+  updatedAt?: string;
 }
 
 export interface Consumable {
@@ -293,6 +303,7 @@ export interface Consumable {
   cost: number;
   unit: string;
   active?: boolean;
+  updatedAt?: string;
 }
 
 export interface Promotion {
@@ -305,6 +316,7 @@ export interface Promotion {
   active: boolean;
   productIds?: string[];
   categoryIds?: string[];
+  updatedAt?: string;
 }
 
 export interface CreditAccount {
@@ -321,6 +333,7 @@ export interface CreditAccount {
   interestRate?: number;
   termMonths?: number;
   monthlyPayment?: number;
+  updatedAt?: string;
 }
 
 export interface CreditPayment {

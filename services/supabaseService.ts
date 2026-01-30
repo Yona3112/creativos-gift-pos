@@ -96,16 +96,19 @@ export class SupabaseService {
         }
     }
 
-    static async syncAll() {
-        console.log("🔄 Iniciando sincronización con Supabase...");
+    static async syncAll(forceFull: boolean = false) {
+        console.log(`🔄 Iniciando sincronización ${forceFull ? 'TOTAL' : 'INCREMENTAL'}...`);
         const client = await this.getClient();
         if (!client) {
             console.error("❌ Supabase no está configurado - no hay cliente");
             throw new Error("Supabase no está configurado.");
         }
 
+        const settings = await db.getSettings();
+        const lastSync = settings.lastCloudSync ? new Date(settings.lastCloudSync).getTime() : 0;
+        const now = new Date().toISOString();
+
         const data = await db.getAllData();
-        console.log("📦 Datos locales obtenidos:", Object.keys(data));
         const results: any = {};
 
         const tables = [
@@ -129,13 +132,26 @@ export class SupabaseService {
 
         for (const table of tables) {
             if (table.data && table.data.length > 0) {
-                console.log(`📤 Sincronizando ${table.name}: ${table.data.length} registros...`);
+                // DELTA FILTERING: Only records updated after last sync
+                const recordsToSync = forceFull ? table.data : table.data.filter((item: any) => {
+                    const itemUpdated = item.updatedAt ? new Date(item.updatedAt).getTime() : 0;
+                    const itemCreated = item.date ? new Date(item.date).getTime() : 0;
+                    return Math.max(itemUpdated, itemCreated) > lastSync;
+                });
+
+                if (recordsToSync.length === 0) {
+                    console.log(`⏭️ ${table.name}: sin cambios nuevos`);
+                    results[table.name] = 'Sin cambios';
+                    continue;
+                }
+
+                console.log(`📤 Sincronizando ${table.name}: ${recordsToSync.length} registros nuevos/modificados...`);
 
                 try {
                     // Handle users table specially due to unique email constraint
                     if (table.name === 'users') {
                         let successCount = 0;
-                        for (const user of table.data) {
+                        for (const user of recordsToSync) {
                             try {
                                 const { error } = await client.from('users').upsert(user, { onConflict: 'id' });
                                 if (!error) successCount++;
@@ -143,36 +159,27 @@ export class SupabaseService {
                                 // Skip problematic users silently
                             }
                         }
-                        console.log(`✅ users sincronizado: ${successCount}/${table.data.length}`);
-                        results['users'] = `Sincronizado (${successCount}/${table.data.length})`;
+                        results['users'] = `Incremental (${successCount}/${recordsToSync.length})`;
                         continue;
                     }
 
                     // Normal upsert for other tables
-                    const { error, data: responseData } = await client.from(table.name).upsert(table.data);
+                    const { error } = await client.from(table.name).upsert(recordsToSync);
                     if (error) {
                         console.error(`❌ Error en ${table.name}:`, error);
                         results[table.name] = `Error: ${error.message}`;
                     } else {
-                        console.log(`✅ ${table.name} sincronizado`);
-                        results[table.name] = 'Sincronizado';
+                        results[table.name] = 'OK';
                     }
                 } catch (tableError: any) {
-                    console.error(`❌ Fallo crítico sincronizando tabla ${table.name}:`, tableError);
-                    results[table.name] = `Fallo: ${tableError.message || 'Error desconocido'}`;
-                    // Sigue con la siguiente tabla en lugar de detener todo el proceso
+                    console.error(`❌ Fallo crítico en ${table.name}:`, tableError);
+                    results[table.name] = `Fallo: ${tableError.message}`;
                 }
-            } else {
-                console.log(`⏭️ ${table.name}: sin datos para sincronizar`);
             }
         }
 
         // Settings is a special case (single row)
         if (data.settings) {
-            console.log("📤 Sincronizando settings...");
-
-            // List of columns that we know exist in the cloud table
-            // This prevents errors if local settings has new UI-only or transient properties
             const cloudColumns = [
                 'id', 'name', 'rtn', 'address', 'phone', 'email', 'cai',
                 'billingRangeStart', 'billingRangeEnd', 'billingDeadline',
@@ -180,7 +187,7 @@ export class SupabaseService {
                 'printerSize', 'moneyPerPoint', 'pointValue', 'defaultCreditRate', 'defaultCreditTerm',
                 'creditDueDateAlertDays', 'enableCreditAlerts', 'showFloatingWhatsapp', 'whatsappTemplate',
                 'logo', 'themeColor', 'whatsappNumber', 'masterPassword', 'supabaseUrl', 'supabaseKey',
-                'autoSync', 'lastBackupDate', 'logoObjectFit', 'thanksMessage', 'warrantyPolicy', 'returnPolicy',
+                'autoSync', 'lastBackupDate', 'lastCloudSync', 'logoObjectFit', 'thanksMessage', 'warrantyPolicy', 'returnPolicy',
                 'barcodeWidth', 'barcodeHeight', 'showLogoOnBarcode', 'barcodeLogoSize', 'legalOwnerName', 'legalCity',
                 'darkMode', 'enableBeep', 'currentSeason'
             ];
@@ -192,13 +199,13 @@ export class SupabaseService {
                 }
             });
 
+            // Update local and cloud last sync time
+            settingsToSync.lastCloudSync = now;
+
             const { error } = await client.from('settings').upsert(settingsToSync);
-            if (error) {
-                console.error("❌ Error en settings:", error);
-                results['settings'] = `Error: ${error.message}`;
-            } else {
-                console.log("✅ settings sincronizado");
-                results['settings'] = 'Sincronizado';
+            if (!error) {
+                // Update local settings with new lastCloudSync
+                await db.saveSettings({ ...data.settings, lastCloudSync: now });
             }
         }
 
@@ -218,6 +225,7 @@ export class SupabaseService {
         ];
 
         const pulledData: any = {};
+        const now = new Date().toISOString();
 
         // Tables that need date filtering to avoid timeout
         const largeTables = ['sales', 'inventory_history', 'price_history'];
@@ -277,9 +285,97 @@ export class SupabaseService {
 
         if (hasAnyData) {
             await db.restoreData(dexieData);
+            // Update lastCloudSync after full pull
+            const currentSett = await db.getSettings();
+            await db.saveSettings({ ...currentSett, lastCloudSync: now });
             return dexieData;
         }
 
         return null;
+    }
+
+    /**
+     * INCREMENTAL SYNC: Fetch only changes from cloud since lastCloudSync
+     */
+    static async pullDelta() {
+        const client = await this.getClient();
+        if (!client) return null;
+
+        const settings = await db.getSettings();
+        const lastSync = settings.lastCloudSync;
+        if (!lastSync) return this.pullAll(); // If no last sync, do full pull
+
+        const now = new Date().toISOString();
+        const tables = [
+            'products', 'categories', 'customers', 'sales', 'users',
+            'branches', 'credits', 'promotions', 'suppliers',
+            'consumables', 'quotes', 'cash_cuts', 'credit_notes',
+            'expenses', 'inventory_history', 'price_history'
+        ];
+
+        let totalChanges = 0;
+        const results: any = {};
+
+        for (const table of tables) {
+            // Fetch records updated after lastSync
+            const { data, error } = await client
+                .from(table)
+                .select('*')
+                .gt('updatedAt', lastSync)
+                .limit(500);
+
+            if (!error && data && data.length > 0) {
+                console.log(`📥 [Delta] ${table}: ${data.length} cambios encontrados`);
+                results[table] = data;
+                totalChanges += data.length;
+            }
+        }
+
+        if (totalChanges > 0) {
+            await this.mergeDelta(results);
+        }
+
+        // Always update last sync time even if no changes to prevent re-querying old data
+        await db.saveSettings({ ...settings, lastCloudSync: now });
+
+        return totalChanges;
+    }
+
+    private static async mergeDelta(delta: any) {
+        // Sales handled differently to merge
+        if (delta.sales) {
+            for (const cloudSale of delta.sales) {
+                await db.insertSaleFromCloud(cloudSale);
+            }
+        }
+
+        // Generic merge for most tables
+        const genericTables = [
+            { cloud: 'products', dexie: 'products' },
+            { cloud: 'categories', dexie: 'categories' },
+            { cloud: 'customers', dexie: 'customers' },
+            { cloud: 'users', dexie: 'users' },
+            { cloud: 'branches', dexie: 'branches' },
+            { cloud: 'credits', dexie: 'credits' },
+            { cloud: 'promotions', dexie: 'promotions' },
+            { cloud: 'suppliers', dexie: 'suppliers' },
+            { cloud: 'consumables', dexie: 'consumables' },
+            { cloud: 'quotes', dexie: 'quotes' },
+            { cloud: 'cash_cuts', dexie: 'cash_cuts' },
+            { cloud: 'credit_notes', dexie: 'credit_notes' },
+            { cloud: 'expenses', dexie: 'expenses' },
+            { cloud: 'inventory_history', dexie: 'inventoryHistory' },
+            { cloud: 'price_history', dexie: 'priceHistory' }
+        ];
+
+        for (const map of genericTables) {
+            const data = delta[map.cloud];
+            if (data && data.length > 0) {
+                // Use put to update or add
+                for (const item of data) {
+                    await (db as any)[map.dexie].put(item);
+                }
+            }
+        }
     }
 }
