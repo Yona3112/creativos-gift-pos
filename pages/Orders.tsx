@@ -92,10 +92,12 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                 cutoff.setDate(cutoff.getDate() - 15);
                 const cutoffStr = cutoff.toISOString();
 
+                // Query: (updatedAt >= cutoff) OR (updatedAt is NULL AND date >= cutoff)
+                // This handles records that existed before updatedAt column was added
                 const { data: cloudSales, error } = await client
                     .from('sales')
                     .select('*')
-                    .gte('updatedAt', cutoffStr);
+                    .or(`updatedAt.gte.${cutoffStr},and(updatedAt.is.null,date.gte.${cutoffStr})`);
                 if (error) {
                     console.warn("⚠️ Polling error:", error.message);
                     return;

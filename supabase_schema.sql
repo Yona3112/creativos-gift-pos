@@ -323,6 +323,9 @@ ALTER TABLE settings ADD COLUMN IF NOT EXISTS "enableBeep" BOOLEAN DEFAULT true;
 -- Customer name directly in sales (for print/display when customer not synced)
 ALTER TABLE sales ADD COLUMN IF NOT EXISTS "customerName" TEXT;
 
+-- CRITICAL: Sales sync tracking - required for order status sync between devices
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+
 -- CRITICAL: Product sync tracking - required for multi-device inventory sync
 ALTER TABLE products ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW();
 
