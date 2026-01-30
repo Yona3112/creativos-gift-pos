@@ -134,9 +134,15 @@ export class SupabaseService {
             if (table.data && table.data.length > 0) {
                 // DELTA FILTERING: Only records updated after last sync
                 const recordsToSync = forceFull ? table.data : table.data.filter((item: any) => {
-                    const itemUpdated = item.updatedAt ? new Date(item.updatedAt).getTime() : 0;
-                    const itemCreated = item.date ? new Date(item.date).getTime() : 0;
-                    return Math.max(itemUpdated, itemCreated) > lastSync;
+                    // Always prefer updatedAt (has precision)
+                    if (item.updatedAt) {
+                        return new Date(item.updatedAt).getTime() > lastSync;
+                    }
+                    // Fallback to business date if updatedAt is missing
+                    // We extract just the date part to avoid ISO/Timezone issues
+                    const itemDate = item.date ? item.date.substring(0, 10) : '';
+                    const lastSyncDate = new Date(lastSync).toISOString().substring(0, 10);
+                    return itemDate >= lastSyncDate;
                 });
 
                 if (recordsToSync.length === 0) {
@@ -230,15 +236,18 @@ export class SupabaseService {
         // Tables that need date filtering to avoid timeout
         const largeTables = ['sales', 'inventory_history', 'price_history'];
         const cutoff = new Date();
-        cutoff.setDate(cutoff.getDate() - 60); // Last 60 days for full sync
-        const cutoffStr = cutoff.toISOString();
+        cutoff.setDate(cutoff.getDate() - 90);
+        const cutoffISO = cutoff.toISOString();
+        const cutoffDateOnly = cutoffISO.split('T')[0]; // "YYYY-MM-DD"
 
         for (const table of tables) {
             let query = client.from(table).select('*');
 
             // Apply limits to large tables to avoid timeout
             if (largeTables.includes(table)) {
-                query = query.gte('date', cutoffStr).order('date', { ascending: false }).limit(500);
+                // If the column is 'date' (text YYYY-MM-DD), use date-only comparison
+                // to avoid issues with ISO string length comparison in Postgres
+                query = query.gte('date', cutoffDateOnly).order('date', { ascending: false }).limit(600);
             }
 
             const { data, error } = await query;

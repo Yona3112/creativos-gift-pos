@@ -150,6 +150,59 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
     setDeleteUserConfirm({ open: true, id });
   };
 
+  const handleCloudSync = async () => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+    setSyncStatus(null);
+    try {
+      await db.saveSettings(settings);
+      const pushResults = await SupabaseService.syncAll();
+      const pulledChanges = await SupabaseService.pullDelta();
+      setSyncStatus({
+        type: 'success',
+        message: 'Sincronización completada con éxito',
+        results: { push: pushResults, pulling: pulledChanges }
+      });
+      showToast("Sincronización completada", "success");
+      const updatedSettings = await db.getSettings();
+      setSettings(updatedSettings);
+      if (onUpdate) onUpdate();
+    } catch (e: any) {
+      console.error("Sync Error:", e);
+      setSyncStatus({ type: 'danger', message: `Fallo al sincronizar: ${e.message}` });
+      showToast("Error al sincronizar", "error");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleForceFullSync = async () => {
+    if (isSyncing) return;
+    const confirm = window.confirm("¿Forzar sincronización total? Esto subirá TODOS los datos locales a la nube (útil si faltan datos de ayer/antier).");
+    if (!confirm) return;
+
+    setIsSyncing(true);
+    setSyncStatus(null);
+    try {
+      await db.saveSettings(settings);
+      showToast("Iniciando subida total...", "info");
+      const pushResults = await SupabaseService.syncAll(true);
+      const pulledChanges = await SupabaseService.pullDelta();
+      setSyncStatus({
+        type: 'success',
+        message: 'Sincronización TOTAL completada',
+        results: { push: pushResults, pulling: pulledChanges }
+      });
+      showToast("Sincronización total completa", "success");
+      if (onUpdate) onUpdate();
+    } catch (e: any) {
+      console.error("Full Sync Error:", e);
+      showToast("Error en sincronización total", "error");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const openUserModal = (user?: User) => {
     setUserFormData(user || { role: UserRole.VENDEDOR, active: true });
     setIsUserModalOpen(true);
@@ -457,11 +510,20 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
               <Input label="Supabase URL" name="supabaseUrl" value={settings.supabaseUrl || ''} onChange={handleChange} className="text-xs" />
               <Input label="Supabase Key" type="password" name="supabaseKey" value={settings.supabaseKey || ''} onChange={handleChange} className="text-xs" />
 
-              <div className="grid grid-cols-2 gap-2 pt-2">
-                <Button size="sm" variant="secondary" onClick={handleBackup} icon="download">Local</Button>
-                <Button size="sm" variant="primary" onClick={() => setIsSyncing(true)} disabled={isSyncing} icon={isSyncing ? 'spinner fa-spin' : 'cloud-upload-alt'}>
-                  Nube
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
+                <Button size="sm" variant="secondary" onClick={handleBackup} icon="download" className="w-full">Respaldo Local</Button>
+                <Button size="sm" variant="primary" onClick={handleCloudSync} disabled={isSyncing} icon={isSyncing ? 'spinner fa-spin' : 'cloud-download-alt'} className="w-full">
+                  Nube (Sync)
                 </Button>
+                <div className="sm:col-span-2">
+                  <button
+                    onClick={handleForceFullSync}
+                    disabled={isSyncing}
+                    className="w-full mt-1 py-1.5 text-[10px] font-bold text-amber-600 hover:text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg border border-amber-200 transition-all flex items-center justify-center gap-2"
+                  >
+                    <i className="fas fa-upload"></i> ¿Faltan datos? Forzar Subida Total
+                  </button>
+                </div>
               </div>
 
               {/* INVENTORY REPAIR SECTION */}
