@@ -1413,12 +1413,24 @@ class StorageService {
     }
 
     // Actualizar venta
-    sale.deposit = (sale.deposit || 0) + balance;
+    const balancePaid = sale.balance || 0;  // Save amount before clearing
+    sale.deposit = (sale.deposit || 0) + balancePaid;
     sale.balance = 0;
     sale.isOrder = false; // Ya no está pendiente de pago
     sale.folio = newFolio;
     sale.documentType = newDocType;
     sale.cai = newCAI;
+
+    // CASH FLOW TRACKING: Record payment date and method for today's cash flow
+    sale.balancePaymentDate = this.getLocalNowISO(); // Payment received TODAY
+    // Determine payment method from paymentDetails
+    if (paymentDetails.cash && paymentDetails.cash > 0) {
+      sale.balancePaymentMethod = 'Efectivo';
+    } else if (paymentDetails.card && paymentDetails.card > 0) {
+      sale.balancePaymentMethod = 'Tarjeta';
+    } else if (paymentDetails.transfer && paymentDetails.transfer > 0) {
+      sale.balancePaymentMethod = 'Transferencia';
+    }
 
     // Actualizar detalles de pago (append note or merge)
     // Simple merge for now

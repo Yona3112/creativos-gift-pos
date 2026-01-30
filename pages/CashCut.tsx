@@ -6,7 +6,7 @@ import { Button, Input, Card, ConfirmDialog, Modal, Badge, showToast } from '../
 
 export const CashCut: React.FC = () => {
   const [todaySales, setTodaySales] = useState<Sale[]>([]);
-  const [totals, setTotals] = useState({ cash: 0, card: 0, transfer: 0, credit: 0, total: 0, creditPayments: 0 });
+  const [totals, setTotals] = useState({ cash: 0, card: 0, transfer: 0, credit: 0, total: 0, creditPayments: 0, orderPayments: 0 });
 
   const [denominations, setDenominations] = useState({
     bill500: 0, bill200: 0, bill100: 0, bill50: 0, bill20: 0, bill10: 0, bill5: 0, bill2: 0, bill1: 0, coins: 0
@@ -55,6 +55,7 @@ export const CashCut: React.FC = () => {
     setTodayCutExists(!!cutToday);
     setTodayCutData(cutToday || null);
 
+    // Calculate today's cash flow from sales made today
     const t = sales.reduce((acc, s) => {
       if (s.paymentMethod === 'Efectivo') acc.cash += s.total;
       else if (s.paymentMethod === 'Tarjeta') acc.card += s.total;
@@ -69,12 +70,41 @@ export const CashCut: React.FC = () => {
 
       acc.total += s.total;
       return acc;
-    }, { cash: 0, card: 0, transfer: 0, credit: 0, total: 0, creditPayments: 0 });
+    }, { cash: 0, card: 0, transfer: 0, credit: 0, total: 0, creditPayments: 0, orderPayments: 0 });
 
+    // Add credit payments (abonos a créditos)
     t.cash += creditPayments.cash;
     t.card += creditPayments.card;
     t.transfer += creditPayments.transfer;
     t.creditPayments = creditPayments.cash + creditPayments.card + creditPayments.transfer;
+
+    // NEW: Add order balance payments made today (pagos de saldo de pedidos)
+    // These are orders created on a different day but balance paid TODAY
+    const orderPaymentsToday = allSales.filter(s => {
+      if (!s.balancePaymentDate || s.status !== 'active') return false;
+      const paymentDateLocal = formatDateForDisplay(s.balancePaymentDate);
+      const saleDateLocal = formatDateForDisplay(s.date);
+      // Only count if payment is TODAY and order was from a DIFFERENT day
+      return paymentDateLocal === today && saleDateLocal !== today;
+    });
+
+    let orderPaymentTotal = 0;
+    for (const order of orderPaymentsToday) {
+      const amountPaid = (order.deposit || 0) - (order.deposit || 0) + order.total - (order.balance || 0); // The deposit that was added when completing
+      // Actually, we need to calculate the balance that was paid
+      // Since deposit now = total (after completion), the paid amount = paymentDetails values
+      const pd = order.paymentDetails;
+      const paidCash = pd?.cash || 0;
+      const paidCard = pd?.card || 0;
+      const paidTransfer = pd?.transfer || 0;
+
+      if (order.balancePaymentMethod === 'Efectivo') t.cash += paidCash;
+      else if (order.balancePaymentMethod === 'Tarjeta') t.card += paidCard;
+      else if (order.balancePaymentMethod === 'Transferencia') t.transfer += paidTransfer;
+
+      orderPaymentTotal += paidCash + paidCard + paidTransfer;
+    }
+    t.orderPayments = orderPaymentTotal;
 
     setTotals(t);
   };
@@ -195,9 +225,18 @@ export const CashCut: React.FC = () => {
 
               <div className="border-t border-dashed border-gray-300 pt-4 mt-2">
                 <div className="flex justify-between items-center mb-2">
-                  <span className="text-gray-500 text-sm">Abonos Recibidos Hoy</span>
+                  <span className="text-gray-500 text-sm">Abonos a Créditos Hoy</span>
                   <span className="font-bold text-gray-700">L {totals.creditPayments.toFixed(2)}</span>
                 </div>
+                {totals.orderPayments > 0 && (
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-gray-500 text-sm flex items-center gap-1">
+                      <i className="fas fa-box text-pink-500"></i>
+                      Pagos de Pedidos Hoy
+                    </span>
+                    <span className="font-bold text-pink-600">L {totals.orderPayments.toFixed(2)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between items-center">
                   <span className="text-gray-600 font-bold text-lg uppercase tracking-wide">Total Movimientos</span>
                   <span className="text-3xl font-bold text-slate-800">L {(totals.cash + totals.card + totals.transfer).toFixed(2)}</span>

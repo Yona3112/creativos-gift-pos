@@ -176,6 +176,8 @@ export interface Sale {
   isOrder?: boolean;
   deposit?: number;
   balance?: number;
+  balancePaymentDate?: string;  // Date when pending balance was paid (for cash flow tracking)
+  balancePaymentMethod?: 'Efectivo' | 'Tarjeta' | 'Transferencia'; // How the balance was paid
   updatedAt?: string; // Timestamp for sync tracking
 }
 
