@@ -81,26 +81,41 @@ export const CashCut: React.FC = () => {
     // NEW: Add order balance payments made today (pagos de saldo de pedidos)
     // These are orders created on a different day but balance paid TODAY
     const orderPaymentsToday = allSales.filter(s => {
-      if (!s.balancePaymentDate || s.status !== 'active') return false;
-      const paymentDateLocal = formatDateForDisplay(s.balancePaymentDate);
+      if (s.status !== 'active') return false;
+
       const saleDateLocal = formatDateForDisplay(s.date);
-      // Only count if payment is TODAY and order was from a DIFFERENT day
-      return paymentDateLocal === today && saleDateLocal !== today;
+      if (saleDateLocal === today) return false; // Ignore sales from today (they are already in t.cash/card/etc)
+
+      // Primary check: use the new field
+      if (s.balancePaymentDate) {
+        return formatDateForDisplay(s.balancePaymentDate) === today;
+      }
+
+      // Fallback check: If the field is missing but it was updated TODAY and is now paid (no balance)
+      // and it was an order (isOrder is false now, but was true before)
+      // This recovers payments made today BEFORE the fix was deployed
+      const updatedToday = s.updatedAt && formatDateForDisplay(s.updatedAt) === today;
+      return updatedToday && s.isOrder === false && (s.balance || 0) === 0 && (s.deposit || 0) > 0;
     });
 
     let orderPaymentTotal = 0;
     for (const order of orderPaymentsToday) {
-      const amountPaid = (order.deposit || 0) - (order.deposit || 0) + order.total - (order.balance || 0); // The deposit that was added when completing
-      // Actually, we need to calculate the balance that was paid
-      // Since deposit now = total (after completion), the paid amount = paymentDetails values
+      // Determine amount to add: it should be the part of the total that wasn't paid at the start
+      // For orders paid today, the amount received today = total - (previous deposit)
+      // But since we don't have "previous deposit", we use paymentDetails as the source of truth for today's payment
       const pd = order.paymentDetails;
+
+      // If balancePaymentMethod is missing (old payment), we infer from paymentDetails
+      const method = order.balancePaymentMethod ||
+        (pd?.cash ? 'Efectivo' : pd?.card ? 'Tarjeta' : pd?.transfer ? 'Transferencia' : 'Efectivo');
+
       const paidCash = pd?.cash || 0;
       const paidCard = pd?.card || 0;
       const paidTransfer = pd?.transfer || 0;
 
-      if (order.balancePaymentMethod === 'Efectivo') t.cash += paidCash;
-      else if (order.balancePaymentMethod === 'Tarjeta') t.card += paidCard;
-      else if (order.balancePaymentMethod === 'Transferencia') t.transfer += paidTransfer;
+      if (method === 'Efectivo') t.cash += paidCash;
+      else if (method === 'Tarjeta') t.card += paidCard;
+      else if (method === 'Transferencia') t.transfer += paidTransfer;
 
       orderPaymentTotal += paidCash + paidCard + paidTransfer;
     }
