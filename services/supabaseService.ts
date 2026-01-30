@@ -106,7 +106,7 @@ export class SupabaseService {
 
         const settings = await db.getSettings();
         const lastSync = settings.lastCloudSync ? new Date(settings.lastCloudSync).getTime() : 0;
-        const now = new Date().toISOString();
+        const now = await db.getLocalNowISO(); // Use unified timestamp
 
         const data = await db.getAllData();
         const results: any = {};
@@ -300,12 +300,15 @@ export class SupabaseService {
     static async pullDelta() {
         const client = await this.getClient();
         if (!client) return null;
-
         const settings = await db.getSettings();
         const lastSync = settings.lastCloudSync;
         if (!lastSync) return this.pullAll(); // If no last sync, do full pull
 
-        const now = new Date().toISOString();
+        // CLOCK DRIFT PROTECTION: Subtract 2 minutes from lastSync to account for client/server time difference
+        const lastSyncDate = new Date(lastSync);
+        const driftedSync = new Date(lastSyncDate.getTime() - (2 * 60 * 1000)).toISOString();
+
+        const now = await db.getLocalNowISO(); // Use unified timestamp
         const tables = [
             'products', 'categories', 'customers', 'sales', 'users',
             'branches', 'credits', 'promotions', 'suppliers',
@@ -317,17 +320,22 @@ export class SupabaseService {
         const results: any = {};
 
         for (const table of tables) {
-            // Fetch records updated after lastSync
-            const { data, error } = await client
-                .from(table)
-                .select('*')
-                .gt('updatedAt', lastSync)
-                .limit(500);
+            try {
+                // Fetch records updated after (lastSync - 2min)
+                // Use .gte() to ensure we don't miss records exactly at the boundary
+                const { data, error } = await client
+                    .from(table)
+                    .select('*')
+                    .gte('updatedAt', driftedSync)
+                    .limit(500);
 
-            if (!error && data && data.length > 0) {
-                console.log(`📥 [Delta] ${table}: ${data.length} cambios encontrados`);
-                results[table] = data;
-                totalChanges += data.length;
+                if (!error && data && data.length > 0) {
+                    results[table] = data;
+                    totalChanges += data.length;
+                    console.log(`📥 ${table}: ${data.length} cambios detectados desde ${driftedSync}`);
+                }
+            } catch (err) {
+                console.warn(`⚠️ Error en pullDelta para tabla ${table}:`, err);
             }
         }
 
@@ -335,7 +343,7 @@ export class SupabaseService {
             await this.mergeDelta(results);
         }
 
-        // Always update last sync time even if no changes to prevent re-querying old data
+        // Always update last sync time even if no changes
         await db.saveSettings({ ...settings, lastCloudSync: now });
 
         return totalChanges;
@@ -344,8 +352,17 @@ export class SupabaseService {
     private static async mergeDelta(delta: any) {
         // Sales handled differently to merge
         if (delta.sales) {
+            console.log(`🔀 Procesando ${delta.sales.length} ventas de la nube...`);
             for (const cloudSale of delta.sales) {
                 await db.insertSaleFromCloud(cloudSale);
+            }
+        }
+
+        // Cash cuts merge
+        if (delta.cash_cuts) {
+            console.log(`🔀 Procesando ${delta.cash_cuts.length} cortes de caja de la nube...`);
+            for (const cut of delta.cash_cuts) {
+                await db.saveCashCut(cut);
             }
         }
 

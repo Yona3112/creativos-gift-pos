@@ -70,6 +70,33 @@ class StorageService {
     return `${year}-${month}-${day}`;
   }
 
+  /**
+   * Interprets an ISO string stored in the DB as a local Honduras Date object.
+   * This is necessary because we store 'shifted' times with a 'Z' marker.
+   */
+  getSystemDate(iso?: string) {
+    if (!iso) return new Date();
+    // Since we store shifted time + 'Z', we need to interpret it as UTC 
+    // to get the correct numerical values that represent Honduras time.
+    return new Date(iso);
+  }
+
+  /**
+   * Returns the current time as a Date object in the system's shifted context.
+   */
+  getSystemNow() {
+    return new Date(this.getLocalNowISO());
+  }
+
+  /**
+   * Calculates real elapsed minutes between a stored ISO time and now.
+   */
+  getElapsedMinutes(iso: string) {
+    const past = this.getSystemDate(iso).getTime();
+    const now = this.getSystemNow().getTime();
+    return Math.floor((now - past) / (1000 * 60));
+  }
+
   // --- INITIALIZATION & MIGRATION ---
   async init() {
     const isMigrated = localStorage.getItem('dexie_migrated');
@@ -553,6 +580,11 @@ class StorageService {
         isOrder: data.isOrder,
         deposit: data.deposit,
         balance: data.balance,
+        fulfillmentHistory: [{
+          status: data.fulfillmentStatus || 'delivered',
+          date: this.getLocalNowISO()
+        }],
+        createdAt: this.getLocalNowISO(),
         updatedAt: this.getLocalNowISO() // Set initial timestamp
       };
 
@@ -1367,6 +1399,18 @@ class StorageService {
 
     sale.fulfillmentStatus = status;
     if (shippingDetails) sale.shippingDetails = { ...sale.shippingDetails, ...shippingDetails } as ShippingDetails;
+
+    // Record HISTORY of status change
+    if (!sale.fulfillmentHistory) sale.fulfillmentHistory = [];
+
+    // Avoid duplicate status entries if the date is very close (e.g. repeated clicks)
+    const lastEntry = sale.fulfillmentHistory[sale.fulfillmentHistory.length - 1];
+    if (!lastEntry || lastEntry.status !== status) {
+      sale.fulfillmentHistory.push({
+        status,
+        date: this.getLocalNowISO()
+      });
+    }
 
     // CRITICAL: Update timestamp for sync
     sale.updatedAt = this.getLocalNowISO();

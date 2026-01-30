@@ -23,6 +23,9 @@ export const CashCut: React.FC = () => {
   const [adminPassword, setAdminPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
 
+  // Multiple Cut State
+  const [forceNewCut, setForceNewCut] = useState(false);
+
   // Helper for Local Date using global db helper
   const getLocalDate = () => db.getLocalTodayISO();
 
@@ -79,33 +82,20 @@ export const CashCut: React.FC = () => {
     t.creditPayments = creditPayments.cash + creditPayments.card + creditPayments.transfer;
 
     // NEW: Add order balance payments made today (pagos de saldo de pedidos)
-    // These are orders created on a different day but balance paid TODAY
     const orderPaymentsToday = allSales.filter(s => {
       if (s.status !== 'active') return false;
-
       const saleDateLocal = formatDateForDisplay(s.date);
-      if (saleDateLocal === today) return false; // Ignore sales from today (they are already in t.cash/card/etc)
-
-      // Primary check: use the new field
+      if (saleDateLocal === today) return false;
       if (s.balancePaymentDate) {
         return formatDateForDisplay(s.balancePaymentDate) === today;
       }
-
-      // Fallback check: If the field is missing but it was updated TODAY and is now paid (no balance)
-      // and it was an order (isOrder is false now, but was true before)
-      // This recovers payments made today BEFORE the fix was deployed
       const updatedToday = s.updatedAt && formatDateForDisplay(s.updatedAt) === today;
       return updatedToday && s.isOrder === false && (s.balance || 0) === 0 && (s.deposit || 0) > 0;
     });
 
     let orderPaymentTotal = 0;
     for (const order of orderPaymentsToday) {
-      // Determine amount to add: it should be the part of the total that wasn't paid at the start
-      // For orders paid today, the amount received today = total - (previous deposit)
-      // But since we don't have "previous deposit", we use paymentDetails as the source of truth for today's payment
       const pd = order.paymentDetails;
-
-      // If balancePaymentMethod is missing (old payment), we infer from paymentDetails
       const method = order.balancePaymentMethod ||
         (pd?.cash ? 'Efectivo' : pd?.card ? 'Tarjeta' : pd?.transfer ? 'Transferencia' : 'Efectivo');
 
@@ -159,6 +149,7 @@ export const CashCut: React.FC = () => {
     showToast('Corte de caja guardado exitosamente', 'success');
     setDenominations({ bill500: 0, bill200: 0, bill100: 0, bill50: 0, bill20: 0, bill10: 0, bill5: 0, bill2: 0, bill1: 0, coins: 0 });
     setCashCutConfirm(false);
+    setForceNewCut(false);
     loadData(); // Reload to show in history
   };
 
@@ -262,9 +253,8 @@ export const CashCut: React.FC = () => {
         </div>
 
         {/* Money Counting or Cut Summary */}
-        <Card title={todayCutExists ? "Resumen del Corte de Hoy" : "Arqueo de Efectivo"} className="shadow-md h-fit">
-          {todayCutExists && todayCutData ? (
-            /* Mostrar resumen del corte ya realizado */
+        <Card title={(todayCutExists && !forceNewCut) ? "Resumen del Corte de Hoy" : "Arqueo de Efectivo"} className="shadow-md h-fit">
+          {todayCutExists && todayCutData && !forceNewCut ? (
             <div className="space-y-4">
               <div className="bg-green-50 p-4 rounded-xl border border-green-200 text-center">
                 <i className="fas fa-check-circle text-green-600 text-3xl mb-2"></i>
@@ -292,16 +282,26 @@ export const CashCut: React.FC = () => {
                 </div>
               </div>
 
-              <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 flex items-start gap-2 text-sm">
-                <i className="fas fa-info-circle text-amber-600 mt-0.5"></i>
-                <p className="text-amber-800">
-                  Para realizar un nuevo corte, primero debe revertir el corte actual desde el historial (requiere contraseña administrativa).
-                </p>
+              <div className="space-y-3">
+                <Button variant="secondary" className="w-full" onClick={() => setForceNewCut(true)} icon="plus">
+                  Realizar otro corte hoy
+                </Button>
+                <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 flex items-start gap-2 text-sm">
+                  <i className="fas fa-info-circle text-amber-600 mt-0.5"></i>
+                  <p className="text-amber-800">
+                    Si el corte anterior fue de un turno previo (ej. medianoche), puedes iniciar uno nuevo sin revertir el anterior.
+                  </p>
+                </div>
               </div>
             </div>
           ) : (
-            /* Mostrar campos de conteo cuando NO hay corte */
             <>
+              {forceNewCut && (
+                <div className="mb-4 flex justify-between items-center bg-blue-50 p-3 rounded-xl border border-blue-100">
+                  <span className="text-sm font-bold text-blue-800">Corte Adicional</span>
+                  <button onClick={() => setForceNewCut(false)} className="text-blue-500 hover:text-blue-700 text-xs font-bold underline">Cancelar</button>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-6">
                 <Input label="L 500" type="number" min="0" value={denominations.bill500} onChange={e => setDenominations({ ...denominations, bill500: parseInt(e.target.value) || 0 })} />
                 <Input label="L 200" type="number" min="0" value={denominations.bill200} onChange={e => setDenominations({ ...denominations, bill200: parseInt(e.target.value) || 0 })} />
@@ -372,25 +372,12 @@ export const CashCut: React.FC = () => {
                     </Badge>
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <Button
-                      size="sm"
-                      variant="danger"
-                      onClick={() => handleRevertClick(cut.id)}
-                      icon="undo"
-                      title="Revertir Corte"
-                    >
+                    <Button size="sm" variant="danger" onClick={() => handleRevertClick(cut.id)} icon="undo" title="Revertir Corte">
                       Revertir
                     </Button>
                   </td>
                 </tr>
               ))}
-              {history.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
-                    No hay cortes registrados
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
@@ -399,7 +386,7 @@ export const CashCut: React.FC = () => {
       <ConfirmDialog
         isOpen={cashCutConfirm}
         title="Cerrar Caja"
-        message="¿Estás seguro de cerrar la caja? Esta acción no se puede deshacer y quedará registrada en el sistema."
+        message="¿Estás seguro de cerrar la caja? Esta acción no se puede deshacer."
         confirmText="Cerrar Caja"
         cancelText="Cancelar"
         variant="warning"
@@ -407,19 +394,17 @@ export const CashCut: React.FC = () => {
         onCancel={() => setCashCutConfirm(false)}
       />
 
-      {/* Modal de Reversión */}
       <Modal isOpen={revertModalOpen} onClose={() => setRevertModalOpen(false)} title="Revertir Corte de Caja" size="sm">
         <div className="space-y-4">
           <div className="bg-red-50 p-4 rounded-xl border border-red-100 flex items-start gap-3">
             <i className="fas fa-exclamation-triangle text-red-500 mt-1"></i>
             <p className="text-sm text-red-800">
-              Esta acción eliminará el registro del corte y permitirá volver a cerrar la caja para este turno. Requiere permiso administrativo.
+              Esta acción eliminará el registro del corte. Requiere permiso administrativo.
             </p>
           </div>
           <Input
             type="password"
             label="Contraseña Administrativa"
-            placeholder="Ingrese clave maestra"
             value={adminPassword}
             onChange={e => { setAdminPassword(e.target.value); setPasswordError(''); }}
             error={passwordError}

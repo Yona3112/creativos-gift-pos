@@ -67,23 +67,21 @@ export const Credits: React.FC<CreditsProps> = ({ settings }) => {
     // Helper for consistent date display
     const getLocalDate = (dateStr: string) => {
         if (!dateStr) return '';
-        const date = new Date(dateStr);
+        const date = db.getSystemDate(dateStr);
         return date.toLocaleDateString('es-HN', {
             year: 'numeric',
             month: '2-digit',
-            day: '2-digit',
-            timeZone: 'America/Tegucigalpa'
+            day: '2-digit'
         });
     };
 
     const getLocalTime = (dateStr: string) => {
         if (!dateStr) return '';
-        const date = new Date(dateStr);
+        const date = db.getSystemDate(dateStr);
         return date.toLocaleTimeString('es-HN', {
             hour: '2-digit',
             minute: '2-digit',
-            hour12: true,
-            timeZone: 'America/Tegucigalpa'
+            hour12: true
         });
     };
 

@@ -357,8 +357,8 @@ export const POS: React.FC<POSProps> = ({
         setIsProcessing(true);
         try {
             const isOrder = !isImmediateDelivery;
-            // El abono bruto hoy es el depósito manual o el total si es entrega inmediata
-            const grossPayToday = (isOrder && depositAmount) ? parseFloat(depositAmount) : total;
+            // El abono bruto hoy es el depósito manual si es un pedido, o el total si es entrega inmediata
+            const grossPayToday = isOrder ? (parseFloat(depositAmount) || 0) : total;
             const balance = Math.max(0, total - grossPayToday);
 
             const saleData = {

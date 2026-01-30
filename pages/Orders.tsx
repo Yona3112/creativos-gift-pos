@@ -700,13 +700,24 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
 
             <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title={`Gestionar Pedido ${selectedOrder?.folio}`}>
                 <div className="space-y-5">
-                    <div className="bg-gray-50 p-4 rounded-xl text-sm border border-gray-100">
-                        <p className="text-gray-500 mb-1">Items del Pedido:</p>
-                        <ul className="list-disc pl-4 font-medium text-gray-800 space-y-1">
-                            {selectedOrder?.items.map((item, idx) => (
-                                <li key={idx}>{item.quantity} x {item.name} {item.notes && <span className="text-gray-500 italic">({item.notes})</span>}</li>
-                            ))}
-                        </ul>
+                    <div className="bg-gray-50 p-4 rounded-xl text-sm border border-gray-100 flex flex-col md:flex-row justify-between gap-4">
+                        <div className="flex-1">
+                            <p className="text-gray-500 mb-1 flex items-center gap-1"><i className="fas fa-shopping-basket text-[10px]"></i> Items:</p>
+                            <ul className="list-disc pl-4 font-medium text-gray-800 space-y-1">
+                                {selectedOrder?.items.map((item, idx) => (
+                                    <li key={idx} className="leading-tight">{item.quantity} x {item.name} {item.notes && <span className="text-gray-500 italic">({item.notes})</span>}</li>
+                                ))}
+                            </ul>
+                        </div>
+                        <div className="md:border-l md:pl-4 border-gray-200 min-w-[140px]">
+                            <p className="text-gray-500 mb-1 flex items-center gap-1"><i className="far fa-calendar-alt text-[10px]"></i> Creado:</p>
+                            <p className="font-bold text-gray-800 leading-tight">
+                                {selectedOrder?.createdAt ? new Date(selectedOrder.createdAt).toLocaleString() : new Date(selectedOrder?.date || '').toLocaleString()}
+                            </p>
+                            <div className="mt-2 inline-block px-2 py-0.5 bg-primary/10 text-primary rounded-full text-[10px] font-black uppercase tracking-wider">
+                                {timeAgo(selectedOrder?.date || '')} de antigüedad
+                            </div>
+                        </div>
                     </div>
 
                     <div>
@@ -723,6 +734,44 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                                 <option value="shipped">🚚 Enviado (En Ruta)</option>
                                 <option value="delivered">🏁 Entregado (Finalizado)</option>
                             </select>
+                        </div>
+                    </div>
+
+                    {/* NUEVO: Historial de Estados */}
+                    <div className="px-1">
+                        <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                            <i className="fas fa-history"></i> Línea de Tiempo del Pedido
+                        </h4>
+                        <div className="space-y-2 relative before:content-[''] before:absolute before:left-[7px] before:top-2 before:bottom-2 before:w-[2px] before:bg-gray-100">
+                            {selectedOrder?.fulfillmentHistory && selectedOrder.fulfillmentHistory.length > 0 ? (
+                                selectedOrder.fulfillmentHistory.slice().reverse().map((entry, idx) => (
+                                    <div key={idx} className="relative pl-6 flex justify-between items-center group">
+                                        <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 border-white shadow-sm flex items-center justify-center z-10 transition-colors ${entry.status === 'delivered' ? 'bg-green-500' :
+                                            entry.status === 'shipped' ? 'bg-purple-500' :
+                                                entry.status === 'ready' ? 'bg-green-400' :
+                                                    entry.status === 'production' ? 'bg-blue-500' : 'bg-yellow-500'
+                                            }`}>
+                                            <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
+                                        </div>
+                                        <div className="flex-1">
+                                            <span className="text-xs font-bold text-gray-700 capitalize">{entry.status.replace('_', ' ')}</span>
+                                            <span className="text-[9px] text-gray-400 ml-2">{new Date(entry.date).toLocaleString()}</span>
+                                        </div>
+                                        {idx === 0 && <Badge variant="default" className="text-[8px] py-0 h-4">Actual</Badge>}
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="relative pl-6 flex justify-between items-center group">
+                                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 border-white shadow-sm flex items-center justify-center z-10 bg-yellow-500">
+                                        <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
+                                    </div>
+                                    <div className="flex-1">
+                                        <span className="text-xs font-bold text-gray-700 capitalize">Creado (Estado Inicial)</span>
+                                        <span className="text-[9px] text-gray-400 ml-2">{new Date(selectedOrder?.date || '').toLocaleString()}</span>
+                                    </div>
+                                    <Badge variant="default" className="text-[8px] py-0 h-4">Origen</Badge>
+                                </div>
+                            )}
                         </div>
                     </div>
 

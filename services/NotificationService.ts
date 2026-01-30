@@ -54,7 +54,7 @@ export class NotificationService {
 
         if (!settings.billingDeadline || !settings.billingRangeEnd) return notifications;
 
-        const today = new Date();
+        const today = db.getSystemNow();
         const deadline = new Date(settings.billingDeadline + 'T23:59:59');
         const daysToDeadline = Math.ceil((deadline.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
@@ -224,9 +224,9 @@ export class NotificationService {
      * @returns Object with days overdue and mora amount
      */
     static calculateMora(credit: CreditAccount, moraRate: number = 2): { daysOverdue: number; moraAmount: number } {
-        const today = new Date();
+        const today = db.getSystemNow();
         today.setHours(0, 0, 0, 0);
-        const dueDate = new Date(credit.dueDate);
+        const dueDate = db.getSystemDate(credit.dueDate);
         dueDate.setHours(0, 0, 0, 0);
 
         if (dueDate >= today || credit.status === 'paid') {

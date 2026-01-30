@@ -141,6 +141,12 @@ export interface PaymentDetails {
 
 export type FulfillmentStatus = 'pending' | 'production' | 'ready' | 'shipped' | 'delivered';
 
+export interface StatusHistoryEntry {
+  status: FulfillmentStatus;
+  date: string;
+  userId?: string;
+}
+
 export interface ShippingDetails {
   method: 'pickup' | 'shipping';
   company?: string;
@@ -184,7 +190,9 @@ export interface Sale {
   balance?: number;
   balancePaymentDate?: string;  // Date when pending balance was paid (for cash flow tracking)
   balancePaymentMethod?: 'Efectivo' | 'Tarjeta' | 'Transferencia'; // How the balance was paid
+  fulfillmentHistory?: StatusHistoryEntry[]; // History of status changes
   updatedAt?: string; // Timestamp for sync tracking
+  createdAt?: string; // Precise creation timestamp
 }
 
 export interface CreditNote {

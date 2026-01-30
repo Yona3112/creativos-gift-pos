@@ -87,9 +87,7 @@ export const SalesHistory: React.FC<SalesHistoryProps> = ({ sales, customers, us
 
     // Calculate time elapsed since sale
     const getTimeElapsedWarning = (saleDate: string) => {
-        const saleTime = new Date(saleDate).getTime();
-        const now = Date.now();
-        const minutesElapsed = Math.floor((now - saleTime) / (1000 * 60));
+        const minutesElapsed = db.getElapsedMinutes(saleDate);
 
         if (minutesElapsed < 30) {
             return { level: 'ok', text: `Hace ${minutesElapsed} minutos`, color: 'green' };

@@ -18,9 +18,10 @@ interface ReportsProps {
 
 export const Reports: React.FC<ReportsProps> = ({ sales: allSales, products: allProducts, customers: allCustomers, categories: allCategories }) => {
     // Helper para fechas locales
-    const getLocalDate = (date: Date = new Date()) => {
-        const offset = date.getTimezoneOffset() * 60000;
-        return new Date(date.getTime() - offset).toISOString().split('T')[0];
+    const getLocalDate = (date?: Date) => {
+        if (!date) return db.getLocalTodayISO();
+        // Since s.date is already shifted in DB, we treat it as UTC to extract the string
+        return date.toISOString().split('T')[0];
     };
 
     const today = getLocalDate();
