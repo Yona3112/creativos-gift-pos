@@ -86,9 +86,9 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                 const client = await SupabaseService.getClient();
                 if (!client) return;
 
-                // OPTIMIZATION: Only fetch orders modified in the last 30 days
+                // REDUCED SCOPE: Only 7 days to minimize query time
                 const cutoff = new Date();
-                cutoff.setDate(cutoff.getDate() - 30);
+                cutoff.setDate(cutoff.getDate() - 7);
                 const cutoffStr = cutoff.toISOString();
 
                 // SIMPLIFIED QUERY: Just fetch recent sales to avoid Supabase timeout
@@ -98,7 +98,7 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                     .select('*')
                     .gte('date', cutoffStr)
                     .order('date', { ascending: false })
-                    .limit(200);
+                    .limit(50);
                 if (error) {
                     console.warn("⚠️ Polling error:", error.message);
                     return;
@@ -153,9 +153,9 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
             }
         };
 
-        // Start polling immediately and then every 10 seconds
+        // Start polling immediately and then every 30 seconds (reduced from 10s)
         pollFromCloud();
-        pollInterval = setInterval(pollFromCloud, 10000);
+        pollInterval = setInterval(pollFromCloud, 30000);
 
         return () => {
             if (pollInterval) clearInterval(pollInterval);

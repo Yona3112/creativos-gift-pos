@@ -334,3 +334,10 @@ ALTER TABLE products ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP WITH TIME ZO
 -- to fix inventory sync issues:
 -- ================================================
 -- ALTER TABLE products ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW();
+
+-- ================================================
+-- CRITICAL: Run these to fix query timeout issues:
+-- ================================================
+CREATE INDEX IF NOT EXISTS idx_sales_date ON sales(date);
+CREATE INDEX IF NOT EXISTS idx_sales_updatedAt ON sales("updatedAt");
+CREATE INDEX IF NOT EXISTS idx_products_updatedAt ON products("updatedAt");
