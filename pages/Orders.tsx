@@ -86,14 +86,12 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                 const client = await SupabaseService.getClient();
                 if (!client) return;
 
-                // OPTIMIZATION: Only fetch orders modified in the last 15 days
-                // This significantly reduces data egress (consumption)
+                // OPTIMIZATION: Only fetch orders modified in the last 30 days
                 const cutoff = new Date();
-                cutoff.setDate(cutoff.getDate() - 15);
+                cutoff.setDate(cutoff.getDate() - 30);
                 const cutoffStr = cutoff.toISOString();
 
                 // Query: (updatedAt >= cutoff) OR (updatedAt is NULL AND date >= cutoff)
-                // This handles records that existed before updatedAt column was added
                 const { data: cloudSales, error } = await client
                     .from('sales')
                     .select('*')
@@ -108,6 +106,7 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
 
                     // Get fresh local sales
                     const localSales = await db.getSales();
+                    console.log(`🔍 Polling: ${cloudSales.length} ventas en nube, ${localSales.length} locales`);
 
                     for (const cloudSale of cloudSales) {
                         const localSale = localSales.find(s => s.id === cloudSale.id);
@@ -118,14 +117,23 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                             hasChanges = true;
                             console.log("📥 Nuevo pedido descargado:", cloudSale.folio);
                         } else {
-                            // SMART SYNC: Update only if cloud is newer
+                            // AGGRESSIVE SYNC: Update if:
+                            // 1. Cloud has updatedAt and it's newer than local
+                            // 2. OR Cloud has updatedAt but local doesn't (cloud was updated after column was added)
+                            // 3. OR fulfillmentStatus is different (status changed on another device)
                             const cloudTime = cloudSale.updatedAt ? new Date(cloudSale.updatedAt).getTime() : 0;
                             const localTime = localSale.updatedAt ? new Date(localSale.updatedAt).getTime() : 0;
+                            const statusDifferent = cloudSale.fulfillmentStatus !== localSale.fulfillmentStatus;
 
-                            if (cloudTime > localTime) {
+                            const shouldUpdate =
+                                (cloudTime > localTime) ||  // Cloud is newer
+                                (cloudTime > 0 && localTime === 0) ||  // Cloud has timestamp, local doesn't
+                                (statusDifferent && cloudTime >= localTime);  // Status different and cloud is same age or newer
+
+                            if (shouldUpdate) {
                                 await db.insertSaleFromCloud(cloudSale);
                                 hasChanges = true;
-                                console.log(`☁️ Pedido actualizado automáticamente: ${cloudSale.folio}`);
+                                console.log(`☁️ Actualizado automáticamente: ${cloudSale.folio} (${localSale.fulfillmentStatus || 'pending'} → ${cloudSale.fulfillmentStatus || 'pending'})`);
                             }
                         }
                     }
@@ -133,6 +141,7 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                     // Refresh UI if there were changes
                     if (hasChanges && isMounted.current) {
                         await refresh();
+                        console.log("🔄 UI actualizada con cambios de la nube");
                     }
                     setLastSync(new Date().toLocaleTimeString());
                 }
