@@ -159,7 +159,48 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
             const { SupabaseService } = await import('../services/supabaseService');
             const sett = await db.getSettings();
             if (sett.supabaseUrl && sett.supabaseKey) {
+                // STEP 1: Push local changes to cloud
                 await SupabaseService.syncAll();
+                console.log("☁️ Datos locales subidos");
+
+                // STEP 2: Pull ALL sales from cloud and merge with local
+                const client = await SupabaseService.getClient();
+                if (client) {
+                    const cutoff = new Date();
+                    cutoff.setDate(cutoff.getDate() - 30); // Wider window for manual sync
+                    const cutoffStr = cutoff.toISOString();
+
+                    const { data: cloudSales, error } = await client
+                        .from('sales')
+                        .select('*')
+                        .or(`updatedAt.gte.${cutoffStr},and(updatedAt.is.null,date.gte.${cutoffStr})`);
+
+                    if (!error && cloudSales) {
+                        const localSales = await db.getSales();
+                        let syncedCount = 0;
+
+                        for (const cloudSale of cloudSales) {
+                            const localSale = localSales.find(s => s.id === cloudSale.id);
+
+                            if (!localSale) {
+                                await db.insertSaleFromCloud(cloudSale);
+                                syncedCount++;
+                                console.log(`📥 Nuevo: ${cloudSale.folio}`);
+                            } else {
+                                const cloudTime = cloudSale.updatedAt ? new Date(cloudSale.updatedAt).getTime() : 0;
+                                const localTime = localSale.updatedAt ? new Date(localSale.updatedAt).getTime() : 0;
+
+                                if (cloudTime > localTime) {
+                                    await db.insertSaleFromCloud(cloudSale);
+                                    syncedCount++;
+                                    console.log(`☁️ Actualizado: ${cloudSale.folio}`);
+                                }
+                            }
+                        }
+                        console.log(`📊 Total sincronizados: ${syncedCount} pedidos`);
+                    }
+                }
+
                 await refresh();
                 showToast("Sincronización completada", "success");
             } else {
