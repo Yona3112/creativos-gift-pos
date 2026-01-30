@@ -210,12 +210,25 @@ export class SupabaseService {
 
             const { error } = await client.from('settings').upsert(settingsToSync);
             if (!error) {
-                // Update local settings with new lastCloudSync
                 await db.saveSettings({ ...data.settings, lastCloudSync: now });
             }
         }
 
-        console.log("🏁 Sincronización completa:", results);
+        // Summarize errors
+        const failedTables = Object.entries(results)
+            .filter(([_, status]) => typeof status === 'string' && status.startsWith('Error:'))
+            .map(([name, status]) => `${name} (${status})`);
+
+        if (failedTables.length > 0) {
+            const isMissingColumn = failedTables.some(e => e.includes('column') || e.includes('no existe la columna'));
+            let errorMsg = `Error en tablas: ${failedTables.join(', ')}`;
+            if (isMissingColumn) {
+                errorMsg += "\n\n💡 TIP: Parece que faltan columnas en Supabase. Por favor, ejecuta el script SQL que te envié en el editor de Supabase.";
+            }
+            throw new Error(errorMsg);
+        }
+
+        console.log("🏁 Sincronización completa sin errores críticos:", results);
         return results;
     }
 
@@ -237,17 +250,15 @@ export class SupabaseService {
         const largeTables = ['sales', 'inventory_history', 'price_history'];
         const cutoff = new Date();
         cutoff.setDate(cutoff.getDate() - 90);
-        const cutoffISO = cutoff.toISOString();
-        const cutoffDateOnly = cutoffISO.split('T')[0]; // "YYYY-MM-DD"
+        const cutoffDateOnly = cutoff.toISOString().split('T')[0];
 
         for (const table of tables) {
             let query = client.from(table).select('*');
 
-            // Apply limits to large tables to avoid timeout
             if (largeTables.includes(table)) {
-                // If the column is 'date' (text YYYY-MM-DD), use date-only comparison
-                // to avoid issues with ISO string length comparison in Postgres
-                query = query.gte('date', cutoffDateOnly).order('date', { ascending: false }).limit(600);
+                // REDUCED LIMIT to 200 to prevent Supabase 57014 (statement timeout)
+                // IMPORTANT: Requires index on 'date' column in Supabase
+                query = query.gte('date', cutoffDateOnly).order('date', { ascending: false }).limit(200);
             }
 
             const { data, error } = await query;

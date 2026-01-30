@@ -127,7 +127,7 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                         .select('*')
                         .gte('date', cutoffDateOnly)
                         .order('date', { ascending: false })
-                        .limit(600);
+                        .limit(200);
 
                     if (!error && cloudSales) {
                         const localSales = await db.getSales();
