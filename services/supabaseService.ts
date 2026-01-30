@@ -8,7 +8,7 @@ export class SupabaseService {
     /**
      * Helper for robust requests with exponential backoff
      */
-    static async requestWithRetry<T>(operation: () => Promise<any>, tableName: string, maxRetries = 3): Promise<T | null> {
+    static async requestWithRetry<T>(operation: () => Promise<any>, tableName: string, maxRetries = 5): Promise<T | null> {
         let lastError: any = null;
         for (let attempt = 0; attempt < maxRetries; attempt++) {
             try {
@@ -36,6 +36,29 @@ export class SupabaseService {
         }
         console.error(`❌ [${tableName}] Falló tras reintentos:`, lastError);
         return null;
+    }
+
+    /**
+     * Batch upsert to avoid compute limits/timeouts
+     */
+    private static async batchUpsert(client: any, tableName: string, records: any[], chunkSize = 50): Promise<boolean> {
+        for (let i = 0; i < records.length; i += chunkSize) {
+            const chunk = records.slice(i, i + chunkSize);
+            console.log(`📦 [${tableName}] Enviando lote ${Math.floor(i / chunkSize) + 1} (${chunk.length} registros)...`);
+
+            const res = await this.requestWithRetry<any>(
+                () => client.from(tableName).upsert(chunk),
+                tableName
+            );
+
+            if (res === null) return false; // Fail fast if a batch failed after retries
+
+            // Add a small delay between batches
+            if (i + chunkSize < records.length) {
+                await new Promise(r => setTimeout(r, 300));
+            }
+        }
+        return true;
     }
 
     static async getClient() {
@@ -203,13 +226,11 @@ export class SupabaseService {
                         continue;
                     }
 
-                    const res = await this.requestWithRetry<any>(
-                        () => client.from(table.name).upsert(recordsToSync),
-                        table.name
-                    );
+                    // Use batchUpsert for all other tables
+                    const success = await this.batchUpsert(client, table.name, recordsToSync);
 
-                    if (res === null) {
-                        results[table.name] = `Error: Falló tras reintentos (posible sobrecarga)`;
+                    if (!success) {
+                        results[table.name] = `Error: Falló tras reintentos o lotes excesivos`;
                     } else {
                         results[table.name] = 'OK';
                     }
