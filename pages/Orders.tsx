@@ -47,7 +47,7 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
     const [isPayModalOpen, setIsPayModalOpen] = useState(false);
     const [payMethod, setPayMethod] = useState<'Efectivo' | 'Tarjeta' | 'Transferencia'>('Efectivo');
     const [payDetails, setPayDetails] = useState<any>({});
-    const [generateInvoice, setGenerateInvoice] = useState(true); // Default to Invoice when completing
+    const [generateInvoice, setGenerateInvoice] = useState(false); // Default to Ticket (non-fiscal)
     const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
     // Polling ref to track if component is mounted
@@ -91,11 +91,14 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                 cutoff.setDate(cutoff.getDate() - 30);
                 const cutoffStr = cutoff.toISOString();
 
-                // Query: (updatedAt >= cutoff) OR (updatedAt is NULL AND date >= cutoff)
+                // SIMPLIFIED QUERY: Just fetch recent sales to avoid Supabase timeout
+                // The .or() query was causing 500 errors on free tier
                 const { data: cloudSales, error } = await client
                     .from('sales')
                     .select('*')
-                    .or(`updatedAt.gte.${cutoffStr},and(updatedAt.is.null,date.gte.${cutoffStr})`);
+                    .gte('date', cutoffStr)
+                    .order('date', { ascending: false })
+                    .limit(200);
                 if (error) {
                     console.warn("⚠️ Polling error:", error.message);
                     return;
@@ -179,10 +182,13 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                     cutoff.setDate(cutoff.getDate() - 30); // Wider window for manual sync
                     const cutoffStr = cutoff.toISOString();
 
+                    // SIMPLIFIED QUERY: Avoid complex .or() that causes timeouts
                     const { data: cloudSales, error } = await client
                         .from('sales')
                         .select('*')
-                        .or(`updatedAt.gte.${cutoffStr},and(updatedAt.is.null,date.gte.${cutoffStr})`);
+                        .gte('date', cutoffStr)
+                        .order('date', { ascending: false })
+                        .limit(300);
 
                     if (!error && cloudSales) {
                         const localSales = await db.getSales();

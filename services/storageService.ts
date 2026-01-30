@@ -1387,6 +1387,11 @@ class StorageService {
     if (newDocumentType === 'FACTURA' && sale.documentType !== 'FACTURA') {
       const settings = await this.getSettings();
 
+      // Validate billing range is configured
+      if (!settings.billingRangeStart || !settings.billingRangeEnd) {
+        throw new Error('Rango de facturación no configurado. Ve a Configuración > Facturación.');
+      }
+
       // Validaciones de Factura
       const nextNum = settings.currentInvoiceNumber;
       const startParts = settings.billingRangeStart.split('-');
