@@ -52,9 +52,9 @@ class AppDatabase extends Dexie {
   }
 }
 
-const db_engine = new AppDatabase();
+export const db_engine = new AppDatabase();
 
-class StorageService {
+export class StorageService {
   getLocalNowISO() {
     // Returns a full ISO string (YYYY-MM-DDTHH:mm:ss.sssZ) adjusted for Honduras time
     // but represented as if it were UTC to avoid automatic shifts by components

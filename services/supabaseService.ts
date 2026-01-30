@@ -1,6 +1,6 @@
 
 import { createClient } from '@supabase/supabase-js';
-import { db } from './storageService';
+import { db, db_engine } from './storageService';
 
 export class SupabaseService {
     private static client: any = null;
@@ -414,15 +414,6 @@ export class SupabaseService {
             }
         }
 
-        // Cash cuts merge
-        if (delta.cash_cuts) {
-            console.log(`🔀 Procesando ${delta.cash_cuts.length} cortes de caja de la nube...`);
-            for (const cut of delta.cash_cuts) {
-                await db.saveCashCut(cut);
-            }
-        }
-
-        // Generic merge for most tables
         const genericTables = [
             { cloud: 'products', dexie: 'products' },
             { cloud: 'categories', dexie: 'categories' },
@@ -434,8 +425,8 @@ export class SupabaseService {
             { cloud: 'suppliers', dexie: 'suppliers' },
             { cloud: 'consumables', dexie: 'consumables' },
             { cloud: 'quotes', dexie: 'quotes' },
-            { cloud: 'cash_cuts', dexie: 'cash_cuts' },
-            { cloud: 'credit_notes', dexie: 'credit_notes' },
+            { cloud: 'cash_cuts', dexie: 'cashCuts' },
+            { cloud: 'credit_notes', dexie: 'creditNotes' },
             { cloud: 'expenses', dexie: 'expenses' },
             { cloud: 'inventory_history', dexie: 'inventoryHistory' },
             { cloud: 'price_history', dexie: 'priceHistory' }
@@ -444,9 +435,9 @@ export class SupabaseService {
         for (const map of genericTables) {
             const data = delta[map.cloud];
             if (data && data.length > 0) {
-                // Use put to update or add
+                // Use put to update or add directly to the database engine
                 for (const item of data) {
-                    await (db as any)[map.dexie].put(item);
+                    await (db_engine as any)[map.dexie].put(item);
                 }
             }
         }
