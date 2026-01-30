@@ -219,8 +219,21 @@ export class SupabaseService {
 
         const pulledData: any = {};
 
+        // Tables that need date filtering to avoid timeout
+        const largeTables = ['sales', 'inventory_history', 'price_history'];
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - 60); // Last 60 days for full sync
+        const cutoffStr = cutoff.toISOString();
+
         for (const table of tables) {
-            const { data, error } = await client.from(table).select('*');
+            let query = client.from(table).select('*');
+
+            // Apply limits to large tables to avoid timeout
+            if (largeTables.includes(table)) {
+                query = query.gte('date', cutoffStr).order('date', { ascending: false }).limit(500);
+            }
+
+            const { data, error } = await query;
             if (!error && data) {
                 pulledData[table] = data;
             } else if (error) {
