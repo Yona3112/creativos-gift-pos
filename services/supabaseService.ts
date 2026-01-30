@@ -5,6 +5,39 @@ import { db } from './storageService';
 export class SupabaseService {
     private static client: any = null;
 
+    /**
+     * Helper for robust requests with exponential backoff
+     */
+    static async requestWithRetry<T>(operation: () => Promise<any>, tableName: string, maxRetries = 3): Promise<T | null> {
+        let lastError: any = null;
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+            try {
+                const { data, error } = await operation();
+                if (error) {
+                    // PGRST002: Service Unavailable / Database starting up
+                    // 503/502: Gateway timeout or Load balancer issues
+                    if (error.code === 'PGRST002' || error.status === 503 || error.status === 502 || error.message?.includes('timeout')) {
+                        const delay = Math.pow(2, attempt) * 1500 + (Math.random() * 1000);
+                        console.warn(`🔄 [${tableName}] Supabase ocupado (intento ${attempt + 1}/${maxRetries}). Reintentando en ${Math.round(delay)}ms...`);
+                        await new Promise(r => setTimeout(r, delay));
+                        lastError = error;
+                        continue;
+                    }
+                    throw error;
+                }
+                return data;
+            } catch (err: any) {
+                lastError = err;
+                if (attempt === maxRetries - 1) break;
+                // For connection errors (not from Supabase SDK), just retry with backoff
+                const delay = Math.pow(2, attempt) * 2000;
+                await new Promise(r => setTimeout(r, delay));
+            }
+        }
+        console.error(`❌ [${tableName}] Falló tras reintentos:`, lastError);
+        return null;
+    }
+
     static async getClient() {
         if (this.client) return this.client;
 
@@ -151,29 +184,32 @@ export class SupabaseService {
                     continue;
                 }
 
-                console.log(`📤 Sincronizando ${table.name}: ${recordsToSync.length} registros nuevos/modificados...`);
+                console.log(`📤 Sincronizando ${table.name}: ${recordsToSync.length} registros...`);
 
                 try {
-                    // Handle users table specially due to unique email constraint
+                    // Small delay between tables to avoid overloading PostgREST
+                    await new Promise(r => setTimeout(r, 100));
+
                     if (table.name === 'users') {
                         let successCount = 0;
                         for (const user of recordsToSync) {
-                            try {
-                                const { error } = await client.from('users').upsert(user, { onConflict: 'id' });
-                                if (!error) successCount++;
-                            } catch (e) {
-                                // Skip problematic users silently
-                            }
+                            const res = await this.requestWithRetry<any>(
+                                () => client.from('users').upsert(user, { onConflict: 'id' }),
+                                'users'
+                            );
+                            if (res !== null) successCount++;
                         }
                         results['users'] = `Incremental (${successCount}/${recordsToSync.length})`;
                         continue;
                     }
 
-                    // Normal upsert for other tables
-                    const { error } = await client.from(table.name).upsert(recordsToSync);
-                    if (error) {
-                        console.error(`❌ Error en ${table.name}:`, error);
-                        results[table.name] = `Error: ${error.message}`;
+                    const res = await this.requestWithRetry<any>(
+                        () => client.from(table.name).upsert(recordsToSync),
+                        table.name
+                    );
+
+                    if (res === null) {
+                        results[table.name] = `Error: Falló tras reintentos (posible sobrecarga)`;
                     } else {
                         results[table.name] = 'OK';
                     }
@@ -253,19 +289,19 @@ export class SupabaseService {
         const cutoffDateOnly = cutoff.toISOString().split('T')[0];
 
         for (const table of tables) {
-            let query = client.from(table).select('*');
+            // Small staggering delay to prevent simultaneous queries
+            await new Promise(r => setTimeout(r, 200));
 
-            if (largeTables.includes(table)) {
-                // REDUCED LIMIT to 200 to prevent Supabase 57014 (statement timeout)
-                // IMPORTANT: Requires index on 'date' column in Supabase
-                query = query.gte('date', cutoffDateOnly).order('date', { ascending: false }).limit(200);
-            }
+            const data = await this.requestWithRetry<any[]>(async () => {
+                let query = client.from(table).select('*');
+                if (largeTables.includes(table)) {
+                    query = query.gte('date', cutoffDateOnly).order('date', { ascending: false }).limit(200);
+                }
+                return await query;
+            }, table);
 
-            const { data, error } = await query;
-            if (!error && data) {
+            if (data) {
                 pulledData[table] = data;
-            } else if (error) {
-                console.error(`Error descargando tabla ${table}:`, error);
             }
         }
 
@@ -341,21 +377,21 @@ export class SupabaseService {
 
         for (const table of tables) {
             try {
-                // Fetch records updated after (lastSync - 2min)
-                // Use .gte() to ensure we don't miss records exactly at the boundary
-                const { data, error } = await client
-                    .from(table)
-                    .select('*')
-                    .gte('updatedAt', driftedSync)
-                    .limit(500);
+                // Stagger requests
+                await new Promise(r => setTimeout(r, 150));
 
-                if (!error && data && data.length > 0) {
+                const data = await this.requestWithRetry<any[]>(
+                    () => client.from(table).select('*').gte('updatedAt', driftedSync).limit(500),
+                    table
+                );
+
+                if (data && data.length > 0) {
                     results[table] = data;
                     totalChanges += data.length;
                     console.log(`📥 ${table}: ${data.length} cambios detectados desde ${driftedSync}`);
                 }
             } catch (err) {
-                console.warn(`⚠️ Error en pullDelta para tabla ${table}:`, err);
+                console.warn(`⚠️ Excepción en pullDelta para tabla ${table}:`, err);
             }
         }
 

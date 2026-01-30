@@ -122,14 +122,12 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                     const cutoffDateOnly = cutoff.toISOString().split('T')[0]; // "YYYY-MM-DD"
 
                     // SIMPLIFIED QUERY: Avoid complex .or() that causes timeouts
-                    const { data: cloudSales, error } = await client
-                        .from('sales')
-                        .select('*')
-                        .gte('date', cutoffDateOnly)
-                        .order('date', { ascending: false })
-                        .limit(200);
+                    const cloudSales = await SupabaseService.requestWithRetry<Sale[]>(
+                        () => client.from('sales').select('*').gte('date', cutoffDateOnly).order('date', { ascending: false }).limit(200),
+                        'sales_manual_sync'
+                    );
 
-                    if (!error && cloudSales) {
+                    if (cloudSales) {
                         const localSales = await db.getSales();
                         let syncedCount = 0;
 
