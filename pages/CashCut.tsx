@@ -196,39 +196,38 @@ export const CashCut: React.FC = () => {
                 <span><i className="fas fa-info-circle mr-2"></i> Incluye Ventas y Abonos a Créditos</span>
               </div>
 
-              <div className="flex justify-between items-center p-4 bg-green-50 rounded-xl border border-green-100 transition-transform hover:scale-[1.01]">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-green-200 flex items-center justify-center text-green-700"><i className="fas fa-money-bill-wave"></i></div>
+              <div className="flex justify-between items-center p-3 bg-green-50 rounded-xl border border-green-100">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-green-200 flex items-center justify-center text-green-700 text-xs"><i className="fas fa-money-bill-wave"></i></div>
                   <div>
-                    <span className="text-green-900 font-medium block">Efectivo Esperado</span>
-                    <span className="text-xs text-green-600">En Caja Física</span>
+                    <span className="text-green-900 font-bold text-xs block uppercase">Efectivo Esperado</span>
                   </div>
                 </div>
-                <span className="text-xl font-bold text-green-700">L {totals.cash.toFixed(2)}</span>
+                <span className="text-lg font-black text-green-700">L {totals.cash.toFixed(2)}</span>
               </div>
 
-              <div className="flex justify-between items-center p-4 bg-blue-50 rounded-xl border border-blue-100 transition-transform hover:scale-[1.01]">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-blue-200 flex items-center justify-center text-blue-700"><i className="fas fa-credit-card"></i></div>
-                  <span className="text-blue-900 font-medium">Tarjetas</span>
+              <div className="flex justify-between items-center p-3 bg-blue-50 rounded-xl border border-blue-100">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-blue-200 flex items-center justify-center text-blue-700 text-xs"><i className="fas fa-credit-card"></i></div>
+                  <span className="text-blue-900 font-bold text-xs uppercase">Tarjetas</span>
                 </div>
-                <span className="text-xl font-bold text-blue-700">L {totals.card.toFixed(2)}</span>
+                <span className="text-lg font-black text-blue-700">L {totals.card.toFixed(2)}</span>
               </div>
 
-              <div className="flex justify-between items-center p-4 bg-purple-50 rounded-xl border border-purple-100 transition-transform hover:scale-[1.01]">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-purple-200 flex items-center justify-center text-purple-700"><i className="fas fa-wifi"></i></div>
-                  <span className="text-purple-900 font-medium">Transferencias</span>
+              <div className="flex justify-between items-center p-3 bg-purple-50 rounded-xl border border-purple-100">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-purple-200 flex items-center justify-center text-purple-700 text-xs"><i className="fas fa-wifi"></i></div>
+                  <span className="text-purple-900 font-bold text-xs uppercase">Transferencias</span>
                 </div>
-                <span className="text-xl font-bold text-purple-700">L {totals.transfer.toFixed(2)}</span>
+                <span className="text-lg font-black text-purple-700">L {totals.transfer.toFixed(2)}</span>
               </div>
 
-              <div className="flex justify-between items-center p-4 bg-orange-50 rounded-xl border border-orange-100 transition-transform hover:scale-[1.01]">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-orange-200 flex items-center justify-center text-orange-700"><i className="fas fa-hand-holding-usd"></i></div>
-                  <span className="text-orange-900 font-medium">Créditos Nuevos (CxC)</span>
+              <div className="flex justify-between items-center p-3 bg-orange-50 rounded-xl border border-orange-100">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-orange-200 flex items-center justify-center text-orange-700 text-xs"><i className="fas fa-hand-holding-usd"></i></div>
+                  <span className="text-orange-900 font-bold text-xs uppercase">Créditos (CxC)</span>
                 </div>
-                <span className="text-xl font-bold text-orange-700">L {totals.credit.toFixed(2)}</span>
+                <span className="text-lg font-black text-orange-700">L {totals.credit.toFixed(2)}</span>
               </div>
 
               <div className="border-t border-dashed border-gray-300 pt-4 mt-2">
@@ -246,8 +245,8 @@ export const CashCut: React.FC = () => {
                   </div>
                 )}
                 <div className="flex justify-between items-center">
-                  <span className="text-gray-600 font-bold text-lg uppercase tracking-wide">Total Movimientos</span>
-                  <span className="text-3xl font-bold text-slate-800">L {(totals.cash + totals.card + totals.transfer).toFixed(2)}</span>
+                  <span className="text-gray-600 font-black text-base uppercase tracking-wider">Total Hoy</span>
+                  <span className="text-2xl font-black text-slate-800 tracking-tight">L {(totals.cash + totals.card + totals.transfer).toFixed(2)}</span>
                 </div>
               </div>
             </div>
@@ -304,31 +303,31 @@ export const CashCut: React.FC = () => {
                   <button onClick={() => setForceNewCut(false)} className="text-blue-500 hover:text-blue-700 text-xs font-bold underline">Cancelar</button>
                 </div>
               )}
-              <div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-6">
-                <Input label="L 500" type="number" min="0" value={denominations.bill500} onChange={e => setDenominations({ ...denominations, bill500: parseInt(e.target.value) || 0 })} />
-                <Input label="L 200" type="number" min="0" value={denominations.bill200} onChange={e => setDenominations({ ...denominations, bill200: parseInt(e.target.value) || 0 })} />
-                <Input label="L 100" type="number" min="0" value={denominations.bill100} onChange={e => setDenominations({ ...denominations, bill100: parseInt(e.target.value) || 0 })} />
-                <Input label="L 50" type="number" min="0" value={denominations.bill50} onChange={e => setDenominations({ ...denominations, bill50: parseInt(e.target.value) || 0 })} />
-                <Input label="L 20" type="number" min="0" value={denominations.bill20} onChange={e => setDenominations({ ...denominations, bill20: parseInt(e.target.value) || 0 })} />
-                <Input label="L 10" type="number" min="0" value={denominations.bill10} onChange={e => setDenominations({ ...denominations, bill10: parseInt(e.target.value) || 0 })} />
-                <Input label="L 5" type="number" min="0" value={denominations.bill5} onChange={e => setDenominations({ ...denominations, bill5: parseInt(e.target.value) || 0 })} />
-                <Input label="L 2" type="number" min="0" value={denominations.bill2} onChange={e => setDenominations({ ...denominations, bill2: parseInt(e.target.value) || 0 })} />
-                <Input label="L 1" type="number" min="0" value={denominations.bill1} onChange={e => setDenominations({ ...denominations, bill1: parseInt(e.target.value) || 0 })} />
-                <Input label="Monedas (Total)" type="number" min="0" step="0.01" value={denominations.coins} onChange={e => setDenominations({ ...denominations, coins: parseFloat(e.target.value) || 0 })} />
+              <div className="grid grid-cols-2 gap-x-3 gap-y-2 mb-4">
+                <Input label="L 500" type="number" min="0" value={denominations.bill500} onChange={e => setDenominations({ ...denominations, bill500: parseInt(e.target.value) || 0 })} className="!py-1 text-xs" />
+                <Input label="L 200" type="number" min="0" value={denominations.bill200} onChange={e => setDenominations({ ...denominations, bill200: parseInt(e.target.value) || 0 })} className="!py-1 text-xs" />
+                <Input label="L 100" type="number" min="0" value={denominations.bill100} onChange={e => setDenominations({ ...denominations, bill100: parseInt(e.target.value) || 0 })} className="!py-1 text-xs" />
+                <Input label="L 50" type="number" min="0" value={denominations.bill50} onChange={e => setDenominations({ ...denominations, bill50: parseInt(e.target.value) || 0 })} className="!py-1 text-xs" />
+                <Input label="L 20" type="number" min="0" value={denominations.bill20} onChange={e => setDenominations({ ...denominations, bill20: parseInt(e.target.value) || 0 })} className="!py-1 text-xs" />
+                <Input label="L 10" type="number" min="0" value={denominations.bill10} onChange={e => setDenominations({ ...denominations, bill10: parseInt(e.target.value) || 0 })} className="!py-1 text-xs" />
+                <Input label="L 5" type="number" min="0" value={denominations.bill5} onChange={e => setDenominations({ ...denominations, bill5: parseInt(e.target.value) || 0 })} className="!py-1 text-xs" />
+                <Input label="L 2" type="number" min="0" value={denominations.bill2} onChange={e => setDenominations({ ...denominations, bill2: parseInt(e.target.value) || 0 })} className="!py-1 text-xs" />
+                <Input label="L 1" type="number" min="0" value={denominations.bill1} onChange={e => setDenominations({ ...denominations, bill1: parseInt(e.target.value) || 0 })} className="!py-1 text-xs" />
+                <Input label="Monedas" type="number" min="0" step="0.01" value={denominations.coins} onChange={e => setDenominations({ ...denominations, coins: parseFloat(e.target.value) || 0 })} className="!py-1 text-xs" />
               </div>
 
-              <div className="bg-slate-50 p-5 rounded-xl border border-slate-100 space-y-3">
-                <div className="flex justify-between text-sm text-gray-600">
-                  <span>Efectivo Contado:</span>
-                  <span className="font-mono font-bold">L {countedTotal.toFixed(2)}</span>
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-2">
+                <div className="flex justify-between text-xs text-gray-500 font-bold uppercase">
+                  <span>Efectivo Contado</span>
+                  <span className="font-mono">L {countedTotal.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between text-sm text-gray-600">
-                  <span>Efectivo Sistema:</span>
-                  <span className="font-mono font-bold">L {totals.cash.toFixed(2)}</span>
+                <div className="flex justify-between text-xs text-gray-500 font-bold uppercase">
+                  <span>Efectivo Sistema</span>
+                  <span className="font-mono">L {totals.cash.toFixed(2)}</span>
                 </div>
-                <div className="h-px bg-gray-200 my-1"></div>
-                <div className={`flex justify-between text-xl font-bold ${difference < -0.99 ? 'text-red-500' : difference > 0.99 ? 'text-blue-500' : 'text-green-600'}`}>
-                  <span>Diferencia:</span>
+                <div className="h-px bg-gray-200 my-0.5"></div>
+                <div className={`flex justify-between text-lg font-black ${difference < -0.99 ? 'text-red-500' : difference > 0.99 ? 'text-blue-500' : 'text-green-600'}`}>
+                  <span>DIFERENCIA</span>
                   <span>{difference > 0 ? '+' : ''}L {difference.toFixed(2)}</span>
                 </div>
               </div>

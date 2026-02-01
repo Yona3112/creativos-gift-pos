@@ -579,67 +579,56 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
 
     return (
         <div className="space-y-6 h-[calc(100vh-140px)] flex flex-col">
-            <div className="flex flex-col sm:flex-row justify-between items-center gap-4 shrink-0">
-                <div className="flex items-center gap-3">
-                    <h1 className="text-2xl font-bold text-gray-800">Gestión de Pedidos</h1>
-                    {lastSync && (
-                        <span className="text-[10px] text-gray-400 bg-gray-100 px-2 py-1 rounded-full flex items-center gap-1">
-                            <i className="fas fa-sync-alt text-green-500"></i> {lastSync}
-                        </span>
-                    )}
-                    <div className="bg-gray-100 p-1 rounded-lg flex">
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-3 shrink-0 bg-white p-3 rounded-2xl border border-gray-100 shadow-sm">
+                <div className="flex items-center gap-3 w-full sm:w-auto">
+                    <h1 className="text-xl font-black text-gray-800 tracking-tight">Gestión de Pedidos</h1>
+                    <div className="bg-gray-100 p-0.5 rounded-lg flex">
                         <button
                             onClick={() => setViewMode('board')}
-                            className={`p-2 rounded-md text-sm font-bold transition-all ${viewMode === 'board' ? 'bg-white shadow-sm text-primary' : 'text-gray-500'}`}
+                            className={`p-1.5 px-2 rounded-md text-xs font-bold transition-all ${viewMode === 'board' ? 'bg-white shadow-sm text-primary' : 'text-gray-500'}`}
                             title="Vista Tablero"
                         >
-                            <i className="fas fa-columns"></i>
+                            <i className="fas fa-columns mr-1"></i> Tablero
                         </button>
                         <button
                             onClick={() => setViewMode('list')}
-                            className={`p-2 rounded-md text-sm font-bold transition-all ${viewMode === 'list' ? 'bg-white shadow-sm text-primary' : 'text-gray-500'}`}
+                            className={`p-1.5 px-2 rounded-md text-xs font-bold transition-all ${viewMode === 'list' ? 'bg-white shadow-sm text-primary' : 'text-gray-500'}`}
                             title="Vista Lista"
                         >
-                            <i className="fas fa-list"></i>
-                        </button>
-                        <button
-                            onClick={handleManualSync}
-                            disabled={isSyncing}
-                            className={`ml-2 p-2 rounded-md text-sm font-bold transition-all ${isSyncing ? 'bg-primary/10 text-primary animate-spin-slow' : 'bg-green-50 text-green-600 hover:bg-green-100'}`}
-                            title="Sincronizar ahora"
-                        >
-                            <i className={`fas fa-${isSyncing ? 'sync-alt' : 'cloud-download-alt'}`}></i>
+                            <i className="fas fa-list mr-1"></i> Lista
                         </button>
                     </div>
+                    {isSyncing && (
+                        <i className="fas fa-sync-alt text-primary animate-spin-slow text-xs"></i>
+                    )}
                 </div>
 
-                <div className="flex gap-2 w-full sm:w-auto">
-                    <Input type="date" value={dateFilter} onChange={e => { setDateFilter(e.target.value); setDatePreset('all'); }} className="w-auto" />
-                    <Input icon="search" placeholder="Buscar..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full sm:w-64" />
+                <div className="flex gap-2 w-full sm:w-auto items-center">
+                    <Input icon="search" placeholder="Buscar..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="!py-1.5 text-xs w-full sm:w-48" />
+                    <Input type="date" value={dateFilter} onChange={e => { setDateFilter(e.target.value); setDatePreset('all'); }} className="!py-1.5 text-xs w-auto" />
+                    <button
+                        onClick={handleManualSync}
+                        disabled={isSyncing}
+                        className={`p-2 rounded-lg text-xs font-bold transition-all ${isSyncing ? 'text-primary' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                        title="Sincronizar ahora"
+                    >
+                        <i className={`fas fa-${isSyncing ? 'sync-alt' : 'cloud-download-alt'}`}></i>
+                    </button>
                 </div>
             </div>
 
-            {/* === CATEGORY FILTER (PROMINENT) === */}
+            {/* === CATEGORY FILTER (COMPACT) === */}
             {categories.length > 0 && (
-                <div className="shrink-0 bg-gradient-to-r from-gray-50 to-white p-3 rounded-xl border border-gray-100 shadow-sm">
-                    <div className="flex items-center gap-2 mb-2">
-                        <i className="fas fa-layer-group text-gray-400 text-xs"></i>
-                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Filtrar por Categoría</span>
-                        {categoryFilter !== 'all' && (
-                            <button onClick={() => setCategoryFilter('all')} className="ml-auto text-[10px] text-gray-400 hover:text-red-500 transition-colors">
-                                <i className="fas fa-times-circle mr-1"></i>Limpiar
-                            </button>
-                        )}
-                    </div>
-                    <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
+                <div className="shrink-0 bg-gray-50/50 p-2 rounded-xl border border-gray-100">
+                    <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-thin">
                         <button
                             onClick={() => setCategoryFilter('all')}
-                            className={`shrink-0 px-4 py-2 rounded-xl font-bold text-sm transition-all border-2 ${categoryFilter === 'all'
-                                ? 'bg-gray-800 text-white border-gray-800 shadow-lg scale-105'
+                            className={`shrink-0 px-3 py-1.5 rounded-lg font-bold text-xs transition-all border ${categoryFilter === 'all'
+                                ? 'bg-gray-800 text-white border-gray-800 shadow-md'
                                 : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
                                 }`}
                         >
-                            <i className="fas fa-th-large mr-2"></i>Todas
+                            <i className="fas fa-th-large mr-1.5"></i>Todas
                         </button>
                         {categories.map(cat => {
                             const isSelected = categoryFilter === cat.id;
@@ -648,19 +637,19 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                                 <button
                                     key={cat.id}
                                     onClick={() => setCategoryFilter(cat.id)}
-                                    className={`shrink-0 px-4 py-2 rounded-xl font-bold text-sm transition-all border-2 flex items-center gap-2 ${isSelected
-                                        ? 'text-white shadow-lg scale-105'
-                                        : 'bg-white hover:shadow-md'
+                                    className={`shrink-0 px-3 py-1.5 rounded-lg font-bold text-xs transition-all border flex items-center gap-1.5 ${isSelected
+                                        ? 'text-white shadow-md'
+                                        : 'bg-white hover:border-gray-300'
                                         }`}
                                     style={{
                                         backgroundColor: isSelected ? cat.color : undefined,
-                                        borderColor: cat.color,
+                                        borderColor: isSelected ? cat.color : '#e5e7eb',
                                         color: isSelected ? 'white' : cat.color
                                     }}
                                 >
                                     <i className={`fas fa-${cat.icon || 'tag'}`}></i>
                                     <span>{cat.name}</span>
-                                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${isSelected ? 'bg-white/30' : 'bg-gray-100'}`}>
+                                    <span className={`text-[10px] px-1 rounded font-black ${isSelected ? 'bg-white/30' : 'bg-gray-100 text-gray-500'}`}>
                                         {orderCount}
                                     </span>
                                 </button>
@@ -670,12 +659,8 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                 </div>
             )}
 
-            {/* === DATE QUICK FILTERS === */}
-            <div className="flex gap-2 shrink-0 overflow-x-auto pb-1">
-                <div className="flex items-center gap-1 mr-2">
-                    <i className="fas fa-calendar-alt text-gray-400 text-xs"></i>
-                    <span className="text-[10px] font-bold text-gray-400 uppercase">Fecha:</span>
-                </div>
+            {/* === DATE QUICK FILTERS (TIGHTER) === */}
+            <div className="flex gap-1.5 shrink-0 overflow-x-auto px-1">
                 {[
                     { id: 'all' as const, label: 'Todo', icon: 'infinity' },
                     { id: 'today' as const, label: 'Hoy', icon: 'calendar-day' },
@@ -686,12 +671,12 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                     <button
                         key={preset.id}
                         onClick={() => { setDatePreset(preset.id); setDateFilter(''); }}
-                        className={`whitespace-nowrap px-3 py-1.5 rounded-lg font-bold text-xs transition-all flex items-center gap-1.5 ${datePreset === preset.id
-                            ? 'bg-primary text-white shadow-md'
-                            : 'bg-white text-gray-500 border border-gray-200 hover:border-primary hover:text-primary'
+                        className={`whitespace-nowrap px-2.5 py-1 rounded-lg font-bold text-[10px] uppercase tracking-tighter transition-all flex items-center gap-1 ${datePreset === preset.id
+                            ? 'bg-primary text-white shadow-sm'
+                            : 'bg-white text-gray-500 border border-gray-100 hover:border-gray-300'
                             }`}
                     >
-                        <i className={`fas fa-${preset.icon}`}></i>
+                        <i className={`fas fa-${preset.icon} text-[8px]`}></i>
                         {preset.label}
                     </button>
                 ))}
@@ -726,38 +711,72 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                                             const orderCatDetails = orderCategories.map(catId => categories.find(c => c.id === catId)).filter(Boolean);
 
                                             return (
-                                                <div key={order.id} className={`p-1.5 rounded border shadow-sm hover:shadow transition-all ${getCardColor(order.fulfillmentStatus)}`}>
+                                                <div
+                                                    key={order.id}
+                                                    onClick={() => openEditModal(order)}
+                                                    className={`p-3 rounded-2xl border shadow-sm hover:shadow-md transition-all cursor-pointer relative group flex flex-col h-fit ${getCardColor(order.fulfillmentStatus)} animate-scale-in`}
+                                                >
                                                     {/* Category Indicators at top */}
                                                     {orderCatDetails.length > 0 && (
-                                                        <div className="flex gap-1 mb-1 flex-wrap">
+                                                        <div className="flex gap-1 mb-2 flex-wrap">
                                                             {orderCatDetails.map((cat: any) => (
                                                                 <span
                                                                     key={cat.id}
-                                                                    className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[7px] font-bold text-white shadow-sm"
+                                                                    className="inline-flex items-center px-1.5 py-0.5 rounded-lg text-[8px] font-black text-white uppercase shadow-sm"
                                                                     style={{ backgroundColor: cat.color }}
-                                                                    title={cat.name}
                                                                 >
-                                                                    <i className={`fas fa-${cat.icon || 'tag'}`}></i>
-                                                                    <span className="max-w-[50px] truncate">{cat.name}</span>
+                                                                    <i className={`fas fa-${cat.icon || 'tag'} mr-1`}></i>
+                                                                    {cat.name}
                                                                 </span>
                                                             ))}
                                                         </div>
                                                     )}
-                                                    <div className="flex justify-between items-center text-[8px]">
-                                                        <span className="font-mono font-bold text-gray-600 bg-white/50 px-0.5 rounded">{order.folio}</span>
-                                                        <div className="flex items-center gap-0.5 text-gray-500">
-                                                            {order.shippingDetails?.isLocalDelivery && <span className="font-bold bg-green-200 text-green-700 px-0.5 rounded">L</span>}
-                                                            {order.shippingDetails?.guideFile && <i className="fas fa-file-alt text-sky-500"></i>}
-                                                            <i className="far fa-clock"></i>{timeAgo(order.date)}
+
+                                                    <div className="flex justify-between items-start mb-1.5">
+                                                        <span className="font-mono font-black text-xs text-gray-400 bg-white/60 px-1.5 py-0.5 rounded-lg">{order.folio}</span>
+                                                        <div className="flex items-center gap-1.5 text-gray-500">
+                                                            {order.shippingDetails?.isLocalDelivery && <span className="bg-green-100 text-green-700 text-[10px] font-black w-5 h-5 flex items-center justify-center rounded-full">L</span>}
+                                                            {order.shippingDetails?.guideFile && <i className="fas fa-file-alt text-sky-500 text-xs"></i>}
+                                                            <div className="text-[10px] font-bold">
+                                                                <i className="far fa-clock mr-1"></i>{timeAgo(order.date)}
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                    <h4 className="font-bold text-gray-800 text-[10px] leading-tight truncate">{getCustomerName(order)}</h4>
-                                                    <p className="text-[8px] text-gray-600 truncate">{order.items.map(i => `${i.quantity} ${i.name}`).join(', ')}</p>
-                                                    {order.balance && order.balance > 0 && <p className="text-[8px] font-bold text-red-600">Debe: L {order.balance.toFixed(2)}</p>}
-                                                    <div className="flex items-center justify-between mt-1 gap-0.5">
-                                                        <button onClick={(e) => { e.stopPropagation(); handleQuickStatusUpdate(order, 'prev'); }} disabled={col.id === 'pending'} className="w-4 h-4 rounded-full bg-white/60 text-gray-500 disabled:opacity-30 flex items-center justify-center text-[7px]"><i className="fas fa-chevron-left"></i></button>
-                                                        <button onClick={() => openEditModal(order)} className="flex-1 text-[8px] font-bold text-primary hover:bg-white/50 py-0.5 rounded">Gestionar</button>
-                                                        <button onClick={(e) => { e.stopPropagation(); handleQuickStatusUpdate(order, 'next'); }} disabled={col.id === 'delivered'} className="w-4 h-4 rounded-full bg-primary text-white disabled:opacity-30 flex items-center justify-center text-[7px]"><i className="fas fa-chevron-right"></i></button>
+
+                                                    <h4 className="font-black text-xs text-gray-800 uppercase leading-none mb-1.5 line-clamp-1">{getCustomerName(order)}</h4>
+
+                                                    <div className="mb-3 space-y-0.5">
+                                                        {order.items.slice(0, 3).map((item, idx) => (
+                                                            <div key={idx} className="text-[10px] text-gray-600 line-clamp-1 flex items-center gap-1">
+                                                                <span className="font-black text-gray-300">{item.quantity}x</span> {item.name}
+                                                            </div>
+                                                        ))}
+                                                        {order.items.length > 3 && <p className="text-[9px] text-gray-400 font-bold italic">+{order.items.length - 3} más...</p>}
+                                                    </div>
+
+                                                    <div className="flex justify-between items-center bg-white/40 p-2 rounded-xl mt-auto">
+                                                        <div>
+                                                            <p className="text-[9px] text-gray-400 font-black uppercase leading-none">Saldo</p>
+                                                            <p className={`text-sm font-black ${(order.balance || 0) > 0 ? 'text-red-500' : 'text-green-600'}`}>
+                                                                L {(order.balance || 0).toFixed(2)}
+                                                            </p>
+                                                        </div>
+                                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); handleQuickStatusUpdate(order, 'prev'); }}
+                                                                disabled={col.id === 'pending'}
+                                                                className="w-6 h-6 rounded-full bg-white/80 text-gray-400 shadow-sm hover:text-primary disabled:opacity-20 flex items-center justify-center"
+                                                            >
+                                                                <i className="fas fa-chevron-left text-[10px]"></i>
+                                                            </button>
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); handleQuickStatusUpdate(order, 'next'); }}
+                                                                disabled={col.id === 'delivered'}
+                                                                className="w-6 h-6 rounded-full bg-primary text-white shadow-md hover:scale-110 active:scale-95 transition-all disabled:opacity-20 flex items-center justify-center"
+                                                            >
+                                                                <i className="fas fa-chevron-right text-[10px]"></i>
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             );

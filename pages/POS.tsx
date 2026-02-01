@@ -556,10 +556,10 @@ export const POS: React.FC<POSProps> = ({
                     <Button variant="secondary" onClick={() => setIsManualModalOpen(true)} title="Agregar Item Manual"><i className="fas fa-plus"></i></Button>
                 </div>
 
-                <div className="flex gap-2 overflow-x-auto pb-2 shrink-0 no-scrollbar">
-                    <button onClick={() => setSelectedCategory('all')} className={`px-4 py-2 rounded-xl whitespace-nowrap font-bold text-sm ${selectedCategory === 'all' ? 'bg-primary text-white' : 'bg-white text-gray-500'}`}>Todo</button>
+                <div className="flex gap-1.5 overflow-x-auto pb-1.5 shrink-0 no-scrollbar">
+                    <button onClick={() => setSelectedCategory('all')} className={`px-3 py-1.5 rounded-lg whitespace-nowrap font-bold text-xs transition-all ${selectedCategory === 'all' ? 'bg-primary text-white shadow-sm' : 'bg-white text-gray-500 border border-transparent hover:border-gray-200'}`}>Todo</button>
                     {categories.map(c => (
-                        <button key={c.id} onClick={() => setSelectedCategory(c.id)} className={`px-4 py-2 rounded-xl whitespace-nowrap font-bold text-sm flex items-center gap-2 ${selectedCategory === c.id ? 'bg-primary text-white' : 'bg-white text-gray-500'}`}><i className={`fas fa-${c.icon}`}></i> {c.name}</button>
+                        <button key={c.id} onClick={() => setSelectedCategory(c.id)} className={`px-3 py-1.5 rounded-lg whitespace-nowrap font-bold text-xs flex items-center gap-1.5 transition-all ${selectedCategory === c.id ? 'bg-primary text-white shadow-sm' : 'bg-white text-gray-500 border border-transparent hover:border-gray-200'}`}><i className={`fas fa-${c.icon} text-[10px]`}></i> {c.name}</button>
                     ))}
                 </div>
 
@@ -578,16 +578,16 @@ export const POS: React.FC<POSProps> = ({
                                     );
                                 })()}
                             </div>
-                            <h3 className="font-bold text-gray-800 text-xs line-clamp-2 mb-1 flex-1">{p.name}</h3>
+                            <h3 className="font-bold text-gray-800 text-[10px] line-clamp-2 leading-tight mb-1 flex-1">{p.name}</h3>
                             <div className="flex justify-between items-center mt-auto">
-                                <p className="font-black text-primary text-sm">L {p.price.toFixed(2)}</p>
-                                <div className="flex gap-1">
+                                <p className="font-black text-primary text-xs tracking-tighter">L {p.price.toFixed(2)}</p>
+                                <div className="flex gap-0.5">
                                     <button
                                         onClick={(e) => shareProductWhatsApp(e, p)}
-                                        className="w-7 h-7 flex items-center justify-center rounded-lg bg-green-50 text-green-500 hover:bg-green-500 hover:text-white transition-all transform active:scale-90"
+                                        className="w-6 h-6 flex items-center justify-center rounded-lg bg-green-50 text-green-500 hover:bg-green-500 hover:text-white transition-all transform active:scale-90"
                                         title="Compartir por WhatsApp"
                                     >
-                                        <i className="fab fa-whatsapp text-sm"></i>
+                                        <i className="fab fa-whatsapp text-[10px]"></i>
                                     </button>
                                     <i className="fas fa-plus-circle text-primary opacity-0 group-hover:opacity-100 transition-opacity ml-1"></i>
                                 </div>
@@ -681,52 +681,52 @@ export const POS: React.FC<POSProps> = ({
                     )}
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                <div className="flex-1 overflow-y-auto p-3 space-y-2">
                     {cart.map(item => {
                         const originalProduct = products.find(p => p.id === item.id);
                         const isStockLimitReached = originalProduct && item.quantity >= originalProduct.stock;
 
                         return (
-                            <div key={item.id} className="flex gap-3 items-center group">
+                            <div key={item.id} className="flex gap-2 items-center group bg-white p-2 rounded-xl border border-transparent hover:border-gray-100 hover:shadow-sm transition-all">
                                 <div className="flex-1">
-                                    <h4 className="text-sm font-bold text-gray-800 leading-tight">{item.name}</h4>
-                                    <p className="text-xs text-gray-400 font-mono">L {item.price.toFixed(2)} x {item.quantity}</p>
+                                    <h4 className="text-[11px] font-black text-gray-800 leading-tight uppercase line-clamp-1">{item.name}</h4>
+                                    <p className="text-[9px] text-gray-400 font-bold uppercase">L {item.price.toFixed(2)} x {item.quantity}</p>
                                 </div>
-                                <div className="flex items-center bg-gray-100 rounded-lg overflow-hidden">
+                                <div className="flex items-center bg-gray-50 rounded-lg overflow-hidden border">
                                     <button
                                         onClick={() => setCart(cart.map(i => i.id === item.id ? { ...i, quantity: Math.max(0, i.quantity - 1) } : i).filter(i => i.quantity > 0))}
-                                        className="px-2 py-1 hover:bg-gray-200 transition-colors"
+                                        className="px-1.5 py-0.5 hover:bg-gray-200 transition-colors text-xs font-bold"
                                     >
                                         -
                                     </button>
-                                    <span className="px-2 text-xs font-bold w-6 text-center">{item.quantity}</span>
+                                    <span className="px-1.5 text-[10px] font-black w-6 text-center text-primary">{item.quantity}</span>
                                     <button
                                         onClick={() => addToCart(item)}
                                         disabled={isStockLimitReached}
-                                        className={`px-2 py-1 transition-colors ${isStockLimitReached ? 'text-gray-300' : 'hover:bg-gray-200'}`}
+                                        className={`px-1.5 py-0.5 transition-colors text-xs font-bold ${isStockLimitReached ? 'text-gray-300' : 'hover:bg-gray-200'}`}
                                     >
                                         +
                                     </button>
                                 </div>
-                                <span className="font-black text-sm min-w-[70px] text-right">L {(item.price * item.quantity).toFixed(2)}</span>
+                                <span className="font-black text-xs min-w-[65px] text-right text-gray-800">L {(item.price * item.quantity).toFixed(2)}</span>
                                 <button
                                     onClick={() => removeFromCart(item.id)}
-                                    className="text-red-300 hover:text-red-500 transition-colors p-1"
+                                    className="text-red-200 hover:text-red-500 transition-colors p-1"
                                     title="Eliminar ítem"
                                 >
-                                    <i className="fas fa-trash-alt text-xs"></i>
+                                    <i className="fas fa-times-circle text-xs"></i>
                                 </button>
                             </div>
                         );
                     })}
-                    {cart.length === 0 && <div className="text-center py-20 text-gray-300"><i className="fas fa-shopping-basket text-4xl mb-2 opacity-20"></i><p>Carrito Vacío</p></div>}
+                    {cart.length === 0 && <div className="text-center py-10 text-gray-300"><i className="fas fa-shopping-basket text-4xl mb-2 opacity-10"></i><p className="text-xs font-bold uppercase tracking-widest">Carrito Vacío</p></div>}
                 </div>
 
-                <div className="p-4 bg-gray-50 border-t space-y-3">
-                    <div className="text-sm space-y-1">
-                        <div className="flex justify-between text-gray-500"><span>Subtotal (sin ISV)</span><span>L {subtotal.toFixed(2)}</span></div>
-                        <div className="flex justify-between text-gray-500"><span>ISV (15%)</span><span>L {taxAmount.toFixed(2)}</span></div>
-                        <div className="flex justify-between text-gray-900 font-black text-xl pt-2 border-t border-dashed border-gray-300"><span>TOTAL</span><span>L {total.toFixed(2)}</span></div>
+                <div className="p-3 bg-gray-50 border-t space-y-2">
+                    <div className="text-[10px] space-y-0.5">
+                        <div className="flex justify-between text-gray-400 font-bold uppercase"><span>Subtotal (sin ISV)</span><span>L {subtotal.toFixed(2)}</span></div>
+                        <div className="flex justify-between text-gray-400 font-bold uppercase"><span>ISV (15%)</span><span>L {taxAmount.toFixed(2)}</span></div>
+                        <div className="flex justify-between text-gray-900 font-black text-lg pt-1.5 border-t border-dashed border-gray-300"><span>TOTAL</span><span>L {total.toFixed(2)}</span></div>
                     </div>
                     <div className="flex gap-2">
                         <Button variant="secondary" className="flex-1" disabled={cart.length === 0} onClick={() => setIsQuoteModalOpen(true)}>
