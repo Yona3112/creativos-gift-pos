@@ -1481,8 +1481,9 @@ export class StorageService {
     sale.documentType = newDocType;
     sale.cai = newCAI;
 
-    // CASH FLOW TRACKING: Record payment date and method for today's cash flow
+    // CASH FLOW TRACKING: Record payment date, method, and amount for today's cash flow
     sale.balancePaymentDate = this.getLocalNowISO(); // Payment received TODAY
+    sale.balancePaid = balancePaid; // Store exact amount for cash cut calculation
     // Determine payment method from paymentDetails
     if (paymentDetails.cash && paymentDetails.cash > 0) {
       sale.balancePaymentMethod = 'Efectivo';

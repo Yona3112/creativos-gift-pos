@@ -82,32 +82,34 @@ export const CashCut: React.FC = () => {
     t.creditPayments = creditPayments.cash + creditPayments.card + creditPayments.transfer;
 
     // NEW: Add order balance payments made today (pagos de saldo de pedidos)
+    // These are orders from PREVIOUS days where the remaining balance was paid TODAY
     const orderPaymentsToday = allSales.filter(s => {
       if (s.status !== 'active') return false;
+      // Skip if sale was made today (it's already counted in today's sales)
       const saleDateLocal = formatDateForDisplay(s.date);
       if (saleDateLocal === today) return false;
+      // Include if balance was paid today (using balancePaymentDate)
       if (s.balancePaymentDate) {
         return formatDateForDisplay(s.balancePaymentDate) === today;
       }
-      const updatedToday = s.updatedAt && formatDateForDisplay(s.updatedAt) === today;
-      return updatedToday && s.isOrder === false && (s.balance || 0) === 0 && (s.deposit || 0) > 0;
+      return false;
     });
 
     let orderPaymentTotal = 0;
     for (const order of orderPaymentsToday) {
-      const pd = order.paymentDetails;
-      const method = order.balancePaymentMethod ||
-        (pd?.cash ? 'Efectivo' : pd?.card ? 'Tarjeta' : pd?.transfer ? 'Transferencia' : 'Efectivo');
+      // Use balancePaid field if available (new orders), fallback to paymentDetails for legacy
+      const balancePaid = order.balancePaid || order.paymentDetails?.cash || order.paymentDetails?.card || order.paymentDetails?.transfer || 0;
+      const method = order.balancePaymentMethod || 'Efectivo';
 
-      const paidCash = pd?.cash || 0;
-      const paidCard = pd?.card || 0;
-      const paidTransfer = pd?.transfer || 0;
+      if (method === 'Efectivo') {
+        t.cash += balancePaid;
+      } else if (method === 'Tarjeta') {
+        t.card += balancePaid;
+      } else if (method === 'Transferencia') {
+        t.transfer += balancePaid;
+      }
 
-      if (method === 'Efectivo') t.cash += paidCash;
-      else if (method === 'Tarjeta') t.card += paidCard;
-      else if (method === 'Transferencia') t.transfer += paidTransfer;
-
-      orderPaymentTotal += paidCash + paidCard + paidTransfer;
+      orderPaymentTotal += balancePaid;
     }
     t.orderPayments = orderPaymentTotal;
 

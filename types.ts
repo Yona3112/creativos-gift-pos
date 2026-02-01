@@ -190,6 +190,7 @@ export interface Sale {
   balance?: number;
   balancePaymentDate?: string;  // Date when pending balance was paid (for cash flow tracking)
   balancePaymentMethod?: 'Efectivo' | 'Tarjeta' | 'Transferencia'; // How the balance was paid
+  balancePaid?: number;  // Exact amount paid when completing the order
   fulfillmentHistory?: StatusHistoryEntry[]; // History of status changes
   updatedAt?: string; // Timestamp for sync tracking
   createdAt?: string; // Precise creation timestamp

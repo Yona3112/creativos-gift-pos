@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Sale, Customer, FulfillmentStatus, ShippingDetails, CompanySettings, PaymentDetails } from '../types';
+import { Sale, Customer, FulfillmentStatus, ShippingDetails, CompanySettings, PaymentDetails, Category } from '../types';
 import { Card, Button, Input, Badge, Modal, showToast } from '../components/UIComponents';
 import { db } from '../services/storageService';
 
@@ -18,6 +18,11 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
     const [dateFilter, setDateFilter] = useState('');
     const [lastSync, setLastSync] = useState<string>('');
     const [isSyncing, setIsSyncing] = useState(false);
+
+    // Category and Date Filtering
+    const [categories, setCategories] = useState<Category[]>([]);
+    const [categoryFilter, setCategoryFilter] = useState<string>('all');
+    const [datePreset, setDatePreset] = useState<'all' | 'today' | 'yesterday' | 'week' | 'month'>('all');
 
     // Edit Modal State
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -58,14 +63,20 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
         return () => { isMounted.current = false; };
     }, []);
 
-    // Polling: Auto-refresh orders every 30 seconds from Supabase
+    // Use ref to track modal states for polling (avoids stale closure)
+    const isAnyModalOpen = useRef(false);
+    useEffect(() => {
+        isAnyModalOpen.current = isEditModalOpen || isAdminModalOpen || isPayModalOpen;
+    }, [isEditModalOpen, isAdminModalOpen, isPayModalOpen]);
+
+    // Polling: Auto-refresh orders every 60 seconds from Supabase
     // IMPORTANT: This polling ONLY adds NEW orders, it does NOT overwrite local status changes
     useEffect(() => {
         let pollInterval: any = null;
 
         const pollFromCloud = async () => {
             // GUARD: Don't poll while user is editing an order - prevents losing unsaved changes
-            if (isEditModalOpen || isAdminModalOpen || isPayModalOpen) {
+            if (isAnyModalOpen.current) {
                 console.log("⏸️ Polling pausado - modal abierto");
                 return;
             }
@@ -92,7 +103,7 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
             }
         };
 
-        // Start polling immediately and then every 60 seconds (optimized from 30s)
+        // Start polling immediately and then every 60 seconds
         pollFromCloud();
         pollInterval = setInterval(pollFromCloud, 60000);
 
@@ -173,9 +184,15 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
 
     const refresh = async () => {
         const allSales = await db.getSales();
-        setSales([...allSales.filter(s => s.status === 'active')]); // Create new array to force re-render
+        // IMPORTANT: Only show actual ORDERS (not regular point-of-sale transactions)
+        // An order is: isOrder=true OR has pending balance OR has fulfillmentStatus set
+        setSales([...allSales.filter(s =>
+            s.status === 'active' &&
+            (s.isOrder === true || (s.balance && s.balance > 0) || s.fulfillmentStatus)
+        )]);
         setCustomers(await db.getCustomers());
         setSettings(await db.getSettings());
+        setCategories(await db.getCategories());
     };
 
     // Optimistic UI update - update local state immediately without waiting for DB
@@ -484,11 +501,41 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
         return `${minutes}m`;
     };
 
+    // Date preset helper
+    const getDateRange = (preset: 'all' | 'today' | 'yesterday' | 'week' | 'month') => {
+        const now = new Date();
+        const today = now.toISOString().split('T')[0];
+        const yesterday = new Date(now.getTime() - 86400000).toISOString().split('T')[0];
+        const weekAgo = new Date(now.getTime() - 7 * 86400000).toISOString().split('T')[0];
+        const monthAgo = new Date(now.getTime() - 30 * 86400000).toISOString().split('T')[0];
+
+        switch (preset) {
+            case 'today': return { from: today, to: today };
+            case 'yesterday': return { from: yesterday, to: yesterday };
+            case 'week': return { from: weekAgo, to: today };
+            case 'month': return { from: monthAgo, to: today };
+            default: return null;
+        }
+    };
+
     const filteredOrders = useMemo(() => {
         return sales.filter(s => {
-
             const matchStatus = statusFilter === 'all' ? true : s.fulfillmentStatus === statusFilter;
-            const matchDate = dateFilter ? s.date.startsWith(dateFilter) : true;
+
+            // Date filter: preset takes priority, then manual dateFilter
+            let matchDate = true;
+            const range = getDateRange(datePreset);
+            if (range) {
+                const orderDate = s.date.split('T')[0];
+                matchDate = orderDate >= range.from && orderDate <= range.to;
+            } else if (dateFilter) {
+                matchDate = s.date.startsWith(dateFilter);
+            }
+
+            // Category filter: check if any item in the order belongs to the selected category
+            const matchCategory = categoryFilter === 'all'
+                ? true
+                : s.items.some(item => item.categoryId === categoryFilter);
 
             const customerName = getCustomerName(s);
             const matchSearch =
@@ -496,9 +543,9 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                 (customerName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (s.shippingDetails?.trackingNumber || '').toLowerCase().includes(searchTerm.toLowerCase());
 
-            return matchStatus && matchSearch && matchDate;
+            return matchStatus && matchSearch && matchDate && matchCategory;
         }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    }, [sales, searchTerm, statusFilter, customers, viewMode]);
+    }, [sales, searchTerm, statusFilter, customers, categoryFilter, dateFilter, datePreset]);
 
     const columns: { id: FulfillmentStatus, label: string, color: string, icon: string }[] = [
         { id: 'pending', label: 'Pendientes', color: 'border-yellow-400 bg-yellow-50', icon: 'clock' },
@@ -567,9 +614,87 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                 </div>
 
                 <div className="flex gap-2 w-full sm:w-auto">
-                    <Input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)} className="w-auto" />
+                    <Input type="date" value={dateFilter} onChange={e => { setDateFilter(e.target.value); setDatePreset('all'); }} className="w-auto" />
                     <Input icon="search" placeholder="Buscar..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full sm:w-64" />
                 </div>
+            </div>
+
+            {/* === CATEGORY FILTER (PROMINENT) === */}
+            {categories.length > 0 && (
+                <div className="shrink-0 bg-gradient-to-r from-gray-50 to-white p-3 rounded-xl border border-gray-100 shadow-sm">
+                    <div className="flex items-center gap-2 mb-2">
+                        <i className="fas fa-layer-group text-gray-400 text-xs"></i>
+                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Filtrar por Categoría</span>
+                        {categoryFilter !== 'all' && (
+                            <button onClick={() => setCategoryFilter('all')} className="ml-auto text-[10px] text-gray-400 hover:text-red-500 transition-colors">
+                                <i className="fas fa-times-circle mr-1"></i>Limpiar
+                            </button>
+                        )}
+                    </div>
+                    <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
+                        <button
+                            onClick={() => setCategoryFilter('all')}
+                            className={`shrink-0 px-4 py-2 rounded-xl font-bold text-sm transition-all border-2 ${categoryFilter === 'all'
+                                ? 'bg-gray-800 text-white border-gray-800 shadow-lg scale-105'
+                                : 'bg-white text-gray-600 border-gray-200 hover:border-gray-400'
+                                }`}
+                        >
+                            <i className="fas fa-th-large mr-2"></i>Todas
+                        </button>
+                        {categories.map(cat => {
+                            const isSelected = categoryFilter === cat.id;
+                            const orderCount = sales.filter(s => s.items.some(item => item.categoryId === cat.id)).length;
+                            return (
+                                <button
+                                    key={cat.id}
+                                    onClick={() => setCategoryFilter(cat.id)}
+                                    className={`shrink-0 px-4 py-2 rounded-xl font-bold text-sm transition-all border-2 flex items-center gap-2 ${isSelected
+                                        ? 'text-white shadow-lg scale-105'
+                                        : 'bg-white hover:shadow-md'
+                                        }`}
+                                    style={{
+                                        backgroundColor: isSelected ? cat.color : undefined,
+                                        borderColor: cat.color,
+                                        color: isSelected ? 'white' : cat.color
+                                    }}
+                                >
+                                    <i className={`fas fa-${cat.icon || 'tag'}`}></i>
+                                    <span>{cat.name}</span>
+                                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black ${isSelected ? 'bg-white/30' : 'bg-gray-100'}`}>
+                                        {orderCount}
+                                    </span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+            {/* === DATE QUICK FILTERS === */}
+            <div className="flex gap-2 shrink-0 overflow-x-auto pb-1">
+                <div className="flex items-center gap-1 mr-2">
+                    <i className="fas fa-calendar-alt text-gray-400 text-xs"></i>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase">Fecha:</span>
+                </div>
+                {[
+                    { id: 'all' as const, label: 'Todo', icon: 'infinity' },
+                    { id: 'today' as const, label: 'Hoy', icon: 'calendar-day' },
+                    { id: 'yesterday' as const, label: 'Ayer', icon: 'calendar-minus' },
+                    { id: 'week' as const, label: 'Esta Semana', icon: 'calendar-week' },
+                    { id: 'month' as const, label: 'Este Mes', icon: 'calendar' },
+                ].map(preset => (
+                    <button
+                        key={preset.id}
+                        onClick={() => { setDatePreset(preset.id); setDateFilter(''); }}
+                        className={`whitespace-nowrap px-3 py-1.5 rounded-lg font-bold text-xs transition-all flex items-center gap-1.5 ${datePreset === preset.id
+                            ? 'bg-primary text-white shadow-md'
+                            : 'bg-white text-gray-500 border border-gray-200 hover:border-primary hover:text-primary'
+                            }`}
+                    >
+                        <i className={`fas fa-${preset.icon}`}></i>
+                        {preset.label}
+                    </button>
+                ))}
             </div>
 
             {viewMode === 'list' && (
@@ -595,26 +720,48 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                                         <span className="bg-white/50 px-2 py-0.5 rounded text-xs font-black">{colOrders.length}</span>
                                     </div>
                                     <div className="flex-1 overflow-y-auto space-y-1 p-0.5 pb-10 scrollbar-thin">
-                                        {colOrders.map(order => (
-                                            <div key={order.id} className={`p-1.5 rounded border shadow-sm hover:shadow transition-all ${getCardColor(order.fulfillmentStatus)}`}>
-                                                <div className="flex justify-between items-center text-[8px]">
-                                                    <span className="font-mono font-bold text-gray-600 bg-white/50 px-0.5 rounded">{order.folio}</span>
-                                                    <div className="flex items-center gap-0.5 text-gray-500">
-                                                        {order.shippingDetails?.isLocalDelivery && <span className="font-bold bg-green-200 text-green-700 px-0.5 rounded">L</span>}
-                                                        {order.shippingDetails?.guideFile && <i className="fas fa-file-alt text-sky-500"></i>}
-                                                        <i className="far fa-clock"></i>{timeAgo(order.date)}
+                                        {colOrders.map(order => {
+                                            // Get unique categories for this order
+                                            const orderCategories = [...new Set(order.items.map(item => item.categoryId))];
+                                            const orderCatDetails = orderCategories.map(catId => categories.find(c => c.id === catId)).filter(Boolean);
+
+                                            return (
+                                                <div key={order.id} className={`p-1.5 rounded border shadow-sm hover:shadow transition-all ${getCardColor(order.fulfillmentStatus)}`}>
+                                                    {/* Category Indicators at top */}
+                                                    {orderCatDetails.length > 0 && (
+                                                        <div className="flex gap-1 mb-1 flex-wrap">
+                                                            {orderCatDetails.map((cat: any) => (
+                                                                <span
+                                                                    key={cat.id}
+                                                                    className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[7px] font-bold text-white shadow-sm"
+                                                                    style={{ backgroundColor: cat.color }}
+                                                                    title={cat.name}
+                                                                >
+                                                                    <i className={`fas fa-${cat.icon || 'tag'}`}></i>
+                                                                    <span className="max-w-[50px] truncate">{cat.name}</span>
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                    <div className="flex justify-between items-center text-[8px]">
+                                                        <span className="font-mono font-bold text-gray-600 bg-white/50 px-0.5 rounded">{order.folio}</span>
+                                                        <div className="flex items-center gap-0.5 text-gray-500">
+                                                            {order.shippingDetails?.isLocalDelivery && <span className="font-bold bg-green-200 text-green-700 px-0.5 rounded">L</span>}
+                                                            {order.shippingDetails?.guideFile && <i className="fas fa-file-alt text-sky-500"></i>}
+                                                            <i className="far fa-clock"></i>{timeAgo(order.date)}
+                                                        </div>
+                                                    </div>
+                                                    <h4 className="font-bold text-gray-800 text-[10px] leading-tight truncate">{getCustomerName(order)}</h4>
+                                                    <p className="text-[8px] text-gray-600 truncate">{order.items.map(i => `${i.quantity} ${i.name}`).join(', ')}</p>
+                                                    {order.balance && order.balance > 0 && <p className="text-[8px] font-bold text-red-600">Debe: L {order.balance.toFixed(2)}</p>}
+                                                    <div className="flex items-center justify-between mt-1 gap-0.5">
+                                                        <button onClick={(e) => { e.stopPropagation(); handleQuickStatusUpdate(order, 'prev'); }} disabled={col.id === 'pending'} className="w-4 h-4 rounded-full bg-white/60 text-gray-500 disabled:opacity-30 flex items-center justify-center text-[7px]"><i className="fas fa-chevron-left"></i></button>
+                                                        <button onClick={() => openEditModal(order)} className="flex-1 text-[8px] font-bold text-primary hover:bg-white/50 py-0.5 rounded">Gestionar</button>
+                                                        <button onClick={(e) => { e.stopPropagation(); handleQuickStatusUpdate(order, 'next'); }} disabled={col.id === 'delivered'} className="w-4 h-4 rounded-full bg-primary text-white disabled:opacity-30 flex items-center justify-center text-[7px]"><i className="fas fa-chevron-right"></i></button>
                                                     </div>
                                                 </div>
-                                                <h4 className="font-bold text-gray-800 text-[10px] leading-tight truncate">{getCustomerName(order)}</h4>
-                                                <p className="text-[8px] text-gray-600 truncate">{order.items.map(i => `${i.quantity} ${i.name}`).join(', ')}</p>
-                                                {order.balance && order.balance > 0 && <p className="text-[8px] font-bold text-red-600">Debe: L {order.balance.toFixed(2)}</p>}
-                                                <div className="flex items-center justify-between mt-1 gap-0.5">
-                                                    <button onClick={(e) => { e.stopPropagation(); handleQuickStatusUpdate(order, 'prev'); }} disabled={col.id === 'pending'} className="w-4 h-4 rounded-full bg-white/60 text-gray-500 disabled:opacity-30 flex items-center justify-center text-[7px]"><i className="fas fa-chevron-left"></i></button>
-                                                    <button onClick={() => openEditModal(order)} className="flex-1 text-[8px] font-bold text-primary hover:bg-white/50 py-0.5 rounded">Gestionar</button>
-                                                    <button onClick={(e) => { e.stopPropagation(); handleQuickStatusUpdate(order, 'next'); }} disabled={col.id === 'delivered'} className="w-4 h-4 rounded-full bg-primary text-white disabled:opacity-30 flex items-center justify-center text-[7px]"><i className="fas fa-chevron-right"></i></button>
-                                                </div>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                         {colOrders.length === 0 && (
                                             <div className="text-center py-10 text-gray-300 border-2 border-dashed border-gray-100 rounded-xl">
                                                 <p className="text-xs">Sin pedidos</p>
@@ -631,61 +778,82 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
             {viewMode === 'list' && (
                 <div className="flex-1 overflow-y-auto">
                     <div className="grid grid-cols-1 gap-3">
-                        {filteredOrders.map(order => (
-                            <Card key={order.id} className="hover:shadow-md transition-shadow" noPadding>
-                                <div className="p-4 flex flex-col md:flex-row items-start md:items-center gap-4">
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-3 mb-1">
-                                            <span className="font-mono font-bold text-gray-700">{order.folio}</span>
-                                            {getStatusBadge(order.fulfillmentStatus)}
-                                            <span className="text-xs text-gray-400">{new Date(order.date).toLocaleString()}</span>
+                        {filteredOrders.map(order => {
+                            // Get unique categories for this order
+                            const orderCategories = [...new Set(order.items.map(item => item.categoryId))];
+                            const orderCatDetails = orderCategories.map(catId => categories.find(c => c.id === catId)).filter(Boolean);
+
+                            return (
+                                <Card key={order.id} className="hover:shadow-md transition-shadow" noPadding>
+                                    <div className="p-4 flex flex-col md:flex-row items-start md:items-center gap-4">
+                                        <div className="flex-1">
+                                            {/* Category badges */}
+                                            {orderCatDetails.length > 0 && (
+                                                <div className="flex gap-1.5 mb-2 flex-wrap">
+                                                    {orderCatDetails.map((cat: any) => (
+                                                        <span
+                                                            key={cat.id}
+                                                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold text-white shadow-sm"
+                                                            style={{ backgroundColor: cat.color }}
+                                                        >
+                                                            <i className={`fas fa-${cat.icon || 'tag'}`}></i>
+                                                            {cat.name}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            )}
+                                            <div className="flex items-center gap-3 mb-1">
+                                                <span className="font-mono font-bold text-gray-700">{order.folio}</span>
+                                                {getStatusBadge(order.fulfillmentStatus)}
+                                                <span className="text-xs text-gray-400">{new Date(order.date).toLocaleString()}</span>
+                                            </div>
+                                            <div className="font-bold text-lg text-gray-900">{getCustomerName(order)}</div>
+                                            <div className="text-sm text-gray-500 mt-1">{order.items.map(i => `${i.quantity}x ${i.name}`).join(', ')}</div>
                                         </div>
-                                        <div className="font-bold text-lg text-gray-900">{getCustomerName(order)}</div>
-                                        <div className="text-sm text-gray-500 mt-1">{order.items.map(i => `${i.quantity}x ${i.name}`).join(', ')}</div>
-                                    </div>
 
-                                    {order.shippingDetails?.trackingNumber && (
-                                        <div className="text-right px-4 border-l border-gray-100 hidden md:block">
-                                            <p className="text-[10px] text-gray-400 uppercase font-bold">Tracking</p>
-                                            <p className="font-mono font-bold text-purple-600">{order.shippingDetails.company}</p>
-                                            <p className="text-xs bg-gray-100 px-1 rounded">{order.shippingDetails.trackingNumber}</p>
+                                        {order.shippingDetails?.trackingNumber && (
+                                            <div className="text-right px-4 border-l border-gray-100 hidden md:block">
+                                                <p className="text-[10px] text-gray-400 uppercase font-bold">Tracking</p>
+                                                <p className="font-mono font-bold text-purple-600">{order.shippingDetails.company}</p>
+                                                <p className="text-xs bg-gray-100 px-1 rounded">{order.shippingDetails.trackingNumber}</p>
+                                            </div>
+                                        )}
+
+                                        <div className="flex gap-2 items-center w-full md:w-auto mt-2 md:mt-0">
+                                            {/* Quick Deliver Checkbox */}
+                                            <label className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-all ${order.fulfillmentStatus === 'delivered' ? 'bg-green-100 text-green-700' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'}`}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={order.fulfillmentStatus === 'delivered'}
+                                                    onChange={async () => {
+                                                        const newStatus = order.fulfillmentStatus === 'delivered' ? 'shipped' : 'delivered';
+
+                                                        if (order.fulfillmentStatus === 'delivered') {
+                                                            // Require password to un-check delivered
+                                                            setPendingRollback({ order, newStatus });
+                                                            setAdminPassword('');
+                                                            setIsAdminModalOpen(true);
+                                                            return;
+                                                        }
+
+                                                        try {
+                                                            await db.updateSaleStatus(order.id, newStatus);
+                                                            refresh();
+                                                            if (onUpdate) onUpdate();
+                                                        } catch (e: any) {
+                                                            showToast(e.message || 'Error al actualizar estado', 'error');
+                                                        }
+                                                    }}
+                                                    className="w-4 h-4 accent-green-600"
+                                                />
+                                                <span className="text-xs font-bold">Entregado</span>
+                                            </label>
+                                            <Button size="sm" variant="secondary" className="flex-1 md:flex-none" onClick={() => openEditModal(order)}>Gestionar</Button>
                                         </div>
-                                    )}
-
-                                    <div className="flex gap-2 items-center w-full md:w-auto mt-2 md:mt-0">
-                                        {/* Quick Deliver Checkbox */}
-                                        <label className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-all ${order.fulfillmentStatus === 'delivered' ? 'bg-green-100 text-green-700' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'}`}>
-                                            <input
-                                                type="checkbox"
-                                                checked={order.fulfillmentStatus === 'delivered'}
-                                                onChange={async () => {
-                                                    const newStatus = order.fulfillmentStatus === 'delivered' ? 'shipped' : 'delivered';
-
-                                                    if (order.fulfillmentStatus === 'delivered') {
-                                                        // Require password to un-check delivered
-                                                        setPendingRollback({ order, newStatus });
-                                                        setAdminPassword('');
-                                                        setIsAdminModalOpen(true);
-                                                        return;
-                                                    }
-
-                                                    try {
-                                                        await db.updateSaleStatus(order.id, newStatus);
-                                                        refresh();
-                                                        if (onUpdate) onUpdate();
-                                                    } catch (e: any) {
-                                                        showToast(e.message || 'Error al actualizar estado', 'error');
-                                                    }
-                                                }}
-                                                className="w-4 h-4 accent-green-600"
-                                            />
-                                            <span className="text-xs font-bold">Entregado</span>
-                                        </label>
-                                        <Button size="sm" variant="secondary" className="flex-1 md:flex-none" onClick={() => openEditModal(order)}>Gestionar</Button>
                                     </div>
-                                </div>
-                            </Card>
-                        ))}
+                                </Card>
+                            );
+                        })}
                         {filteredOrders.length === 0 && (
                             <div className="text-center py-12 text-gray-400">
                                 <i className="fas fa-box-open text-4xl mb-3 opacity-50"></i>
