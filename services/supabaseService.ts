@@ -252,7 +252,7 @@ export class SupabaseService {
                 'logo', 'themeColor', 'whatsappNumber', 'masterPassword', 'supabaseUrl', 'supabaseKey',
                 'autoSync', 'lastBackupDate', 'lastCloudSync', 'logoObjectFit', 'thanksMessage', 'warrantyPolicy', 'returnPolicy',
                 'barcodeWidth', 'barcodeHeight', 'showLogoOnBarcode', 'barcodeLogoSize', 'legalOwnerName', 'legalCity',
-                'darkMode', 'enableBeep', 'currentSeason'
+                'darkMode', 'enableBeep', 'currentSeason', 'updatedAt', 'deviceId'
             ];
 
             const settingsToSync: any = { id: 'main' };
@@ -390,7 +390,7 @@ export class SupabaseService {
             'products', 'categories', 'customers', 'sales', 'users',
             'branches', 'credits', 'promotions', 'suppliers',
             'consumables', 'quotes', 'cash_cuts', 'credit_notes',
-            'expenses', 'inventory_history', 'price_history'
+            'expenses', 'inventory_history', 'price_history', 'settings'
         ];
 
         let totalChanges = 0;
@@ -444,7 +444,8 @@ export class SupabaseService {
             { cloud: 'credit_notes', dexie: 'creditNotes' },
             { cloud: 'expenses', dexie: 'expenses' },
             { cloud: 'inventory_history', dexie: 'inventoryHistory' },
-            { cloud: 'price_history', dexie: 'priceHistory' }
+            { cloud: 'price_history', dexie: 'priceHistory' },
+            { cloud: 'settings', dexie: 'settings' }
         ];
 
         for (const map of genericTables) {

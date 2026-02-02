@@ -5,7 +5,7 @@ import {
   Branch, CreditAccount, Promotion, Supplier, Consumable,
   CashCut, Quote, CreditNote, CreditPayment,
   Expense, InventoryMovement, MovementType, FulfillmentStatus, ShippingDetails, UserRole,
-  PriceHistoryEntry, PaymentDetails
+  PriceHistoryEntry, PaymentDetails, AuditLog
 } from '../types';
 
 // --- DATABASE CONFIGURATION (DEXIE) ---
@@ -27,6 +27,7 @@ class AppDatabase extends Dexie {
   expenses!: Table<Expense>;
   inventoryHistory!: Table<InventoryMovement>;
   priceHistory!: Table<PriceHistoryEntry>;
+  auditLogs!: Table<AuditLog>;
 
   constructor() {
     super('CreativosGiftDB');
@@ -47,7 +48,8 @@ class AppDatabase extends Dexie {
       creditNotes: 'id, folio, status',
       expenses: 'id, date, categoryId',
       inventoryHistory: '++id, productId, date, type',
-      priceHistory: '++id, productId, date'
+      priceHistory: '++id, productId, date',
+      auditLogs: 'id, date, userId, module, action'
     });
   }
 }
@@ -170,6 +172,29 @@ export class StorageService {
     }
   }
 
+  async saveLog(module: string, action: string, details: string) {
+    try {
+      const activeUserStr = localStorage.getItem('active_user') || localStorage.getItem('creativos_gift_currentUser');
+      const user = activeUserStr ? JSON.parse(activeUserStr) : null;
+
+      const log: AuditLog = {
+        id: crypto.randomUUID(),
+        date: this.getLocalNowISO(),
+        userId: user?.id || 'anonymous',
+        branchId: user?.branchId || 'main',
+        module,
+        action,
+        details,
+        updatedAt: this.getLocalNowISO()
+      };
+
+      await db_engine.auditLogs.put(log);
+      this.triggerAutoSync(); // Always sync logs
+    } catch (e) {
+      console.warn("Could not save audit log", e);
+    }
+  }
+
   // --- SETTINGS ---
   async getSettings(): Promise<CompanySettings> {
     const saved = await db_engine.settings.get('main');
@@ -207,12 +232,29 @@ export class StorageService {
       legalOwnerName: '',
       legalCity: 'Tegucigalpa',
       themeColor: '#e62e8a',
-      logo: 'https://i.imgur.com/K6mXQ0j.png' // New brand logo
+      logo: 'https://i.imgur.com/K6mXQ0j.png', // New brand logo
+      deviceId: undefined
     };
-    return saved ? { ...defaults, ...saved } : defaults;
+
+    if (saved && !saved.deviceId) {
+      // Generate and save deviceId if missing in existing settings
+      const deviceId = `dev-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      const updated = { ...saved, deviceId };
+      await db_engine.settings.put({ id: 'main', ...updated });
+      return { ...defaults, ...updated };
+    }
+
+    if (!saved) {
+      // For completely new settings, generate deviceId
+      const deviceId = `dev-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      return { ...defaults, deviceId };
+    }
+
+    return { ...defaults, ...saved };
   }
 
   async saveSettings(settings: CompanySettings) {
+    settings.updatedAt = this.getLocalNowISO();
     await db_engine.settings.put({ id: 'main', ...settings });
     if (settings.autoSync) this.triggerAutoSync();
   }
@@ -375,6 +417,7 @@ export class StorageService {
         date: this.getLocalNowISO(),
         userId
       });
+      await this.saveLog('inventory', 'CHANGE_PRICE', `Precio de "${product.name}" cambiado de L${existing.price} a L${product.price}.`);
     }
 
     product.updatedAt = this.getLocalNowISO(); // Update timestamp
@@ -389,6 +432,7 @@ export class StorageService {
       p.active = false;
       p.updatedAt = this.getLocalNowISO();
       await db_engine.products.put(p);
+      await this.saveLog('inventory', 'DELETE_PRODUCT', `Producto "${p.name}" (${p.code}) eliminado.`);
       const settings = await this.getSettings();
       if (settings.autoSync) this.triggerAutoSync();
     }
@@ -1988,6 +2032,208 @@ export class StorageService {
       console.error('❌ Error en force push:', e);
       return { success: false, count: 0 };
     }
+  }
+
+  /**
+   * GENERATE BARCODE LABELS
+   * Creates a printable HTML sheet of product labels with barcodes.
+   */
+  async generateBarcodeLabels(productIds: string[], labelsPerProduct: number = 1): Promise<string> {
+    const settings = await this.getSettings();
+    const products = await Promise.all(productIds.map(id => db_engine.products.get(id)));
+    const validProducts = products.filter(Boolean) as Product[];
+
+    const labels: string[] = [];
+    for (const p of validProducts) {
+      for (let i = 0; i < labelsPerProduct; i++) {
+        labels.push(`
+          <div class="label">
+            ${settings.showLogoOnBarcode && settings.logo ? `<img src="${settings.logo}" class="logo" alt="logo">` : ''}
+            <p class="name">${p.name}</p>
+            <svg class="barcode"></svg>
+            <p class="code">${p.code}</p>
+            <p class="price">L ${p.price.toFixed(2)}</p>
+          </div>
+        `);
+      }
+    }
+
+    const bw = settings.barcodeWidth || 50;
+    const bh = settings.barcodeHeight || 25;
+    const logoSize = settings.barcodeLogoSize || 10;
+
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3/dist/JsBarcode.all.min.js"></script>
+        <style>
+          @page { size: letter; margin: 10mm; }
+          body { font-family: sans-serif; display: flex; flex-wrap: wrap; gap: 5mm; justify-content: center; }
+          .label { width: ${bw}mm; height: ${bh}mm; border: 1px solid #ccc; padding: 2mm; box-sizing: border-box; text-align: center; display: flex; flex-direction: column; justify-content: center; align-items: center; page-break-inside: avoid; overflow: hidden; }
+          .label .logo { height: ${logoSize}mm; object-fit: contain; margin-bottom: 1mm; }
+          .label .name { font-size: 8px; font-weight: bold; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+          .label .barcode { width: 100%; max-height: ${bh * 0.4}mm; }
+          .label .code { font-size: 7px; margin: 0; color: #555; }
+          .label .price { font-size: 10px; font-weight: bold; margin: 0; color: #000; }
+        </style>
+      </head>
+      <body>
+        ${labels.join('')}
+        <script>
+          document.querySelectorAll('.label').forEach(lbl => {
+            const code = lbl.querySelector('.code')?.textContent || 'N/A';
+            const svg = lbl.querySelector('.barcode');
+            if (svg && code) {
+              JsBarcode(svg, code, { format: "CODE128", height: 30, displayValue: false, margin: 0 });
+            }
+          });
+          window.onload = () => { window.print(); };
+        </script>
+      </body>
+      </html>
+    `;
+  }
+
+  /**
+   * GENERATE WHATSAPP CATALOG
+   * Creates a shareable HTML page or blob for WhatsApp sharing.
+   */
+  async generateCatalogHTML(categoryId?: string): Promise<string> {
+    const settings = await this.getSettings();
+    let productsToShow = await this.getProducts();
+
+    if (categoryId && categoryId !== 'all') {
+      productsToShow = productsToShow.filter(p => p.categoryId === categoryId);
+    }
+
+    const categories = await this.getCategories();
+
+    const productCards = productsToShow.map(p => {
+      const cat = categories.find(c => c.id === p.categoryId);
+      return `
+        <div class="product-card">
+          ${p.image ? `<img src="${p.image}" alt="${p.name}" class="product-img">` : `<div class="product-img placeholder"><i class="fas fa-box"></i></div>`}
+          <h3>${p.name}</h3>
+          <p class="cat">${cat?.name || 'General'}</p>
+          <p class="price">L ${p.price.toFixed(2)}</p>
+          ${p.stock <= p.minStock ? '<span class="low-stock">¡Pocas unidades!</span>' : ''}
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Catálogo - ${settings.name}</title>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+        <style>
+          * { box-sizing: border-box; margin: 0; padding: 0; }
+          body { font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); min-height: 100vh; padding: 20px; }
+          .header { text-align: center; padding: 20px; margin-bottom: 20px; }
+          .header img { max-height: 80px; margin-bottom: 10px; }
+          .header h1 { font-size: 24px; color: #333; }
+          .header p { color: #666; font-size: 14px; }
+          .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 15px; max-width: 1200px; margin: 0 auto; }
+          .product-card { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.1); transition: transform 0.2s; }
+          .product-card:hover { transform: translateY(-5px); }
+          .product-img { width: 100%; height: 120px; object-fit: cover; background: #f0f0f0; display: flex; align-items: center; justify-content: center; color: #ccc; font-size: 30px; }
+          .product-img.placeholder { background: linear-gradient(135deg, #e0e0e0, #f5f5f5); }
+          .product-card h3 { font-size: 13px; padding: 10px 10px 0; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+          .product-card .cat { font-size: 10px; color: #888; padding: 0 10px; }
+          .product-card .price { font-size: 16px; font-weight: bold; color: #4F46E5; padding: 5px 10px 10px; }
+          .product-card .low-stock { display: block; background: #fee2e2; color: #ef4444; font-size: 9px; text-align: center; padding: 3px; font-weight: bold; }
+          .footer { text-align: center; margin-top: 30px; color: #888; font-size: 12px; }
+          .footer a { color: #25D366; text-decoration: none; font-weight: bold; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          ${settings.logo ? `<img src="${settings.logo}" alt="Logo">` : ''}
+          <h1>${settings.name}</h1>
+          <p>📍 ${settings.address} | 📞 ${settings.phone}</p>
+        </div>
+        <div class="grid">
+          ${productCards}
+        </div>
+        <div class="footer">
+          <p>¿Interesado? <a href="https://wa.me/${settings.whatsappNumber?.replace(/\D/g, '')}"><i class="fab fa-whatsapp"></i> Escríbenos por WhatsApp</a></p>
+          <p style="margin-top: 10px;">Catálogo generado por ${settings.name}</p>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+  /**
+   * PROFITABILITY REPORT
+   * Calculates real profit by subtracting COGS, consumables, and expenses from revenue.
+   */
+  async getProfitabilityReport(startDate: string, endDate: string): Promise<{
+    revenue: number;
+    cogs: number;
+    grossProfit: number;
+    expenses: number;
+    netProfit: number;
+    margin: number;
+    breakdown: { category: string; amount: number }[];
+  }> {
+    const sales = await db_engine.sales.toArray();
+    const expenses = await db_engine.expenses.toArray();
+
+    // Filter sales by date range and status
+    const filteredSales = sales.filter(s => {
+      if (s.status !== 'active') return false;
+      const saleDate = s.date.split('T')[0];
+      return saleDate >= startDate && saleDate <= endDate;
+    });
+
+    // Calculate Revenue and COGS
+    let revenue = 0;
+    let cogs = 0;
+    for (const sale of filteredSales) {
+      for (const item of sale.items) {
+        revenue += item.price * item.quantity;
+        cogs += (item.cost || 0) * item.quantity;
+      }
+    }
+
+    const grossProfit = revenue - cogs;
+
+    // Filter expenses by date range
+    const filteredExpenses = expenses.filter(e => {
+      const expDate = e.date.split('T')[0];
+      return expDate >= startDate && expDate <= endDate;
+    });
+
+    const totalExpenses = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
+
+    // Breakdown by expense category
+    const breakdown: { category: string; amount: number }[] = [];
+    const expenseByCategory: Record<string, number> = {};
+    expenseByCategory['Costo de Productos'] = cogs;
+    for (const e of filteredExpenses) {
+      expenseByCategory[e.categoryId] = (expenseByCategory[e.categoryId] || 0) + e.amount;
+    }
+    for (const [cat, amt] of Object.entries(expenseByCategory)) {
+      breakdown.push({ category: cat, amount: amt });
+    }
+    breakdown.sort((a, b) => b.amount - a.amount);
+
+    const netProfit = grossProfit - totalExpenses;
+    const margin = revenue > 0 ? (netProfit / revenue) * 100 : 0;
+
+    return {
+      revenue,
+      cogs,
+      grossProfit,
+      expenses: totalExpenses,
+      netProfit,
+      margin,
+      breakdown
+    };
   }
 }
 

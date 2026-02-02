@@ -139,7 +139,7 @@ export interface PaymentDetails {
   bank?: string;
 }
 
-export type FulfillmentStatus = 'pending' | 'production' | 'ready' | 'shipped' | 'delivered';
+export type FulfillmentStatus = 'pending' | 'design' | 'printing' | 'qc' | 'production' | 'ready' | 'shipped' | 'delivered';
 
 export interface StatusHistoryEntry {
   status: FulfillmentStatus;
@@ -262,6 +262,8 @@ export interface CompanySettings {
   darkMode?: boolean;
   enableBeep?: boolean;
   currentSeason?: string;
+  deviceId?: string;
+  updatedAt?: string;
 }
 
 export const SEASONS = [
@@ -383,3 +385,14 @@ export const ICONS = [
   // Otros útiles
   'hand-holding-heart', 'handshake', 'user', 'users', 'baby', 'child', 'person', 'people-group'
 ];
+
+export interface AuditLog {
+  id: string;
+  date: string;
+  userId: string;
+  action: string; // e.g. 'DELETE_PRODUCT', 'CHANGE_PRICE', 'LOGIN', 'SYNC'
+  details: string; // JSON string or text summary
+  module: string; // e.g. 'inventory', 'sales', 'settings'
+  branchId: string;
+  updatedAt?: string;
+}

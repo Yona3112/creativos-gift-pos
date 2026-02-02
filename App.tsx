@@ -52,6 +52,21 @@ function App() {
   // Ref to prevent multiple pullAll() calls during session - fixes duplicate data bug
   const hasPulledFromCloud = useRef(false);
 
+  // Global Navigation Shortcuts
+  useEffect(() => {
+    const handleGlobalKeys = (e: KeyboardEvent) => {
+      if (e.altKey && user) {
+        if (e.key === '1') setPage('pos');
+        if (e.key === '2') setPage('orders');
+        if (e.key === '3') setPage('history');
+        if (e.key === '4') setPage('inventory');
+        if (e.key === '5') setPage('dashboard');
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeys);
+    return () => window.removeEventListener('keydown', handleGlobalKeys);
+  }, [user]);
+
 
   const refreshData = async (shouldPushToCloud = false, isManual = false) => {
     try {
@@ -274,6 +289,7 @@ function App() {
 
         if (changed && changed > 0) {
           console.log(`🔄 FastSync: ${changed} cambios aplicados desde la nube`);
+          await db.fixDuplicateFolios();
           await refreshData(false);
         }
       } catch (e) {
@@ -327,6 +343,35 @@ function App() {
       return new Date(c.dueDate) < today;
     }).length
   };
+
+  // Calculate Alerts for Notification Bell
+  const alerts: { type: string; message: string; link?: string }[] = [];
+
+  // Low Stock Alerts
+  const lowStockProducts = products.filter(p => p.enableLowStockAlert !== false && p.stock <= p.minStock);
+  if (lowStockProducts.length > 0) {
+    alerts.push({ type: 'stock', message: `${lowStockProducts.length} producto(s) con stock bajo`, link: 'products' });
+  }
+
+  // Overdue Credit Alerts
+  const overdueCredits = (credits || []).filter(c => {
+    if (c.status === 'paid' || c.status === 'cancelled') return false;
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    return new Date(c.dueDate) < today;
+  });
+  if (overdueCredits.length > 0) {
+    alerts.push({ type: 'credit', message: `${overdueCredits.length} crédito(s) vencido(s)`, link: 'credits' });
+  }
+
+  // Pending Orders Due Tomorrow
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(0, 0, 0, 0);
+  const tomorrowStr = tomorrow.toISOString().split('T')[0];
+  const ordersDueTomorrow = sales.filter(s => s.isOrder && s.status === 'active' && s.fulfillmentStatus !== 'delivered' && s.shippingDetails?.shippingDate?.startsWith(tomorrowStr));
+  if (ordersDueTomorrow.length > 0) {
+    alerts.push({ type: 'order', message: `${ordersDueTomorrow.length} pedido(s) para entregar MAÑANA`, link: 'orders' });
+  }
 
   if (loading) {
     return (
@@ -454,6 +499,9 @@ function App() {
         settings={settings}
         onManualUpload={handleManualUpload}
         onManualDownload={handleManualDownload}
+        badges={badges}
+        alerts={alerts}
+        isSyncing={isSyncing}
       >
         {renderPage()}
       </Layout>

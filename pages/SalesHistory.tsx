@@ -61,9 +61,10 @@ export const SalesHistory: React.FC<SalesHistoryProps> = ({ sales, customers, us
         return safeSales.filter(s => {
             if (!s || !s.items) return false;
 
-            if (user?.role === UserRole.VENDEDOR && s.userId !== user.id) {
-                return false;
-            }
+            // Relaxed visibility: Allow vendors to see all branch sales
+            // if (user?.role === UserRole.VENDEDOR && s.userId !== user.id) {
+            //     return false;
+            // }
 
             const client = customers.find(c => c.id === s.customerId);
             const clientName = client?.name || 'Consumidor Final';

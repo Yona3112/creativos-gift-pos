@@ -458,7 +458,10 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
 
     const columns: { id: FulfillmentStatus, label: string, color: string, icon: string }[] = [
         { id: 'pending', label: 'Pendientes', color: 'border-yellow-400 bg-yellow-50', icon: 'clock' },
-        { id: 'production', label: 'En Producción', color: 'border-blue-400 bg-blue-50', icon: 'tools' },
+        { id: 'design', label: 'Diseño', color: 'border-pink-400 bg-pink-50', icon: 'palette' },
+        { id: 'printing', label: 'Impresión/Corte', color: 'border-cyan-400 bg-cyan-50', icon: 'print' },
+        { id: 'qc', label: 'Control Calidad', color: 'border-orange-400 bg-orange-50', icon: 'check-double' },
+        { id: 'production', label: 'Ensamble', color: 'border-blue-400 bg-blue-50', icon: 'tools' },
         { id: 'ready', label: 'Listos / Empaquetado', color: 'border-green-400 bg-green-50', icon: 'box-open' },
         { id: 'shipped', label: 'En Ruta / Enviado', color: 'border-purple-400 bg-purple-50', icon: 'shipping-fast' },
         { id: 'delivered', label: 'Entregados', color: 'border-gray-400 bg-gray-50', icon: 'check-circle' },
@@ -467,7 +470,10 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
     const getStatusBadge = (status?: FulfillmentStatus) => {
         switch (status) {
             case 'pending': return <Badge variant="warning">Pendiente</Badge>;
-            case 'production': return <Badge variant="info">En Producción</Badge>;
+            case 'design': return <Badge variant="info">Diseño</Badge>;
+            case 'printing': return <Badge variant="info">Impresión</Badge>;
+            case 'qc': return <Badge variant="warning">Control Calidad</Badge>;
+            case 'production': return <Badge variant="info">Ensamble</Badge>;
             case 'ready': return <Badge variant="success">Listo</Badge>;
             case 'shipped': return <Badge variant="info">Enviado</Badge>;
             case 'delivered': return <Badge variant="default">Entregado</Badge>;
@@ -478,6 +484,9 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
     const getCardColor = (status?: FulfillmentStatus) => {
         switch (status) {
             case 'pending': return 'bg-yellow-50 border-yellow-200';
+            case 'design': return 'bg-pink-50 border-pink-200';
+            case 'printing': return 'bg-cyan-50 border-cyan-200';
+            case 'qc': return 'bg-orange-50 border-orange-200';
             case 'production': return 'bg-blue-50 border-blue-200';
             case 'ready': return 'bg-green-50 border-green-200';
             case 'shipped': return 'bg-purple-50 border-purple-200';

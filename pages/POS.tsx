@@ -209,27 +209,76 @@ export const POS: React.FC<POSProps> = ({
     // Keyboard Shortcuts
     useEffect(() => {
         const handleKeys = (e: KeyboardEvent) => {
-            if (e.key === 'F1') {
+            const isInput = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement;
+
+            // F1 or Ctrl+B - Focus search (even if in input)
+            if (e.key === 'F1' || (e.ctrlKey && e.key === 'b')) {
                 e.preventDefault();
                 searchInputRef.current?.focus();
             }
-            if (e.key === 'F2') {
+
+            // F2 or Ctrl+U - New Customer
+            if (e.key === 'F2' || (e.ctrlKey && e.key === 'u')) {
                 e.preventDefault();
                 setIsNewCustomerModalOpen(true);
             }
-            if (e.key === 'F4') {
-                e.preventDefault();
-                if (cart.length > 0) setIsPaymentModalOpen(true);
+
+            // F4 or Ctrl+Enter - Payment / Finalize
+            if (e.key === 'F4' || (e.ctrlKey && e.key === 'Enter')) {
+                if (cart.length > 0 && !isPaymentModalOpen && !isSuccessModalOpen) {
+                    e.preventDefault();
+                    setIsPaymentModalOpen(true);
+                } else if (isPaymentModalOpen && !isProcessing) {
+                    e.preventDefault();
+                    document.getElementById('finalize-sale-btn')?.click();
+                } else if (isSuccessModalOpen) {
+                    e.preventDefault();
+                    setIsSuccessModalOpen(false); // Quick restart POS
+                }
             }
+
+            // F9 - Manual Item
             if (e.key === 'F9') {
                 e.preventDefault();
                 setIsManualModalOpen(true);
             }
+
+            // Alt + E/T/R - Payment Methods (Only when modal is open)
+            if (e.altKey && isPaymentModalOpen) {
+                if (e.key.toLowerCase() === 'e') { e.preventDefault(); setPaymentMethod('Efectivo'); }
+                if (e.key.toLowerCase() === 't') { e.preventDefault(); setPaymentMethod('Tarjeta'); }
+                if (e.key.toLowerCase() === 'r') { e.preventDefault(); setPaymentMethod('Transferencia'); }
+            }
+
+            // Ctrl + Delete - Clear Cart
+            if (e.ctrlKey && e.key === 'Delete' && cart.length > 0) {
+                e.preventDefault();
+                if (window.confirm('¿Limpiar todo el carrito?')) setCart([]);
+            }
+
+            // Ctrl + P - Reprint last sale
+            if (e.ctrlKey && e.key === 'p' && lastSale) {
+                e.preventDefault();
+                const customer = lastSale.customerName ? { name: lastSale.customerName } as Customer : undefined;
+                db.generateTicketHTML(lastSale, customer).then(html => {
+                    const win = window.open('', '', 'width=400,height=600');
+                    if (win) {
+                        win.document.write(html);
+                        win.document.close();
+                        win.focus();
+                        setTimeout(() => { win.print(); win.close(); }, 500);
+                    }
+                });
+            }
+
+            // Escape - Close everything
             if (e.key === 'Escape') {
                 setIsCartOpen(false);
                 setIsPaymentModalOpen(false);
                 setIsManualModalOpen(false);
                 setIsNewCustomerModalOpen(false);
+                setIsSuccessModalOpen(false);
+                setIsQuoteModalOpen(false);
             }
         };
 
@@ -1028,7 +1077,7 @@ export const POS: React.FC<POSProps> = ({
                             <p className="text-xs font-bold opacity-70 uppercase tracking-widest">{!isImmediateDelivery && depositAmount ? 'A Pagar Hoy' : 'Monto Total a Pagar'}</p>
                             <h3 className="text-4xl font-black">L {cashRequiredToday.toFixed(2)}</h3>
                         </div>
-                        <Button variant="secondary" className="bg-white text-primary border-none hover:bg-gray-100 h-14 px-8" onClick={handleCheckout} disabled={isProcessing}>
+                        <Button id="finalize-sale-btn" variant="secondary" className="bg-white text-primary border-none hover:bg-gray-100 h-14 px-8" onClick={handleCheckout} disabled={isProcessing}>
                             {isProcessing ? <i className="fas fa-spinner fa-spin"></i> : 'Confirmar Pago'}
                         </Button>
                     </div>
@@ -1081,7 +1130,7 @@ export const POS: React.FC<POSProps> = ({
                         </div>
                     </div>
                     <div className="pt-2">
-                        <Button className="w-full h-12" onClick={addManualItem}>
+                        <Button id="add-manual-item-btn" className="w-full h-12" onClick={addManualItem}>
                             <i className="fas fa-cart-plus mr-2"></i> Agregar al Carrito
                         </Button>
                     </div>

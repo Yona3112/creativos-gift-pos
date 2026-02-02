@@ -17,6 +17,7 @@ interface LayoutProps {
   onManualDownload: () => void;
   badges?: Record<string, number>;
   isSyncing?: boolean;
+  alerts?: { type: string; message: string; link?: string }[];
 }
 
 const MENU_ITEMS = [
@@ -150,8 +151,52 @@ const BackupReminderBell: React.FC<{
   );
 };
 
+// Notification Bell for Low Stock, Overdue Credits, Pending Orders
+const NotificationBell: React.FC<{
+  alerts: { type: string; message: string; link?: string }[];
+  onNavigate: (page: string) => void;
+}> = ({ alerts, onNavigate }) => {
+  const [showDropdown, setShowDropdown] = useState(false);
+  if (alerts.length === 0) return null;
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setShowDropdown(!showDropdown)}
+        className="w-10 h-10 flex items-center justify-center bg-red-100 rounded-xl relative transition-all hover:scale-105"
+        title="Notificaciones"
+      >
+        <i className="fas fa-bell text-red-600 text-lg"></i>
+        <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-600 rounded-full text-white text-[10px] flex items-center justify-center font-bold animate-bounce">
+          {alerts.length}
+        </span>
+      </button>
+      {showDropdown && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setShowDropdown(false)}></div>
+          <div className="absolute right-0 top-12 w-72 bg-white rounded-xl shadow-xl border border-gray-100 z-50 p-3 animate-scale-in origin-top-right max-h-80 overflow-y-auto">
+            <p className="font-black text-gray-800 text-sm mb-2"><i className="fas fa-exclamation-triangle text-yellow-500 mr-2"></i>Alertas del Sistema</p>
+            <div className="space-y-2">
+              {alerts.map((a, i) => (
+                <button
+                  key={i}
+                  onClick={() => { if (a.link) { onNavigate(a.link); setShowDropdown(false); } }}
+                  className={`w-full text-left p-2 rounded-lg text-xs ${a.type === 'stock' ? 'bg-orange-50' : a.type === 'credit' ? 'bg-red-50' : 'bg-yellow-50'} hover:opacity-80 transition-opacity`}
+                >
+                  <i className={`fas ${a.type === 'stock' ? 'fa-boxes text-orange-500' : a.type === 'credit' ? 'fa-hand-holding-usd text-red-500' : 'fa-clipboard-list text-yellow-600'} mr-2`}></i>
+                  {a.message}
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
 export const Layout: React.FC<LayoutProps> = ({
-  children, user, settings, onLogout, activePage, onNavigate, onManualUpload, onManualDownload, badges = {}, isSyncing
+  children, user, settings, onLogout, activePage, onNavigate, onManualUpload, onManualDownload, badges = {}, isSyncing, alerts = []
 }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showLogoModal, setShowLogoModal] = useState(false);
@@ -228,6 +273,7 @@ export const Layout: React.FC<LayoutProps> = ({
           </div>
 
           <div className="flex items-center gap-4">
+            <NotificationBell alerts={alerts} onNavigate={onNavigate} />
             {settings && (
               <BackupReminderBell
                 settings={settings}
@@ -255,6 +301,7 @@ export const Layout: React.FC<LayoutProps> = ({
           <button onClick={() => setSidebarOpen(true)} className="w-10 h-10 flex items-center justify-center bg-gray-50 rounded-xl"><i className="fas fa-bars"></i></button>
           <span className="font-black text-primary">{settings?.name || 'Creativos Gift'}</span>
           <div className="flex items-center gap-2">
+            <NotificationBell alerts={alerts} onNavigate={onNavigate} />
             {settings && (
               <BackupReminderBell
                 settings={settings}

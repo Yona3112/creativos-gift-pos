@@ -170,6 +170,14 @@ export const Alert: React.FC<{ variant?: 'success' | 'warning' | 'danger' | 'inf
 
 // MODAL WITH HIGHER Z-INDEX (z-[70]) to stay above POS Cart (z-[60])
 export const Modal: React.FC<{ isOpen: boolean; onClose: () => void; title: string; children: React.ReactNode; size?: 'sm' | 'md' | 'lg' | 'xl' }> = ({ isOpen, onClose, title, children, size = 'md' }) => {
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) onClose();
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const sizes = {
