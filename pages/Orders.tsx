@@ -36,7 +36,8 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
         guideFileName: string;
         productionImages: string[];
         isLocalDelivery: boolean;
-    }>({ status: 'pending', shippingCompany: '', tracking: '', notes: '', guideFile: '', guideFileType: '', guideFileName: '', productionImages: [], isLocalDelivery: false });
+        sharePhone: string;
+    }>({ status: 'pending', shippingCompany: '', tracking: '', notes: '', guideFile: '', guideFileType: '', guideFileName: '', productionImages: [], isLocalDelivery: false, sharePhone: '' });
 
     // Admin Password Modal State
     const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
@@ -209,7 +210,8 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
             guideFileType: order.shippingDetails?.guideFileType || '',
             guideFileName: order.shippingDetails?.guideFileName || '',
             productionImages: order.shippingDetails?.productionImages || [],
-            isLocalDelivery: order.shippingDetails?.isLocalDelivery || false
+            isLocalDelivery: order.shippingDetails?.isLocalDelivery || false,
+            sharePhone: customers.find(c => c.id === order.customerId)?.phone || ''
         });
         setIsEditModalOpen(true);
     };
@@ -647,7 +649,15 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                                                         </div>
                                                     </div>
 
-                                                    <h4 className="font-black text-xs text-gray-800 uppercase leading-none mb-1.5 line-clamp-1">{getCustomerName(order)}</h4>
+                                                    <div className="flex justify-between items-center mb-1">
+                                                        <h4 className="font-black text-xs text-gray-800 uppercase leading-none truncate flex-1">{getCustomerName(order)}</h4>
+                                                        {customers.find(c => c.id === order.customerId)?.phone && (
+                                                            <span className="text-[10px] font-bold text-gray-500 flex items-center gap-1">
+                                                                <i className="fab fa-whatsapp text-green-500"></i>
+                                                                {customers.find(c => c.id === order.customerId)?.phone}
+                                                            </span>
+                                                        )}
+                                                    </div>
 
                                                     <div className="mb-3 space-y-0.5">
                                                         {order.items.slice(0, 3).map((item, idx) => (
@@ -730,7 +740,15 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                                                 {getStatusBadge(order.fulfillmentStatus)}
                                                 <span className="text-xs text-gray-400">{new Date(order.date).toLocaleString()}</span>
                                             </div>
-                                            <div className="font-bold text-lg text-gray-900">{getCustomerName(order)}</div>
+                                            <div className="font-bold text-lg text-gray-900 flex items-center gap-3">
+                                                {getCustomerName(order)}
+                                                {customers.find(c => c.id === order.customerId)?.phone && (
+                                                    <span className="text-xs font-bold text-gray-400 flex items-center gap-1 bg-gray-50 px-2 py-0.5 rounded-full">
+                                                        <i className="fab fa-whatsapp text-green-500"></i>
+                                                        {customers.find(c => c.id === order.customerId)?.phone}
+                                                    </span>
+                                                )}
+                                            </div>
                                             <div className="text-sm text-gray-500 mt-1">{order.items.map(i => `${i.quantity}x ${i.name}`).join(', ')}</div>
                                         </div>
 
@@ -791,7 +809,19 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                 <div className="space-y-5">
                     <div className="bg-gray-50 p-4 rounded-xl text-sm border border-gray-100 flex flex-col md:flex-row justify-between gap-4">
                         <div className="flex-1">
-                            <p className="text-gray-500 mb-1 flex items-center gap-1"><i className="fas fa-shopping-basket text-[10px]"></i> Items:</p>
+                            <div className="flex items-center justify-between mb-2">
+                                <p className="text-gray-500 flex items-center gap-1"><i className="fas fa-shopping-basket text-[10px]"></i> Items:</p>
+                                {customers.find(c => c.id === selectedOrder?.customerId)?.phone && (
+                                    <a
+                                        href={`https://wa.me/${(customers.find(c => c.id === selectedOrder?.customerId)?.phone || '').replace(/\D/g, '')}`}
+                                        target="_blank"
+                                        className="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded-lg flex items-center gap-1 hover:bg-green-100 transition-colors"
+                                    >
+                                        <i className="fab fa-whatsapp"></i>
+                                        {customers.find(c => c.id === selectedOrder?.customerId)?.phone}
+                                    </a>
+                                )}
+                            </div>
                             <ul className="list-disc pl-4 font-medium text-gray-800 space-y-1">
                                 {selectedOrder?.items.map((item, idx) => (
                                     <li key={idx} className="leading-tight">{item.quantity} x {item.name} {item.notes && <span className="text-gray-500 italic">({item.notes})</span>}</li>
@@ -900,6 +930,40 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                             <h4 className="font-bold text-sky-900 text-sm uppercase flex items-center gap-2">
                                 <i className="fas fa-file-alt"></i> Guía de Envío
                             </h4>
+
+                            {/* WhatsApp Share Action */}
+                            {editForm.tracking && (
+                                <div className="flex items-center gap-2 bg-white p-3 rounded-xl border border-sky-200 shadow-sm">
+                                    <div className="flex-1">
+                                        <p className="text-[10px] font-bold text-sky-600 uppercase">Compartir con Cliente</p>
+                                        <p className="text-xs text-gray-500">Enviar guía por WhatsApp</p>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <Input
+                                            placeholder="Teléfono"
+                                            value={editForm.sharePhone}
+                                            className="!py-1 !text-xs w-28"
+                                            onChange={(e) => setEditForm({ ...editForm, sharePhone: e.target.value })}
+                                        />
+                                        <Button
+                                            size="sm"
+                                            variant="success"
+                                            icon="whatsapp"
+                                            onClick={() => {
+                                                const cleanPhone = editForm.sharePhone.replace(/\D/g, '');
+                                                const message = `👋 Hola *${selectedOrder?.customerName}*, te compartimos los datos de tu envío:\n\n` +
+                                                    `📦 *Empresa:* ${editForm.shippingCompany}\n` +
+                                                    `🆔 *Guía/Tracking:* ${editForm.tracking}\n` +
+                                                    `📑 *Pedido:* ${selectedOrder?.folio}\n\n` +
+                                                    `_Tu pedido está en camino. ¡Gracias por tu compra!_`;
+                                                window.open(`https://wa.me/${cleanPhone.length > 8 ? cleanPhone : '504' + cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
+                                            }}
+                                        >
+                                            Enviar
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
 
                             {editForm.guideFile ? (
                                 <div className="space-y-2">
