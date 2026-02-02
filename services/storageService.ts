@@ -1328,50 +1328,91 @@ export class StorageService {
     const cuts = await db_engine.cashCuts.toArray();
     if (cuts.length === 0) return null;
     // Sort by date descending and return the most recent
-    cuts.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    return cuts[0];
+    const sorted = [...cuts].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    return sorted[0];
+  }
+
+  // Fetch all financial data (sales, credit payments, expenses) since the last cash cut
+  async getUncutData() {
+    const lastCut = await this.getLastCashCut();
+    const lastCutTime = lastCut ? new Date(lastCut.date).getTime() : 0;
+    const now = new Date().getTime();
+
+    // 1. Uncut Sales
+    const allSales = await db_engine.sales.toArray();
+    const uncutSales = allSales.filter(s => {
+      const saleTime = new Date(s.date).getTime();
+      // Only include active sales and balance payments since last cut
+      const isNewSale = saleTime > lastCutTime && s.status === 'active';
+      const isNewBalancePayment = s.balancePaymentDate && new Date(s.balancePaymentDate).getTime() > lastCutTime && s.status === 'active';
+      return isNewSale || isNewBalancePayment;
+    });
+
+    // 2. Uncut Credit Payments
+    const credits = await db_engine.credits.toArray();
+    const uncutCreditPayments = { cash: 0, card: 0, transfer: 0 };
+    credits.forEach(c => {
+      (c.payments || []).forEach(p => {
+        if (new Date(p.date).getTime() > lastCutTime) {
+          if (p.method === 'Efectivo') uncutCreditPayments.cash += p.amount;
+          else if (p.method === 'Tarjeta') uncutCreditPayments.card += p.amount;
+          else if (p.method === 'Transferencia') uncutCreditPayments.transfer += p.amount;
+        }
+      });
+    });
+
+    // 3. Uncut Expenses
+    const allExpenses = await db_engine.expenses.toArray();
+    const uncutExpensesList = allExpenses.filter(e => {
+      // Use updatedAt if available, fallback to date
+      const expTime = e.updatedAt ? new Date(e.updatedAt).getTime() : new Date(e.date + 'T12:00:00').getTime();
+      return expTime > lastCutTime;
+    });
+
+    const cashExpenses = uncutExpensesList
+      .filter(e => e.paymentMethod === 'Efectivo')
+      .reduce((acc, e) => acc + e.amount, 0);
+
+    return {
+      sales: uncutSales,
+      creditPayments: uncutCreditPayments,
+      cashExpenses,
+      lastCutTime,
+      lastCutDate: lastCut?.date || null,
+      uncutExpensesList
+    };
   }
 
   // Check if there are sales from previous day(s) without a corresponding cash cut
   async hasPendingCashCut(): Promise<{ pending: boolean; lastCutDate: string | null; salesWithoutCut: number }> {
-    const getLocalDate = (d: Date) => {
-      const offset = d.getTimezoneOffset() * 60000;
-      return new Date(d.getTime() - offset).toISOString().split('T')[0];
-    };
-
-    const today = getLocalDate(new Date());
-
     const lastCut = await this.getLastCashCut();
-    const lastCutDate = lastCut ? getLocalDate(new Date(lastCut.date)) : null;
+    const lastCutTime = lastCut ? new Date(lastCut.date).getTime() : 0;
 
-    // If last cut is from today, we're good
-    if (lastCutDate === today) {
-      return { pending: false, lastCutDate, salesWithoutCut: 0 };
-    }
+    // Start of the current local day (Honduras time)
+    const todayLocal = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Tegucigalpa" }));
+    todayLocal.setHours(0, 0, 0, 0);
+    const todayStartTime = todayLocal.getTime();
 
-    // Check if there were sales yesterday (or before) that weren't covered by a cash cut
+    // A cut is pending if there are active sales made AFTER the last cut but BEFORE today began
     const allSales = await db_engine.sales.toArray();
-    const salesBeforeToday = allSales.filter(s => {
-      const saleDate = getLocalDate(new Date(s.date));
-      return saleDate < today && saleDate !== lastCutDate && s.status === 'active';
+    const pendingSales = allSales.filter(s => {
+      const saleTime = new Date(s.date).getTime();
+      const isLegacyUncut = saleTime > lastCutTime && saleTime < todayStartTime && s.status === 'active';
+
+      // Also check balance payments (when people pay the remainder of an order)
+      const isBalanceUncut = s.balancePaymentDate &&
+        new Date(s.balancePaymentDate).getTime() > lastCutTime &&
+        new Date(s.balancePaymentDate).getTime() < todayStartTime &&
+        s.status === 'active';
+
+      return isLegacyUncut || isBalanceUncut;
     });
 
-    // If no last cut exists but there are old sales, they need a cut
-    if (!lastCutDate && salesBeforeToday.length > 0) {
-      return { pending: true, lastCutDate: null, salesWithoutCut: salesBeforeToday.length };
-    }
-
-    // If sales exist from after the last cut but before today, cut is required
-    const salesAfterLastCut = allSales.filter(s => {
-      const saleDate = getLocalDate(new Date(s.date));
-      return saleDate < today && (!lastCutDate || saleDate > lastCutDate) && s.status === 'active';
-    });
-
-    if (salesAfterLastCut.length > 0) {
-      return { pending: true, lastCutDate, salesWithoutCut: salesAfterLastCut.length };
-    }
-
-    return { pending: false, lastCutDate, salesWithoutCut: 0 };
+    return {
+      pending: pendingSales.length > 0,
+      lastCutDate: lastCut ? lastCut.date : null,
+      salesWithoutCut: pendingSales.length
+    };
   }
 
   async refundCreditNote(id: string) {

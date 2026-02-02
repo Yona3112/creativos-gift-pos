@@ -6,7 +6,10 @@ import { Button, Input, Card, ConfirmDialog, Modal, Badge, showToast } from '../
 
 export const CashCut: React.FC = () => {
   const [todaySales, setTodaySales] = useState<Sale[]>([]);
-  const [totals, setTotals] = useState({ cash: 0, card: 0, transfer: 0, credit: 0, total: 0, creditPayments: 0, orderPayments: 0 });
+  const [totals, setTotals] = useState({
+    cash: 0, card: 0, transfer: 0, credit: 0, total: 0,
+    creditPayments: 0, orderPayments: 0, cashExpenses: 0
+  });
 
   const [denominations, setDenominations] = useState({
     bill500: 0, bill200: 0, bill100: 0, bill50: 0, bill20: 0, bill10: 0, bill5: 0, bill2: 0, bill1: 0, coins: 0
@@ -25,27 +28,53 @@ export const CashCut: React.FC = () => {
 
   // Multiple Cut State
   const [forceNewCut, setForceNewCut] = useState(false);
-
-  // Helper for Local Date using global db helper
-  const getLocalDate = () => db.getLocalTodayISO();
-
-  // Format date from ISO string to local display format
-  const formatDateForDisplay = (dateStr: string) => {
-    const d = new Date(dateStr);
-    const offset = d.getTimezoneOffset() * 60000;
-    return new Date(d.getTime() - offset).toISOString().split('T')[0];
-  };
+  const [lastCutDate, setLastCutDate] = useState<string | null>(null);
 
   const loadData = async () => {
-    const today = getLocalDate();
-    const allSales = await db.getSales();
-    const sales = allSales.filter(s => {
-      const saleLocal = formatDateForDisplay(s.date);
-      return saleLocal === today && s.status === 'active';
-    });
+    const uncutData = await db.getUncutData();
+    const { sales, creditPayments, cashExpenses, lastCutDate: lastDate } = uncutData;
 
     setTodaySales(sales);
-    const creditPayments = await db.getTodaysCreditPayments(today);
+    setLastCutDate(lastDate);
+
+    // Calculate totals from uncut sales
+    const t = sales.reduce((acc, s) => {
+      // 1. Initial sale/deposit - count if the sale was created in this period
+      if (new Date(s.date).getTime() > uncutData.lastCutTime) {
+        if (s.paymentMethod === 'Efectivo') acc.cash += s.isOrder ? (s.deposit || 0) : s.total;
+        else if (s.paymentMethod === 'Tarjeta') acc.card += s.isOrder ? (s.deposit || 0) : s.total;
+        else if (s.paymentMethod === 'Transferencia') acc.transfer += s.isOrder ? (s.deposit || 0) : s.total;
+        else if (s.paymentMethod === 'Crédito') acc.credit += s.total;
+        else if (s.paymentMethod === 'Mixto' && s.paymentDetails) {
+          acc.cash += s.paymentDetails.cash || 0;
+          acc.card += s.paymentDetails.card || 0;
+          acc.transfer += s.paymentDetails.transfer || 0;
+        }
+        acc.total += s.isOrder ? (s.deposit || 0) : s.total;
+      }
+
+      // 2. Balance payment - count if the balance was paid in this period
+      if (s.balancePaymentDate && new Date(s.balancePaymentDate).getTime() > uncutData.lastCutTime) {
+        const amount = s.balancePaid || 0;
+        const method = s.balancePaymentMethod || 'Efectivo';
+        if (method === 'Efectivo') acc.cash += amount;
+        else if (method === 'Tarjeta') acc.card += amount;
+        else if (method === 'Transferencia') acc.transfer += amount;
+        acc.orderPayments += amount;
+        acc.total += amount;
+      }
+
+      return acc;
+    }, { cash: 0, card: 0, transfer: 0, credit: 0, total: 0, creditPayments: 0, orderPayments: 0, cashExpenses: 0 });
+
+    // Add credit payments (abonos a créditos)
+    t.cash += creditPayments.cash;
+    t.card += creditPayments.card;
+    t.transfer += creditPayments.transfer;
+    t.creditPayments = creditPayments.cash + creditPayments.card + creditPayments.transfer;
+    t.cashExpenses = cashExpenses;
+
+    setTotals(t);
 
     // Load History and Settings
     const cuts = await db.getCashCuts();
@@ -53,67 +82,11 @@ export const CashCut: React.FC = () => {
     const s = await db.getSettings();
     setSettings(s);
 
-    // Check if there's already a cut for today
-    const cutToday = cuts.find(c => formatDateForDisplay(c.date) === today);
+    // Check if there's already a cut for "today" (for display purposes, but logic is now timestamp based)
+    const today = db.getLocalTodayISO();
+    const cutToday = cuts.find(c => c.date.startsWith(today));
     setTodayCutExists(!!cutToday);
     setTodayCutData(cutToday || null);
-
-    // Calculate today's cash flow from sales made today
-    const t = sales.reduce((acc, s) => {
-      if (s.paymentMethod === 'Efectivo') acc.cash += s.total;
-      else if (s.paymentMethod === 'Tarjeta') acc.card += s.total;
-      else if (s.paymentMethod === 'Transferencia') acc.transfer += s.total;
-      else if (s.paymentMethod === 'Crédito') acc.credit += s.total;
-
-      if (s.paymentMethod === 'Mixto' && s.paymentDetails) {
-        acc.cash += s.paymentDetails.cash || 0;
-        acc.card += s.paymentDetails.card || 0;
-        acc.transfer += s.paymentDetails.transfer || 0;
-      }
-
-      acc.total += s.total;
-      return acc;
-    }, { cash: 0, card: 0, transfer: 0, credit: 0, total: 0, creditPayments: 0, orderPayments: 0 });
-
-    // Add credit payments (abonos a créditos)
-    t.cash += creditPayments.cash;
-    t.card += creditPayments.card;
-    t.transfer += creditPayments.transfer;
-    t.creditPayments = creditPayments.cash + creditPayments.card + creditPayments.transfer;
-
-    // NEW: Add order balance payments made today (pagos de saldo de pedidos)
-    // These are orders from PREVIOUS days where the remaining balance was paid TODAY
-    const orderPaymentsToday = allSales.filter(s => {
-      if (s.status !== 'active') return false;
-      // Skip if sale was made today (it's already counted in today's sales)
-      const saleDateLocal = formatDateForDisplay(s.date);
-      if (saleDateLocal === today) return false;
-      // Include if balance was paid today (using balancePaymentDate)
-      if (s.balancePaymentDate) {
-        return formatDateForDisplay(s.balancePaymentDate) === today;
-      }
-      return false;
-    });
-
-    let orderPaymentTotal = 0;
-    for (const order of orderPaymentsToday) {
-      // Use balancePaid field if available (new orders), fallback to paymentDetails for legacy
-      const balancePaid = order.balancePaid || order.paymentDetails?.cash || order.paymentDetails?.card || order.paymentDetails?.transfer || 0;
-      const method = order.balancePaymentMethod || 'Efectivo';
-
-      if (method === 'Efectivo') {
-        t.cash += balancePaid;
-      } else if (method === 'Tarjeta') {
-        t.card += balancePaid;
-      } else if (method === 'Transferencia') {
-        t.transfer += balancePaid;
-      }
-
-      orderPaymentTotal += balancePaid;
-    }
-    t.orderPayments = orderPaymentTotal;
-
-    setTotals(t);
   };
 
   useEffect(() => {
@@ -129,7 +102,8 @@ export const CashCut: React.FC = () => {
   };
 
   const countedTotal = calculateCounted();
-  const difference = countedTotal - totals.cash;
+  const netCashExpected = totals.cash - totals.cashExpenses;
+  const difference = countedTotal - netCashExpected;
 
   const handleSave = async () => {
     setCashCutConfirm(true);
@@ -142,7 +116,7 @@ export const CashCut: React.FC = () => {
       userId: 'current',
       branchId: 'current',
       totalSales: totals.total,
-      cashExpected: totals.cash,
+      cashExpected: netCashExpected, // Net expected in drawer
       cashCounted: countedTotal,
       difference,
       details: denominations
@@ -182,8 +156,10 @@ export const CashCut: React.FC = () => {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-800">Corte de Caja</h1>
         <div className="text-right">
-          <p className="text-sm text-gray-500">Fecha</p>
-          <p className="font-bold text-gray-900">{new Date().toLocaleDateString()}</p>
+          <p className="text-xs text-gray-500 font-bold uppercase">Período del Corte</p>
+          <p className="text-[10px] text-primary font-bold">
+            {lastCutDate ? new Date(lastCutDate).toLocaleString() : 'Inicio'} → Ahora
+          </p>
         </div>
       </div>
 
@@ -230,23 +206,38 @@ export const CashCut: React.FC = () => {
                 <span className="text-lg font-black text-orange-700">L {totals.credit.toFixed(2)}</span>
               </div>
 
+              <div className="flex justify-between items-center p-3 bg-red-50 rounded-xl border border-red-100">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-red-200 flex items-center justify-center text-red-700 text-xs"><i className="fas fa-arrow-down"></i></div>
+                  <span className="text-red-900 font-bold text-xs uppercase">Gastos en Efectivo</span>
+                </div>
+                <span className="text-lg font-black text-red-700">-L {totals.cashExpenses.toFixed(2)}</span>
+              </div>
+
               <div className="border-t border-dashed border-gray-300 pt-4 mt-2">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-gray-500 text-sm">Abonos a Créditos Hoy</span>
-                  <span className="font-bold text-gray-700">L {totals.creditPayments.toFixed(2)}</span>
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-gray-500 text-xs uppercase font-bold">Resumen de Caja</span>
+                </div>
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-gray-500 text-xs">Abonos a Créditos</span>
+                  <span className="font-bold text-gray-700 text-xs">L {totals.creditPayments.toFixed(2)}</span>
                 </div>
                 {totals.orderPayments > 0 && (
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-gray-500 text-sm flex items-center gap-1">
+                  <div className="flex justify-between items-center mb-1 text-xs">
+                    <span className="text-gray-500 flex items-center gap-1">
                       <i className="fas fa-box text-pink-500"></i>
-                      Pagos de Pedidos Hoy
+                      Pagos de Pedidos
                     </span>
                     <span className="font-bold text-pink-600">L {totals.orderPayments.toFixed(2)}</span>
                   </div>
                 )}
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600 font-black text-base uppercase tracking-wider">Total Hoy</span>
-                  <span className="text-2xl font-black text-slate-800 tracking-tight">L {(totals.cash + totals.card + totals.transfer).toFixed(2)}</span>
+                <div className="flex justify-between items-center mt-2 pt-2 border-t">
+                  <span className="text-green-900 font-black text-base uppercase tracking-wider">Efectivo en Caja</span>
+                  <span className="text-2xl font-black text-green-700 tracking-tight">L {netCashExpected.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center mt-1">
+                  <span className="text-gray-600 font-bold text-sm uppercase">Total Otros Medios</span>
+                  <span className="text-lg font-bold text-slate-700">L {(totals.card + totals.transfer).toFixed(2)}</span>
                 </div>
               </div>
             </div>
@@ -322,8 +313,8 @@ export const CashCut: React.FC = () => {
                   <span className="font-mono">L {countedTotal.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-xs text-gray-500 font-bold uppercase">
-                  <span>Efectivo Sistema</span>
-                  <span className="font-mono">L {totals.cash.toFixed(2)}</span>
+                  <span>Efectivo Sistema (NETO)</span>
+                  <span className="font-mono">L {netCashExpected.toFixed(2)}</span>
                 </div>
                 <div className="h-px bg-gray-200 my-0.5"></div>
                 <div className={`flex justify-between text-lg font-black ${difference < -0.99 ? 'text-red-500' : difference > 0.99 ? 'text-blue-500' : 'text-green-600'}`}>
