@@ -694,7 +694,7 @@ export class StorageService {
     return { fixed, details };
   }
 
-  async cancelSale(saleId: string, userId: string = 'system', refundType: 'cash' | 'creditNote' = 'creditNote') {
+  async cancelSale(saleId: string, userId: string = 'system', refundType: 'cash' | 'creditNote' = 'creditNote', refundMethod?: 'Efectivo' | 'Tarjeta' | 'Transferencia') {
     await db_engine.transaction('rw', [db_engine.sales, db_engine.products, db_engine.inventoryHistory, db_engine.customers, db_engine.settings, db_engine.creditNotes], async () => {
       const sale = await db_engine.sales.get(saleId);
       if (sale && sale.status === 'active') {
@@ -745,12 +745,18 @@ export class StorageService {
         }
 
         // Generar registro de reembolso
-        let refundable = sale.total;
-        if (sale.paymentMethod === 'Crédito') refundable = 0;
+        // BUG FIX: Only refund what was actually paid (Total - Balance)
+        const paidAmount = sale.total - (sale.balance || 0);
+        let refundable = paidAmount;
+        if (sale.paymentMethod === 'Crédito' && (sale.balance || 0) > 0) {
+          // Si es crédito y no se ha pagado nada, no hay nada que reembolsar en "efectivo/NC"
+          // Pero si hubo un depósito inicial, ese sí es reembolsable
+          refundable = sale.deposit || 0;
+        }
 
         if (refundable > 0) {
           if (refundType === 'cash') {
-            // Devolución en efectivo: registrar como nota de crédito USADA inmediatamente
+            // Devolución en efectivo/banco: registrar como nota de crédito USADA inmediatamente
             await db_engine.creditNotes.add({
               id: Date.now().toString(),
               folio: `DEV-${sale.folio}`,
@@ -758,9 +764,11 @@ export class StorageService {
               customerId: sale.customerId || '',
               originalTotal: refundable,
               remainingAmount: 0, // Ya devuelto
-              reason: 'Devolución en Efectivo',
+              reason: 'Devolución Directa',
               date: this.getLocalNowISO(),
-              status: 'used' // Marcada como usada porque ya se devolvió el dinero
+              status: 'used', // Marcada como usada porque ya se devolvió el dinero
+              // @ts-ignore - will add this to interface next
+              refundMethod: refundMethod || 'Efectivo'
             });
           } else {
             // Nota de Crédito tradicional: disponible para uso futuro
@@ -1373,10 +1381,21 @@ export class StorageService {
       .filter(e => e.paymentMethod === 'Efectivo')
       .reduce((acc, e) => acc + e.amount, 0);
 
+    // 4. Uncut Cash Refunds (Notas de Crédito devueltas en efectivo)
+    const allCN = await db_engine.creditNotes.toArray();
+    const cashRefunds = allCN
+      .filter(nc => {
+        const ncTime = nc.updatedAt ? new Date(nc.updatedAt).getTime() : new Date(nc.date).getTime();
+        // @ts-ignore
+        return ncTime > lastCutTime && nc.status === 'used' && (nc.refundMethod === 'Efectivo' || !nc.refundMethod) && nc.reason === 'Devolución Directa';
+      })
+      .reduce((acc, nc) => acc + nc.originalTotal, 0);
+
     return {
       sales: uncutSales,
       creditPayments: uncutCreditPayments,
       cashExpenses,
+      cashRefunds,
       lastCutTime,
       lastCutDate: lastCut?.date || null,
       uncutExpensesList

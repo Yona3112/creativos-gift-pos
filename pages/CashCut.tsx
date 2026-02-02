@@ -8,7 +8,7 @@ export const CashCut: React.FC = () => {
   const [todaySales, setTodaySales] = useState<Sale[]>([]);
   const [totals, setTotals] = useState({
     cash: 0, card: 0, transfer: 0, credit: 0, total: 0,
-    creditPayments: 0, orderPayments: 0, cashExpenses: 0
+    creditPayments: 0, orderPayments: 0, cashExpenses: 0, cashRefunds: 0
   });
 
   const [denominations, setDenominations] = useState({
@@ -32,7 +32,7 @@ export const CashCut: React.FC = () => {
 
   const loadData = async () => {
     const uncutData = await db.getUncutData();
-    const { sales, creditPayments, cashExpenses, lastCutDate: lastDate } = uncutData;
+    const { sales, creditPayments, cashExpenses, cashRefunds, lastCutDate: lastDate } = uncutData;
 
     setTodaySales(sales);
     setLastCutDate(lastDate);
@@ -65,7 +65,7 @@ export const CashCut: React.FC = () => {
       }
 
       return acc;
-    }, { cash: 0, card: 0, transfer: 0, credit: 0, total: 0, creditPayments: 0, orderPayments: 0, cashExpenses: 0 });
+    }, { cash: 0, card: 0, transfer: 0, credit: 0, total: 0, creditPayments: 0, orderPayments: 0, cashExpenses: 0, cashRefunds: 0 });
 
     // Add credit payments (abonos a créditos)
     t.cash += creditPayments.cash;
@@ -73,6 +73,7 @@ export const CashCut: React.FC = () => {
     t.transfer += creditPayments.transfer;
     t.creditPayments = creditPayments.cash + creditPayments.card + creditPayments.transfer;
     t.cashExpenses = cashExpenses;
+    t.cashRefunds = cashRefunds;
 
     setTotals(t);
 
@@ -102,7 +103,7 @@ export const CashCut: React.FC = () => {
   };
 
   const countedTotal = calculateCounted();
-  const netCashExpected = totals.cash - totals.cashExpenses;
+  const netCashExpected = totals.cash - totals.cashExpenses - totals.cashRefunds;
   const difference = countedTotal - netCashExpected;
 
   const handleSave = async () => {
@@ -213,6 +214,16 @@ export const CashCut: React.FC = () => {
                 </div>
                 <span className="text-lg font-black text-red-700">-L {totals.cashExpenses.toFixed(2)}</span>
               </div>
+
+              {totals.cashRefunds > 0 && (
+                <div className="flex justify-between items-center p-3 bg-red-50 rounded-xl border border-red-100 mt-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-red-200 flex items-center justify-center text-red-700 text-xs"><i className="fas fa-undo"></i></div>
+                    <span className="text-red-900 font-bold text-xs uppercase">Reembolsos Efectivo</span>
+                  </div>
+                  <span className="text-lg font-black text-red-700">-L {totals.cashRefunds.toFixed(2)}</span>
+                </div>
+              )}
 
               <div className="border-t border-dashed border-gray-300 pt-4 mt-2">
                 <div className="flex justify-between items-center mb-1">

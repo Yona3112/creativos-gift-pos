@@ -206,6 +206,7 @@ export interface CreditNote {
   reason: string;
   date: string;
   status: 'active' | 'used';
+  refundMethod?: 'Efectivo' | 'Tarjeta' | 'Transferencia';
   updatedAt?: string;
 }
 

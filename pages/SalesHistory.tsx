@@ -40,6 +40,7 @@ export const SalesHistory: React.FC<SalesHistoryProps> = ({ sales, customers, us
     const [confirmWord, setConfirmWord] = useState('');
     const [passwordError, setPasswordError] = useState('');
     const [refundType, setRefundType] = useState<'cash' | 'creditNote'>('creditNote');
+    const [refundMethod, setRefundMethod] = useState<'Efectivo' | 'Tarjeta' | 'Transferencia'>('Efectivo');
 
     // Refund confirm state
     const [refundConfirm, setRefundConfirm] = useState<{ open: boolean; id: string }>({ open: false, id: '' });
@@ -107,6 +108,7 @@ export const SalesHistory: React.FC<SalesHistoryProps> = ({ sales, customers, us
         setConfirmWord('');
         setPasswordError('');
         setRefundType('creditNote');
+        setRefundMethod('Efectivo');
         setCancelModalOpen(true);
     };
 
@@ -124,9 +126,9 @@ export const SalesHistory: React.FC<SalesHistoryProps> = ({ sales, customers, us
         }
 
         if (selectedSale) {
-            await db.cancelSale(selectedSale.id, user?.id || 'system', refundType);
+            await db.cancelSale(selectedSale.id, user?.id || 'system', refundType, refundMethod);
             const msg = refundType === 'cash'
-                ? 'Venta anulada. Devolución en efectivo registrada.'
+                ? `Venta anulada. Reembolso via ${refundMethod} registrado.`
                 : 'Venta anulada. Se ha generado una Nota de Crédito.';
             showToast(msg, 'success');
             onUpdate();
@@ -460,8 +462,7 @@ export const SalesHistory: React.FC<SalesHistoryProps> = ({ sales, customers, us
                         </div>
                     </div>
 
-                    {/* Tipo de Reembolso */}
-                    <div className="space-y-2">
+                    <div className="space-y-4">
                         <label className="block text-sm font-bold text-gray-700">Tipo de Devolución</label>
                         <div className="grid grid-cols-2 gap-3">
                             <button
@@ -469,9 +470,9 @@ export const SalesHistory: React.FC<SalesHistoryProps> = ({ sales, customers, us
                                 onClick={() => setRefundType('cash')}
                                 className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 ${refundType === 'cash' ? 'border-green-500 bg-green-50' : 'border-gray-200 hover:border-gray-300'}`}
                             >
-                                <i className={`fas fa-money-bill-wave text-2xl ${refundType === 'cash' ? 'text-green-600' : 'text-gray-400'}`}></i>
-                                <span className={`font-bold text-sm ${refundType === 'cash' ? 'text-green-700' : 'text-gray-600'}`}>Efectivo</span>
-                                <span className="text-xs text-gray-500">Devolver dinero ahora</span>
+                                <i className={`fas fa-reply text-2xl ${refundType === 'cash' ? 'text-green-600' : 'text-gray-400'}`}></i>
+                                <span className={`font-bold text-sm ${refundType === 'cash' ? 'text-green-700' : 'text-gray-600'}`}>Reembolsar Ya</span>
+                                <span className="text-[10px] text-gray-500">Devolver dinero ahora</span>
                             </button>
                             <button
                                 type="button"
@@ -480,10 +481,37 @@ export const SalesHistory: React.FC<SalesHistoryProps> = ({ sales, customers, us
                             >
                                 <i className={`fas fa-file-invoice text-2xl ${refundType === 'creditNote' ? 'text-blue-600' : 'text-gray-400'}`}></i>
                                 <span className={`font-bold text-sm ${refundType === 'creditNote' ? 'text-blue-700' : 'text-gray-600'}`}>Nota de Crédito</span>
-                                <span className="text-xs text-gray-500">Saldo para futuras compras</span>
+                                <span className="text-[10px] text-gray-500">Saldo para futuras ventas</span>
                             </button>
                         </div>
-                        <p className="text-xs text-gray-500 text-center">L {selectedSale?.total.toFixed(2)} se {refundType === 'cash' ? 'devolverá en efectivo' : 'acreditará para futuras compras'}</p>
+
+                        {refundType === 'cash' && (
+                            <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 animate-fade-in">
+                                <label className="block text-[10px] font-black text-gray-400 uppercase mb-2">Método de Reembolso</label>
+                                <div className="flex gap-2">
+                                    {['Efectivo', 'Transferencia', 'Tarjeta'].map(m => (
+                                        <button
+                                            key={m}
+                                            type="button"
+                                            onClick={() => setRefundMethod(m as any)}
+                                            className={`flex-1 py-2 px-1 rounded-lg text-xs font-bold border-2 transition-all ${refundMethod === m ? 'bg-primary text-white border-primary shadow-sm' : 'bg-white text-gray-500 border-gray-100 hover:border-gray-200'}`}
+                                        >
+                                            {m}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="bg-amber-50 p-3 rounded-xl border border-amber-200 text-center">
+                            <p className="text-[10px] text-amber-700 font-bold uppercase mb-1">Monto a Devolver</p>
+                            <p className="text-xl font-black text-amber-900">
+                                L {(selectedSale ? selectedSale.total - (selectedSale.balance || 0) : 0).toFixed(2)}
+                            </p>
+                            <p className="text-[10px] text-amber-600 font-medium italic mt-1">
+                                (Basado en el total menos el saldo pendiente)
+                            </p>
+                        </div>
                     </div>
 
                     <div className="space-y-4">
