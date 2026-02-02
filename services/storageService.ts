@@ -695,12 +695,22 @@ export class StorageService {
   }
 
   async cancelSale(saleId: string, userId: string = 'system', refundType: 'cash' | 'creditNote' = 'creditNote', refundMethod?: 'Efectivo' | 'Tarjeta' | 'Transferencia') {
-    await db_engine.transaction('rw', [db_engine.sales, db_engine.products, db_engine.inventoryHistory, db_engine.customers, db_engine.settings, db_engine.creditNotes], async () => {
+    await db_engine.transaction('rw', [db_engine.sales, db_engine.products, db_engine.inventoryHistory, db_engine.customers, db_engine.settings, db_engine.creditNotes, db_engine.credits], async () => {
       const sale = await db_engine.sales.get(saleId);
       if (sale && sale.status === 'active') {
         const settings = await this.getSettings();
         sale.status = 'cancelled';
         await db_engine.sales.put(sale);
+
+        // Cancelar Cuenta de Crédito (Contrato) si existe
+        if (sale.paymentMethod === 'Crédito') {
+          const credit = await db_engine.credits.where('saleId').equals(sale.id).first();
+          if (credit) {
+            credit.status = 'cancelled';
+            credit.updatedAt = this.getLocalNowISO();
+            await db_engine.credits.put(credit);
+          }
+        }
 
         // Revertir Stock en Kardex
         for (const item of sale.items) {

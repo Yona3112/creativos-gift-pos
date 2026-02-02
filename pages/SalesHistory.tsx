@@ -412,6 +412,32 @@ export const SalesHistory: React.FC<SalesHistoryProps> = ({ sales, customers, us
                                 <i className="fab fa-whatsapp mr-1"></i> WhatsApp
                             </Button>
                             <Button variant="secondary" onClick={() => reprintTicket(selectedSale)} icon="print">Reimprimir</Button>
+                            {selectedSale.paymentMethod === 'Crédito' && (
+                                <>
+                                    <Button variant="outline" size="sm" icon="file-contract" onClick={async () => {
+                                        const customer = customers.find(c => c.id === selectedSale.customerId);
+                                        if (customer) {
+                                            const htmlContrato = await db.generateCreditContractHTML(selectedSale, customer, settings);
+                                            const htmlPagare = await db.generateCreditPagareHTML(selectedSale, customer, settings);
+                                            const win = window.open('', '', 'width=800,height=600');
+                                            if (win) {
+                                                win.document.write(htmlContrato);
+                                                win.document.write('<div style="page-break-after: always;"></div>');
+                                                win.document.write(htmlPagare);
+                                                win.document.close();
+                                                setTimeout(() => win.print(), 500);
+                                            }
+                                        } else {
+                                            showToast("No se encontró información del cliente para imprimir el contrato.", "error");
+                                        }
+                                    }}>Contrato y Pagaré</Button>
+                                    <Button variant="outline" size="sm" icon="list-ol" onClick={async () => {
+                                        const html = await db.generatePaymentPlanHTML(selectedSale);
+                                        const win = window.open('', '', 'width=600,height=800');
+                                        if (win) { win.document.write(html); win.document.close(); win.print(); }
+                                    }}>Plan de Pago</Button>
+                                </>
+                            )}
                             {selectedSale.status === 'active' && (
                                 <Button variant="danger" onClick={openCancelModal} icon="ban">Anular Venta</Button>
                             )}
