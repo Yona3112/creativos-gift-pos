@@ -507,18 +507,44 @@ export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, 
                                         const todayDeliveries = sales.filter(s => getLocalDate(new Date(s.date)) === today && s.fulfillmentStatus !== 'delivered' && s.status === 'active');
                                         const tomorrowDeliveries = sales.filter(s => getLocalDate(new Date(s.date)) === tomorrowStr && s.fulfillmentStatus !== 'delivered' && s.status === 'active');
 
-                                        let message = `*RESUMEN DE PEDIDOS: ${today}*\n\n`;
-                                        message += `📅 *HOY:*\n`;
-                                        if (todayDeliveries.length === 0) message += `_Sin entregas pendientes_\n`;
-                                        todayDeliveries.forEach(s => {
-                                            message += `• ${s.folio}: ${s.customerName} (${s.fulfillmentStatus})\n`;
-                                        });
+                                        let message = `🍱 *RESUMEN DE PRODUCCIÓN - CREATIVOS GIFT*\n\n`;
 
-                                        message += `\n📅 *MAÑANA (${tomorrowStr}):*\n`;
-                                        if (tomorrowDeliveries.length === 0) message += `_Sin entregas pendientes_\n`;
-                                        tomorrowDeliveries.forEach(s => {
-                                            message += `• ${s.folio}: ${s.customerName} (${s.fulfillmentStatus})\n`;
-                                        });
+                                        const formatSection = (title: string, date: string, items: Sale[]) => {
+                                            let sec = `📅 *${title} (${date})*\n`;
+                                            sec += `━━━━━━━━━━━━━━━━━━━━\n`;
+                                            if (items.length === 0) {
+                                                sec += `_Sin pedidos programados_\n\n`;
+                                                return sec;
+                                            }
+
+                                            // Agrupar por estado para mejor visibilidad
+                                            const statuses = {
+                                                'ready': { emoji: '✅', label: 'PEDIDOS LISTOS' },
+                                                'production': { emoji: '🛠️', label: 'EN TALLER' },
+                                                'pending': { emoji: '⏳', label: 'PENDIENTES' }
+                                            };
+
+                                            Object.entries(statuses).forEach(([status, info]) => {
+                                                const filtered = items.filter(s => s.fulfillmentStatus === status);
+                                                if (filtered.length > 0) {
+                                                    sec += `*${info.emoji} ${info.label}*\n`;
+                                                    filtered.forEach(s => {
+                                                        sec += `• 🆔 *${s.folio}* | 👤 ${s.customerName || 'C. Final'}\n`;
+                                                        // Listamos items principales
+                                                        const itemsDesc = s.items.map(i => `${i.quantity}x ${i.name}`).join(', ');
+                                                        sec += `  📦 _${itemsDesc.length > 40 ? itemsDesc.substring(0, 40) + '...' : itemsDesc}_\n`;
+                                                    });
+                                                    sec += `\n`;
+                                                }
+                                            });
+                                            return sec;
+                                        };
+
+                                        message += formatSection('ENTREGAS HOY', today, todayDeliveries);
+                                        message += `\n`;
+                                        message += formatSection('PEDIDOS PARA MAÑANA', tomorrowStr, tomorrowDeliveries);
+
+                                        message += `\n🚀 _Generado automáticamente desde Creativos Gift POS_`;
 
                                         const encoded = encodeURIComponent(message);
                                         window.open(`https://wa.me/?text=${encoded}`, '_blank');
