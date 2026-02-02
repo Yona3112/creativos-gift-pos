@@ -81,11 +81,23 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
     };
 
     // Simplified Order List Filter
+    // Include sales that are: (1) not cancelled, AND (2) are orders, have balance, or are in a non-delivered workflow state
     const orderSales = useMemo(() => {
-        return allSales.filter(s =>
-            s.status === 'active' &&
-            (s.isOrder === true || (s.balance && s.balance > 0) || s.fulfillmentStatus)
-        );
+        return allSales.filter(s => {
+            // Exclude cancelled/returned sales
+            if (s.status === 'cancelled' || s.status === 'returned') return false;
+
+            // Include if explicitly marked as order
+            if (s.isOrder === true) return true;
+
+            // Include if has pending balance (partial payment)
+            if (s.balance && s.balance > 0) return true;
+
+            // Include if has a fulfillment status that is NOT delivered (workflow in progress)
+            if (s.fulfillmentStatus && s.fulfillmentStatus !== 'delivered') return true;
+
+            return false;
+        });
     }, [allSales]);
 
     // Track local changes until parent state updates
