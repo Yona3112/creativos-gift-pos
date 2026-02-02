@@ -46,6 +46,7 @@ function App() {
   const [settings, setSettings] = useState<CompanySettings | null>(null);
 
   const [quoteToLoad, setQuoteToLoad] = useState<Quote | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
   const { sendNotification } = useNotifications();
 
   // Ref to prevent multiple pullAll() calls during session - fixes duplicate data bug
@@ -62,17 +63,18 @@ function App() {
           const { SupabaseService } = await import('./services/supabaseService');
           try {
             if (isManual) showToast("Sincronizando con la nube...", "info");
+            setIsSyncing(true);
             await SupabaseService.syncAll(); // Solo PUSH
             console.log("☁️ Push a la nube completado.");
-            if (isManual) showToast("Nube actualizada con éxito", "success");
 
             // Actualizar fecha de último backup
             const now = new Date().toISOString();
             await db.saveSettings({ ...sett, lastBackupDate: now });
-            setSettings(s => s ? ({ ...s, lastBackupDate: now }) : s);
           } catch (pushErr) {
             console.warn("⚠️ No se pudo subir a la nube:", pushErr);
             if (isManual) showToast("Error al sincronizar con la nube", "error");
+          } finally {
+            setIsSyncing(false);
           }
         }
       }
@@ -121,17 +123,21 @@ function App() {
         // Esto se maneja en storageService.triggerAutoSync() que se llama después de cada operación
         /*
         intervalId = setInterval(async () => {
+         const fastSync = async () => {
+        const sett = await db.getSettings();
+        if (sett.supabaseUrl && sett.supabaseKey && sett.autoSync) {
           try {
-            const sett = await db.getSettings();
-            if (sett.supabaseUrl && sett.supabaseKey && sett.autoSync) {
-              const { SupabaseService } = await import('./services/supabaseService');
-              await SupabaseService.syncAll();
-              console.log("🔄 Auto-sync push completado.");
-            }
+            setIsSyncing(true);
+            const { SupabaseService } = await import('./services/supabaseService');
+            await SupabaseService.syncAll();
+            console.log("🔄 Autocompletado FastSync");
           } catch (e) {
-            console.warn("⚠️ Error en auto-sync:", e);
+            console.warn("FastSync failed, will retry next interval");
+          } finally {
+            setIsSyncing(false);
           }
-        }, 30000);
+        }
+      };
         */
 
         const storedUser = localStorage.getItem('creativos_gift_currentUser');
@@ -275,8 +281,8 @@ function App() {
       }
     };
 
-    // Inicializar polling cada 20 segundos
-    pollInterval = setInterval(fastSync, 20000);
+    // Inicializar polling cada 15 segundos
+    pollInterval = setInterval(fastSync, 15000);
 
     return () => {
       if (pollInterval) clearInterval(pollInterval);
@@ -309,6 +315,17 @@ function App() {
     setPageParams(params);
     // Soft refresh: sync with cloud when changing modules
     refreshData(true);
+  };
+
+  // Calculate Badges
+  const badges = {
+    orders: sales.filter(s => (s.fulfillmentStatus === 'pending' || s.fulfillmentStatus === 'production') && s.status === 'active').length,
+    credits: (credits || []).filter(c => {
+      if (c.status === 'paid' || c.status === 'cancelled') return false;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      return new Date(c.dueDate) < today;
+    }).length
   };
 
   if (loading) {

@@ -483,10 +483,134 @@ export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, 
                     </div>
                 </div>
 
-                {/* 6. Top Products (Horizontal Bars) */}
-                <div className="md:col-span-3 lg:col-span-4 bg-white rounded-2xl p-6 border border-gray-100 shadow-sm">
+                {/* SECCIÓN: PRÓXIMAS ENTREGAS & WHATSAPP */}
+                <div className="md:col-span-3 lg:col-span-4 grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="lg:col-span-2">
+                        <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm h-full">
+                            <div className="flex items-center justify-between mb-6">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
+                                        <i className="fas fa-calendar-day"></i>
+                                    </div>
+                                    <h3 className="font-black text-gray-900 text-lg">Próximas Entregas</h3>
+                                </div>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    icon="whatsapp"
+                                    className="text-green-600 border-green-200 hover:bg-green-50"
+                                    onClick={() => {
+                                        const tomorrowArr = new Date();
+                                        tomorrowArr.setDate(tomorrowArr.getDate() + 1);
+                                        const tomorrowStr = getLocalDate(tomorrowArr);
+
+                                        const todayDeliveries = sales.filter(s => getLocalDate(new Date(s.date)) === today && s.fulfillmentStatus !== 'delivered' && s.status === 'active');
+                                        const tomorrowDeliveries = sales.filter(s => getLocalDate(new Date(s.date)) === tomorrowStr && s.fulfillmentStatus !== 'delivered' && s.status === 'active');
+
+                                        let message = `*RESUMEN DE PEDIDOS: ${today}*\n\n`;
+                                        message += `📅 *HOY:*\n`;
+                                        if (todayDeliveries.length === 0) message += `_Sin entregas pendientes_\n`;
+                                        todayDeliveries.forEach(s => {
+                                            message += `• ${s.folio}: ${s.customerName} (${s.fulfillmentStatus})\n`;
+                                        });
+
+                                        message += `\n📅 *MAÑANA (${tomorrowStr}):*\n`;
+                                        if (tomorrowDeliveries.length === 0) message += `_Sin entregas pendientes_\n`;
+                                        tomorrowDeliveries.forEach(s => {
+                                            message += `• ${s.folio}: ${s.customerName} (${s.fulfillmentStatus})\n`;
+                                        });
+
+                                        const encoded = encodeURIComponent(message);
+                                        window.open(`https://wa.me/?text=${encoded}`, '_blank');
+                                    }}
+                                >
+                                    Enviar Resumen WhatsApp
+                                </Button>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                                        <span className="font-bold text-xs text-gray-500 uppercase">Vencen Hoy</span>
+                                    </div>
+                                    <div className="space-y-2">
+                                        {sales.filter(s => getLocalDate(new Date(s.date)) === today && s.fulfillmentStatus !== 'delivered' && s.status === 'active').slice(0, 5).map(order => (
+                                            <div key={order.id} className="flex justify-between items-center text-sm p-2 bg-white rounded-lg border border-gray-50">
+                                                <span className="font-bold">{order.folio}</span>
+                                                <span className="text-gray-500 truncate max-w-[100px]">{order.customerName}</span>
+                                                <Badge variant={order.fulfillmentStatus === 'ready' ? 'success' : 'warning'}>
+                                                    {order.fulfillmentStatus}
+                                                </Badge>
+                                            </div>
+                                        ))}
+                                        {sales.filter(s => getLocalDate(new Date(s.date)) === today && s.fulfillmentStatus !== 'delivered' && s.status === 'active').length === 0 && (
+                                            <p className="text-xs text-gray-400 italic text-center py-2">Todo al día para hoy</p>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                                        <span className="font-bold text-xs text-gray-500 uppercase">Para Mañana</span>
+                                    </div>
+                                    <div className="space-y-2">
+                                        {sales.filter(s => {
+                                            const tom = new Date();
+                                            tom.setDate(tom.getDate() + 1);
+                                            return getLocalDate(new Date(s.date)) === getLocalDate(tom) && s.fulfillmentStatus !== 'delivered' && s.status === 'active';
+                                        }).slice(0, 5).map(order => (
+                                            <div key={order.id} className="flex justify-between items-center text-sm p-2 bg-white rounded-lg border border-gray-50">
+                                                <span className="font-bold">{order.folio}</span>
+                                                <span className="text-gray-500 truncate max-w-[100px]">{order.customerName}</span>
+                                                <Badge variant="info">
+                                                    {order.fulfillmentStatus}
+                                                </Badge>
+                                            </div>
+                                        ))}
+                                        {sales.filter(s => {
+                                            const tom = new Date();
+                                            tom.setDate(tom.getDate() + 1);
+                                            return getLocalDate(new Date(s.date)) === getLocalDate(tom) && s.fulfillmentStatus !== 'delivered' && s.status === 'active';
+                                        }).length === 0 && (
+                                                <p className="text-xs text-gray-400 italic text-center py-2">No hay pedidos para mañana</p>
+                                            )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div className="bg-indigo-600 rounded-2xl p-6 text-white h-full shadow-lg shadow-indigo-200">
+                            <h3 className="font-black text-lg mb-4 flex items-center gap-2">
+                                <i className="fas fa-lightbulb"></i> Tips de Gestión
+                            </h3>
+                            <div className="space-y-4 text-xs opacity-90">
+                                <div className="p-3 bg-white/10 rounded-xl border border-white/10">
+                                    <p className="font-bold mb-1">🔥 El tiempo es oro</p>
+                                    <p>Revisa tus pedidos "En Producción" cada mañana para evitar retrasos.</p>
+                                </div>
+                                <div className="p-3 bg-white/10 rounded-xl border border-white/10">
+                                    <p className="font-bold mb-1">💬 Fideliza</p>
+                                    <p>Usa los estados para informar a tus clientes. Un cliente informado es un cliente feliz.</p>
+                                </div>
+                                <Button
+                                    className="w-full bg-white text-indigo-600 hover:bg-gray-100 font-bold border-none mt-2"
+                                    onClick={() => onNavigate && onNavigate('orders')}
+                                >
+                                    Ver Todos los Pedidos
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="md:col-span-3 lg:col-span-4 bg-white rounded-2xl p-6 border border-gray-100 shadow-sm mt-6">
                     <h3 className="font-bold text-gray-800 mb-4">Top Productos del Mes</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                    <p className="text-gray-500 font-bold text-xs uppercase tracking-widest mb-4">Información de Hoy</p>
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                         {topProducts.map((p, idx) => (
                             <div key={idx} className="bg-gray-50 rounded-xl p-3 flex items-center gap-3">
                                 <div className="font-black text-2xl text-gray-200">#{idx + 1}</div>

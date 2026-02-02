@@ -172,6 +172,12 @@ export const POS: React.FC<POSProps> = ({
     const change = paymentMethod === 'Efectivo' ? Math.max(0, (parseFloat(receivedAmount) || 0) - cashRequiredToday) : 0;
     const totalItems = cart.reduce((acc, item) => acc + item.quantity, 0);
 
+    // Removal of auto-manual sync on mount to rely on App.tsx unified fast sync
+    /* 
+    useEffect(() => {
+        handleManualSync();
+    }, []);
+    */
     useEffect(() => {
         if (loadedQuote) {
             setCart(loadedQuote.items);
@@ -482,8 +488,6 @@ export const POS: React.FC<POSProps> = ({
         };
 
         await db.saveQuote(quote);
-
-        // Clear cart and close modal
         setCart([]);
         setSelectedCustomer(null);
         setIsConsumidorFinal(false);
@@ -556,7 +560,7 @@ export const POS: React.FC<POSProps> = ({
             )}
 
             {/* SECCIÓN IZQUIERDA: PRODUCTOS */}
-            <div className="flex-1 flex flex-col gap-4 min-h-0 pb-20 lg:pb-0">
+            <div className="flex-1 flex flex-col gap-4 min-h-0 pb-20 lg:pb-0 min-w-0">
                 <div className="flex gap-2 shrink-0">
                     <Input
                         ref={searchInputRef}

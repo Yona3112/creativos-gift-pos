@@ -15,6 +15,8 @@ interface LayoutProps {
   onNavigate: (page: string) => void;
   onManualUpload: () => void;
   onManualDownload: () => void;
+  badges?: Record<string, number>;
+  isSyncing?: boolean;
 }
 
 const MENU_ITEMS = [
@@ -32,14 +34,14 @@ const MENU_ITEMS = [
   { id: 'settings', label: 'Ajustes', icon: 'cog' },
 ];
 
-// Cloud Upload Reminder Bell Component
 const BackupReminderBell: React.FC<{
   settings: CompanySettings;
   onNavigate: (page: string) => void;
   onManualUpload: () => void;
   onManualDownload: () => void;
   userRole?: string;
-}> = ({ settings, onNavigate, onManualUpload, onManualDownload, userRole }) => {
+  isSyncing?: boolean;
+}> = ({ settings, onNavigate, onManualUpload, onManualDownload, userRole, isSyncing }) => {
   const [showDropdown, setShowDropdown] = useState(false);
 
   const getBackupStatus = () => {
@@ -72,10 +74,10 @@ const BackupReminderBell: React.FC<{
     <div className="relative">
       <button
         onClick={() => setShowDropdown(!showDropdown)}
-        className={`w-10 h-10 flex items-center justify-center ${statusInfo.bg} rounded-xl relative transition-all hover:scale-105`}
-        title="Estado de Nube"
+        className={`w-10 h-10 flex items-center justify-center ${isSyncing ? 'bg-green-100' : statusInfo.bg} rounded-xl relative transition-all hover:scale-105`}
+        title={isSyncing ? "Sincronizando con la nube..." : "Estado de Nube"}
       >
-        <i className={`fas ${statusInfo.icon} ${statusInfo.color} text-lg`}></i>
+        <i className={`fas ${statusInfo.icon} ${isSyncing ? 'text-green-600 animate-pulse' : statusInfo.color} text-lg`}></i>
         {statusInfo.badge && (
           <span className={`absolute -top-1 -right-1 w-4 h-4 ${statusInfo.color.includes('red') ? 'bg-red-600' : statusInfo.color.includes('orange') ? 'bg-orange-500' : 'bg-yellow-500'} rounded-full text-white text-[10px] flex items-center justify-center font-bold`}>
             {statusInfo.badge}
@@ -149,7 +151,7 @@ const BackupReminderBell: React.FC<{
 };
 
 export const Layout: React.FC<LayoutProps> = ({
-  children, user, settings, onLogout, activePage, onNavigate, onManualUpload, onManualDownload
+  children, user, settings, onLogout, activePage, onNavigate, onManualUpload, onManualDownload, badges = {}, isSyncing
 }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showLogoModal, setShowLogoModal] = useState(false);
@@ -203,6 +205,11 @@ export const Layout: React.FC<LayoutProps> = ({
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${activePage === item.id ? 'bg-primary text-white shadow-lg' : 'text-gray-500 hover:bg-gray-50'}`}
             >
               <i className={`fas fa-${item.icon} w-5`}></i> {item.label}
+              {badges[item.id] > 0 && (
+                <span className="ml-auto bg-red-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full min-w-[18px] text-center shadow-sm animate-bounce-subtle">
+                  {badges[item.id]}
+                </span>
+              )}
             </button>
           ))}
         </nav>

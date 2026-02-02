@@ -427,15 +427,9 @@ export class SupabaseService {
     }
 
     private static async mergeDelta(delta: any) {
-        // Sales handled differently to merge
-        if (delta.sales) {
-            console.log(`🔀 Procesando ${delta.sales.length} ventas de la nube...`);
-            for (const cloudSale of delta.sales) {
-                await db.insertSaleFromCloud(cloudSale);
-            }
-        }
-
+        // All tables now handled generically via bulkPut for architectural consistency
         const genericTables = [
+            { cloud: 'sales', dexie: 'sales' },
             { cloud: 'products', dexie: 'products' },
             { cloud: 'categories', dexie: 'categories' },
             { cloud: 'customers', dexie: 'customers' },

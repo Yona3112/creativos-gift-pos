@@ -228,9 +228,6 @@ export class StorageService {
           const { SupabaseService } = await import('./supabaseService');
           await SupabaseService.syncAll();
           // Update last backup date
-          s.lastBackupDate = new Date().toISOString();
-          await this.saveSettings(s);
-          console.log("🔄 Auto-sync completado con éxito");
         } catch (e) {
           console.error("❌ Error en auto-sync:", e);
         }

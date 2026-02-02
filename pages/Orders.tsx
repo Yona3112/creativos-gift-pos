@@ -54,9 +54,12 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
     const [generateInvoice, setGenerateInvoice] = useState(false);
     const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
+    // Removal of redundant sync on mount to favor App.tsx unification
+    /* 
     useEffect(() => {
         handleManualSync();
     }, []);
+    */
 
     const handleManualSync = async () => {
         if (isSyncing) return;
@@ -100,16 +103,17 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
         });
     }, [allSales]);
 
-    // Track local changes until parent state updates
-    const [localOrders, setLocalOrders] = useState<Record<string, Partial<Sale>>>({});
+    // Track local changes removed to ensure single source of truth from props
+    // const [localOrders, setLocalOrders] = useState<Record<string, Partial<Sale>>>({});
 
-    // Optimistic UI update
+    /*
     const updateOrderInState = (orderId: string, newStatus: FulfillmentStatus, newShippingDetails?: ShippingDetails) => {
         setLocalOrders(prev => ({
             ...prev,
             [orderId]: { fulfillmentStatus: newStatus, shippingDetails: newShippingDetails }
         }));
     };
+    */
 
     const getCustomerName = (order: Sale) => order.customerName || customers.find(c => c.id === order.customerId)?.name || 'Consumidor Final';
 
@@ -148,8 +152,8 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
             try {
                 console.log(`📤 Cambio rápido: ${order.folio} ${order.fulfillmentStatus} → ${newStatus}`);
 
-                // OPTIMISTIC UI UPDATE: Show change immediately
-                updateOrderInState(order.id, newStatus);
+                // OPTIMISTIC UI REMOVED: Now relying on database -> onUpdate -> Re-render cycle
+                // updateOrderInState(order.id, newStatus);
 
                 await db.updateSaleStatus(order.id, newStatus);
 
@@ -180,15 +184,15 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
         if (!pendingRollback || !settings) return;
 
         if (adminPassword === settings.masterPassword) {
-            // OPTIMISTIC UI UPDATE
-            updateOrderInState(pendingRollback.order.id, pendingRollback.newStatus, pendingRollback.details);
+            // OPTIMISTIC UI REMOVED: Now relying on database -> onUpdate -> Re-render cycle
+            // updateOrderInState(pendingRollback.order.id, pendingRollback.newStatus, pendingRollback.details);
 
             await db.updateSaleStatus(pendingRollback.order.id, pendingRollback.newStatus, pendingRollback.details);
+            if (onUpdate) onUpdate(); // Re-render UI after status update
             setIsAdminModalOpen(false);
             setPendingRollback(null);
             setAdminPassword('');
             showToast('Estado actualizado correctamente', 'success');
-            if (onUpdate) onUpdate();
         } else {
             showToast('Contraseña incorrecta', 'error');
         }
@@ -336,11 +340,12 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
             console.log(`📤 Guardando pedido ${selectedOrder.folio}: ${selectedOrder.fulfillmentStatus} → ${editForm.status}`);
             console.log(`📦 Guía: ${editForm.guideFile ? 'SÍ' : 'NO'}, Local: ${editForm.isLocalDelivery ? 'SÍ' : 'NO'}`);
 
-            // OPTIMISTIC UI UPDATE: Show change immediately
-            updateOrderInState(selectedOrder.id, editForm.status, details);
+            // OPTIMISTIC UI REMOVED: Now relying on database -> onUpdate -> Re-render cycle
+            // updateOrderInState(selectedOrder.id, editForm.status, details);
             setIsEditModalOpen(false);
 
             await db.updateSaleStatus(selectedOrder.id, editForm.status, details);
+            if (onUpdate) onUpdate(); // Refresh global state
 
             // BACKGROUND SYNC: Push to cloud (don't await - let it happen in background)
             (async () => {
@@ -357,7 +362,6 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
             })();
 
             showToast(`Pedido actualizado: ${editForm.status}`, 'success');
-            if (onUpdate) onUpdate();
         } catch (e: any) {
             console.error('❌ Error guardando pedido:', e);
             if (onUpdate) onUpdate(); // Forced revert to global state
@@ -418,10 +422,10 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
     };
 
     const filteredOrders = useMemo(() => {
-        return orderSales.map(s => {
-            const local = localOrders[s.id];
-            return local ? { ...s, ...local } : s;
-        }).filter(s => {
+        let result = [...orderSales];
+
+        // Apply filters directly to orderSales which is derived from props
+        return result.filter(s => {
             const matchStatus = statusFilter === 'all' ? true : s.fulfillmentStatus === statusFilter;
 
             let matchDate = true;
@@ -445,7 +449,7 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
 
             return matchStatus && matchSearch && matchDate && matchCategory;
         }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    }, [orderSales, localOrders, searchTerm, statusFilter, customers, categoryFilter, dateFilter, datePreset]);
+    }, [orderSales, searchTerm, statusFilter, customers, categoryFilter, dateFilter, datePreset]);
 
     const columns: { id: FulfillmentStatus, label: string, color: string, icon: string }[] = [
         { id: 'pending', label: 'Pendientes', color: 'border-yellow-400 bg-yellow-50', icon: 'clock' },
