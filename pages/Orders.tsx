@@ -37,7 +37,8 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
         productionImages: string[];
         isLocalDelivery: boolean;
         sharePhone: string;
-    }>({ status: 'pending', shippingCompany: '', tracking: '', notes: '', guideFile: '', guideFileType: '', guideFileName: '', productionImages: [], isLocalDelivery: false, sharePhone: '' });
+        address: string;
+    }>({ status: 'pending', shippingCompany: '', tracking: '', notes: '', guideFile: '', guideFileType: '', guideFileName: '', productionImages: [], isLocalDelivery: false, sharePhone: '', address: '' });
 
     // Admin Password Modal State
     const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
@@ -211,7 +212,8 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
             guideFileName: order.shippingDetails?.guideFileName || '',
             productionImages: order.shippingDetails?.productionImages || [],
             isLocalDelivery: order.shippingDetails?.isLocalDelivery || false,
-            sharePhone: customers.find(c => c.id === order.customerId)?.phone || ''
+            sharePhone: customers.find(c => c.id === order.customerId)?.phone || '',
+            address: order.shippingDetails?.address || customers.find(c => c.id === order.customerId)?.address || ''
         });
         setIsEditModalOpen(true);
     };
@@ -315,7 +317,8 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                 guideFileType: editForm.guideFileType || undefined,
                 guideFileName: editForm.guideFileName || undefined,
                 productionImages: editForm.productionImages.length > 0 ? editForm.productionImages : undefined,
-                isLocalDelivery: editForm.isLocalDelivery
+                isLocalDelivery: editForm.isLocalDelivery,
+                address: editForm.address
             };
 
             // Validación: requiere guía para avanzar a shipped/delivered (a menos que sea entrega local)
@@ -898,9 +901,21 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                         <h4 className="font-bold text-purple-900 text-sm uppercase flex items-center gap-2">
                             <i className="fas fa-truck"></i> Datos de Envío
                         </h4>
-                        <div className="grid grid-cols-2 gap-3">
-                            <Input label="Empresa de Envío" placeholder="Ej: Cargo Expreso" value={editForm.shippingCompany} onChange={e => setEditForm({ ...editForm, shippingCompany: e.target.value })} style={{ background: 'white' }} disabled={editForm.isLocalDelivery} />
-                            <Input label="No. de Guía / Tracking" placeholder="Ej: 12345678" value={editForm.tracking} onChange={e => setEditForm({ ...editForm, tracking: e.target.value })} style={{ background: 'white' }} disabled={editForm.isLocalDelivery} />
+                        <div className="space-y-3">
+                            <div className="grid grid-cols-2 gap-3">
+                                <Input label="Empresa de Envío" placeholder="Ej: Cargo Expreso" value={editForm.shippingCompany} onChange={e => setEditForm({ ...editForm, shippingCompany: e.target.value })} style={{ background: 'white' }} disabled={editForm.isLocalDelivery} />
+                                <Input label="No. de Guía / Tracking" placeholder="Ej: 12345678" value={editForm.tracking} onChange={e => setEditForm({ ...editForm, tracking: e.target.value })} style={{ background: 'white' }} disabled={editForm.isLocalDelivery} />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="block text-[10px] font-bold text-purple-400 uppercase">Dirección de Entrega</label>
+                                <textarea
+                                    className="w-full p-2 text-xs rounded-xl border border-gray-200 bg-white outline-none focus:border-purple-300 min-h-[60px]"
+                                    placeholder="Ingrese la dirección completa..."
+                                    value={editForm.address}
+                                    onChange={e => setEditForm({ ...editForm, address: e.target.value })}
+                                    disabled={editForm.isLocalDelivery}
+                                ></textarea>
+                            </div>
                         </div>
 
                         {/* Toggle Entrega Local */}
@@ -954,13 +969,54 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                                                 const message = `👋 Hola *${selectedOrder?.customerName}*, te compartimos los datos de tu envío:\n\n` +
                                                     `📦 *Empresa:* ${editForm.shippingCompany}\n` +
                                                     `🆔 *Guía/Tracking:* ${editForm.tracking}\n` +
+                                                    (editForm.address ? `📍 *Dirección:* ${editForm.address}\n` : '') +
                                                     `📑 *Pedido:* ${selectedOrder?.folio}\n\n` +
                                                     `_Tu pedido está en camino. ¡Gracias por tu compra!_`;
                                                 window.open(`https://wa.me/${cleanPhone.length > 8 ? cleanPhone : '504' + cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
                                             }}
                                         >
-                                            Enviar
+                                            Texto
                                         </Button>
+
+                                        {editForm.guideFile && (
+                                            <Button
+                                                size="sm"
+                                                variant="primary"
+                                                icon="share-alt"
+                                                onClick={async () => {
+                                                    try {
+                                                        const response = await fetch(editForm.guideFile);
+                                                        const blob = await response.blob();
+                                                        const extension = editForm.guideFileType === 'pdf' ? 'pdf' : 'jpg';
+                                                        const file = new File([blob], `guia-${selectedOrder?.folio}.${extension}`, { type: blob.type });
+
+                                                        const cleanPhone = editForm.sharePhone.replace(/\D/g, '');
+                                                        const message = `Guía de envío - Pedido ${selectedOrder?.folio}`;
+
+                                                        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+                                                            await navigator.share({
+                                                                files: [file],
+                                                                title: message,
+                                                                text: message
+                                                            });
+                                                            showToast("Menú de compartir abierto", "success");
+                                                        } else {
+                                                            // Fallback: Descargar
+                                                            const link = document.createElement('a');
+                                                            link.href = editForm.guideFile;
+                                                            link.download = `guia-${selectedOrder?.folio}.${extension}`;
+                                                            link.click();
+                                                            showToast("El navegador no soporta compartir archivos. Se ha descargado el archivo.", "warning");
+                                                        }
+                                                    } catch (err) {
+                                                        console.error("Error sharing file:", err);
+                                                        showToast("Error al intentar compartir el archivo", "error");
+                                                    }
+                                                }}
+                                            >
+                                                Archivo
+                                            </Button>
+                                        )}
                                     </div>
                                 </div>
                             )}
