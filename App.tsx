@@ -248,6 +248,41 @@ function App() {
     initSync();
   }, [user?.id]);
 
+  // Global Unified Cloud Polling (Fast Sync)
+  useEffect(() => {
+    let pollInterval: any = null;
+
+    const fastSync = async () => {
+      // 1. Guard: Solo si hay usuario logueado
+      if (!user) return;
+
+      // 2. Guard: Solo si la pestaña está visible (ahorro de datos/batería)
+      if (document.visibilityState !== 'visible') return;
+
+      try {
+        const sett = await db.getSettings();
+        if (!sett?.supabaseUrl || !sett?.supabaseKey) return;
+
+        const { SupabaseService } = await import('./services/supabaseService');
+        const changed = await SupabaseService.pullDelta();
+
+        if (changed && changed > 0) {
+          console.log(`🔄 FastSync: ${changed} cambios aplicados desde la nube`);
+          await refreshData(false);
+        }
+      } catch (e) {
+        console.warn("⚠️ FastSync failure:", e);
+      }
+    };
+
+    // Inicializar polling cada 20 segundos
+    pollInterval = setInterval(fastSync, 20000);
+
+    return () => {
+      if (pollInterval) clearInterval(pollInterval);
+    };
+  }, [user?.id]);
+
   const handleManualUpload = async () => {
     await refreshData(true, true);
   };
@@ -377,7 +412,7 @@ function App() {
       case 'sarBooks': return <SARBooks />;
       case 'settings': return <Settings onUpdate={refreshData} />;
       case 'cashCut': return <CashCut />;
-      case 'orders': return <Orders onUpdate={refreshData} />;
+      case 'orders': return <Orders sales={sales} customers={customers} categories={categories} settings={safeSettings} onUpdate={refreshData} />;
       case 'promotions': return <Promotions />;
       case 'users': return <Users />;
       case 'branches': return <Branches />;

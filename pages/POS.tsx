@@ -357,8 +357,22 @@ export const POS: React.FC<POSProps> = ({
         setIsProcessing(true);
         try {
             const isOrder = !isImmediateDelivery;
-            // El abono bruto hoy es el depósito manual si es un pedido, o el total si es entrega inmediata
-            const grossPayToday = isOrder ? (parseFloat(depositAmount) || 0) : total;
+            // El abono bruto hoy es el depósito manual si es un pedido.
+            // Si es entrega inmediata:
+            // - En crédito, solo la prima (downPayment).
+            // - En mixto, el total menos la parte de crédito.
+            // - En el resto, el total completo.
+            let grossPayToday = 0;
+            if (isOrder) {
+                grossPayToday = parseFloat(depositAmount) || 0;
+            } else if (paymentMethod === 'Crédito') {
+                grossPayToday = parseFloat(creditDownPayment) || 0;
+            } else if (paymentMethod === 'Mixto') {
+                grossPayToday = Math.max(0, total - (paymentDetails.credit || 0));
+            } else {
+                grossPayToday = total;
+            }
+
             const balance = Math.max(0, total - grossPayToday);
 
             const saleData = {

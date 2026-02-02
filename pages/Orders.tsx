@@ -5,23 +5,22 @@ import { Card, Button, Input, Badge, Modal, showToast } from '../components/UICo
 import { db } from '../services/storageService';
 
 interface OrdersProps {
+    sales: Sale[];
+    customers: Customer[];
+    categories: Category[];
+    settings: CompanySettings | null;
     onUpdate?: () => void;
 }
 
-export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
-    const [sales, setSales] = useState<Sale[]>([]);
-    const [customers, setCustomers] = useState<Customer[]>([]);
-    const [settings, setSettings] = useState<CompanySettings | null>(null);
+export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, categories, settings, onUpdate }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [viewMode, setViewMode] = useState<'board' | 'list'>('board');
     const [statusFilter, setStatusFilter] = useState<FulfillmentStatus | 'all'>('all');
-    const [dateFilter, setDateFilter] = useState('');
-    const [lastSync, setLastSync] = useState<string>('');
+    const [dateFilter, setDateFilter] = useState<string>('');
     const [isSyncing, setIsSyncing] = useState(false);
-
-    // Category and Date Filtering
-    const [categories, setCategories] = useState<Category[]>([]);
     const [categoryFilter, setCategoryFilter] = useState<string>('all');
+
+    // Filter states
     const [datePreset, setDatePreset] = useState<'all' | 'today' | 'yesterday' | 'week' | 'month'>('all');
 
     // Edit Modal State
@@ -52,122 +51,26 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
     const [isPayModalOpen, setIsPayModalOpen] = useState(false);
     const [payMethod, setPayMethod] = useState<'Efectivo' | 'Tarjeta' | 'Transferencia'>('Efectivo');
     const [payDetails, setPayDetails] = useState<any>({});
-    const [generateInvoice, setGenerateInvoice] = useState(false); // Default to Ticket (non-fiscal)
+    const [generateInvoice, setGenerateInvoice] = useState(false);
     const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
-    // Polling ref to track if component is mounted
-    const isMounted = useRef(true);
-
     useEffect(() => {
-        refresh();
-        return () => { isMounted.current = false; };
+        handleManualSync();
     }, []);
-
-    // Use ref to track modal states for polling (avoids stale closure)
-    const isAnyModalOpen = useRef(false);
-    useEffect(() => {
-        isAnyModalOpen.current = isEditModalOpen || isAdminModalOpen || isPayModalOpen;
-    }, [isEditModalOpen, isAdminModalOpen, isPayModalOpen]);
-
-    // Polling: Auto-refresh orders every 60 seconds from Supabase
-    // IMPORTANT: This polling ONLY adds NEW orders, it does NOT overwrite local status changes
-    useEffect(() => {
-        let pollInterval: any = null;
-
-        const pollFromCloud = async () => {
-            // GUARD: Don't poll while user is editing an order - prevents losing unsaved changes
-            if (isAnyModalOpen.current) {
-                console.log("⏸️ Polling pausado - modal abierto");
-                return;
-            }
-
-            // OPTIMIZATION: Don't poll if the tab is not visible (minimized or in background)
-            if (document.visibilityState !== 'visible') {
-                return;
-            }
-
-            try {
-                const currentSettings = await db.getSettings();
-                if (!currentSettings?.supabaseUrl || !currentSettings?.supabaseKey) return;
-
-                const { SupabaseService } = await import('../services/supabaseService');
-                const changed = await SupabaseService.pullDelta();
-
-                if (changed && changed > 0 && isMounted.current) {
-                    await refresh();
-                    console.log(`🔄 Delta Sync: ${changed} cambios aplicados`);
-                    setLastSync(new Date().toLocaleTimeString());
-                }
-            } catch (e) {
-                console.warn("⚠️ Polling exception:", e);
-            }
-        };
-
-        // Start polling immediately and then every 60 seconds
-        pollFromCloud();
-        pollInterval = setInterval(pollFromCloud, 60000);
-
-        return () => {
-            if (pollInterval) clearInterval(pollInterval);
-        };
-
-    }, []); // Empty dependency array: run once on mount
 
     const handleManualSync = async () => {
         if (isSyncing) return;
         setIsSyncing(true);
         try {
-            console.log("🔄 Iniciando sincronización manual...");
             const { SupabaseService } = await import('../services/supabaseService');
             const sett = await db.getSettings();
             if (sett.supabaseUrl && sett.supabaseKey) {
-                // STEP 1: Push local changes to cloud
                 await SupabaseService.syncAll();
-                console.log("☁️ Datos locales subidos");
-
-                // STEP 2: Pull ALL sales from cloud and merge with local
-                const client = await SupabaseService.getClient();
-                if (client) {
-                    const cutoff = new Date();
-                    cutoff.setDate(cutoff.getDate() - 90);
-                    const cutoffDateOnly = cutoff.toISOString().split('T')[0]; // "YYYY-MM-DD"
-
-                    // SIMPLIFIED QUERY: Avoid complex .or() that causes timeouts
-                    const cloudSales = await SupabaseService.requestWithRetry<Sale[]>(
-                        () => client.from('sales').select('*').gte('date', cutoffDateOnly).order('date', { ascending: false }).limit(200),
-                        'sales_manual_sync'
-                    );
-
-                    if (cloudSales) {
-                        const localSales = await db.getSales();
-                        let syncedCount = 0;
-
-                        for (const cloudSale of cloudSales) {
-                            const localSale = localSales.find(s => s.id === cloudSale.id);
-
-                            if (!localSale) {
-                                await db.insertSaleFromCloud(cloudSale);
-                                syncedCount++;
-                                console.log(`📥 Nuevo: ${cloudSale.folio}`);
-                            } else {
-                                const cloudTime = cloudSale.updatedAt ? new Date(cloudSale.updatedAt).getTime() : 0;
-                                const localTime = localSale.updatedAt ? new Date(localSale.updatedAt).getTime() : 0;
-
-                                if (cloudTime > localTime) {
-                                    await db.insertSaleFromCloud(cloudSale);
-                                    syncedCount++;
-                                    console.log(`☁️ Actualizado: ${cloudSale.folio}`);
-                                }
-                            }
-                        }
-                        console.log(`📊 Total sincronizados: ${syncedCount} pedidos`);
-                    }
+                const changed = await SupabaseService.pullDelta();
+                if (changed && changed > 0 && onUpdate) {
+                    onUpdate();
                 }
-
-                await refresh();
                 showToast("Sincronización completada", "success");
-            } else {
-                showToast("Supabase no configurado", "warning");
             }
         } catch (e) {
             console.error("❌ Error en sync manual:", e);
@@ -177,37 +80,23 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
         }
     };
 
-    // Force sync on module mount
-    useEffect(() => {
-        handleManualSync();
-    }, []);
-
-    const refresh = async () => {
-        const allSales = await db.getSales();
-        // IMPORTANT: Only show actual ORDERS (not regular point-of-sale transactions)
-        // An order is: isOrder=true OR has pending balance OR has fulfillmentStatus set
-        setSales([...allSales.filter(s =>
+    // Simplified Order List Filter
+    const orderSales = useMemo(() => {
+        return allSales.filter(s =>
             s.status === 'active' &&
             (s.isOrder === true || (s.balance && s.balance > 0) || s.fulfillmentStatus)
-        )]);
-        setCustomers(await db.getCustomers());
-        setSettings(await db.getSettings());
-        setCategories(await db.getCategories());
-    };
-
-    // Optimistic UI update - update local state immediately without waiting for DB
-    const updateOrderInState = (orderId: string, newStatus: FulfillmentStatus, newShippingDetails?: ShippingDetails) => {
-        setSales(prevSales =>
-            prevSales.map(sale =>
-                sale.id === orderId
-                    ? {
-                        ...sale,
-                        fulfillmentStatus: newStatus,
-                        shippingDetails: newShippingDetails || sale.shippingDetails
-                    }
-                    : sale
-            )
         );
+    }, [allSales]);
+
+    // Track local changes until parent state updates
+    const [localOrders, setLocalOrders] = useState<Record<string, Partial<Sale>>>({});
+
+    // Optimistic UI update
+    const updateOrderInState = (orderId: string, newStatus: FulfillmentStatus, newShippingDetails?: ShippingDetails) => {
+        setLocalOrders(prev => ({
+            ...prev,
+            [orderId]: { fulfillmentStatus: newStatus, shippingDetails: newShippingDetails }
+        }));
     };
 
     const getCustomerName = (order: Sale) => order.customerName || customers.find(c => c.id === order.customerId)?.name || 'Consumidor Final';
@@ -239,7 +128,7 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
 
                 if (!hasGuide && !isLocal) {
                     showToast('Debes subir una guía de envío o marcar como entrega local', 'warning');
-                    openEditModal(order);
+                    handleEditOrder(order);
                     return;
                 }
             }
@@ -255,14 +144,13 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                 // BACKGROUND SYNC: Push to cloud (don't await - let it happen in background)
                 (async () => {
                     try {
-                        const settings = await db.getSettings();
-                        if (settings.supabaseUrl && settings.supabaseKey) {
+                        if (settings?.supabaseUrl && settings?.supabaseKey) {
                             const { SupabaseService } = await import('../services/supabaseService');
                             await SupabaseService.syncAll();
-                            console.log('☁️ Sincronizado con nube');
+                            console.log("🔄 Background cloud sync completed");
                         }
-                    } catch (syncErr) {
-                        console.warn('⚠️ Sync pendiente:', syncErr);
+                    } catch (err) {
+                        console.warn("⚠️ Background sync failed:", err);
                     }
                 })();
 
@@ -270,7 +158,7 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                 if (onUpdate) onUpdate();
             } catch (e: any) {
                 // Revert optimistic update on error
-                refresh();
+                if (onUpdate) onUpdate();
                 showToast(e.message || 'Error al actualizar estado', 'error');
             }
         }
@@ -294,7 +182,7 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
         }
     };
 
-    const openEditModal = (order: Sale) => {
+    const handleEditOrder = (order: Sale) => {
         setSelectedOrder(order);
         setEditForm({
             status: order.fulfillmentStatus || 'pending',
@@ -456,11 +344,11 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                 }
             })();
 
-            showToast(`Pedido actualizado: ${selectedOrder.fulfillmentStatus} → ${editForm.status}`, 'success');
+            showToast(`Pedido actualizado: ${editForm.status}`, 'success');
             if (onUpdate) onUpdate();
         } catch (e: any) {
             console.error('❌ Error guardando pedido:', e);
-            refresh(); // Revert on error
+            if (onUpdate) onUpdate(); // Forced revert to global state
             showToast(e.message || 'Error al actualizar pedido', 'error');
         }
     };
@@ -481,7 +369,6 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
             showToast('Pago completado y documento generado', 'success');
             setIsPayModalOpen(false);
             setIsEditModalOpen(false);
-            refresh();
             if (onUpdate) onUpdate();
         } catch (e: any) {
             showToast(e.message || 'Error al completar pago', 'error');
@@ -519,10 +406,12 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
     };
 
     const filteredOrders = useMemo(() => {
-        return sales.filter(s => {
+        return orderSales.map(s => {
+            const local = localOrders[s.id];
+            return local ? { ...s, ...local } : s;
+        }).filter(s => {
             const matchStatus = statusFilter === 'all' ? true : s.fulfillmentStatus === statusFilter;
 
-            // Date filter: preset takes priority, then manual dateFilter
             let matchDate = true;
             const range = getDateRange(datePreset);
             if (range) {
@@ -532,7 +421,6 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                 matchDate = s.date.startsWith(dateFilter);
             }
 
-            // Category filter: check if any item in the order belongs to the selected category
             const matchCategory = categoryFilter === 'all'
                 ? true
                 : s.items.some(item => item.categoryId === categoryFilter);
@@ -545,7 +433,7 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
 
             return matchStatus && matchSearch && matchDate && matchCategory;
         }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    }, [sales, searchTerm, statusFilter, customers, categoryFilter, dateFilter, datePreset]);
+    }, [orderSales, localOrders, searchTerm, statusFilter, customers, categoryFilter, dateFilter, datePreset]);
 
     const columns: { id: FulfillmentStatus, label: string, color: string, icon: string }[] = [
         { id: 'pending', label: 'Pendientes', color: 'border-yellow-400 bg-yellow-50', icon: 'clock' },
@@ -632,7 +520,7 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                         </button>
                         {categories.map(cat => {
                             const isSelected = categoryFilter === cat.id;
-                            const orderCount = sales.filter(s => s.items.some(item => item.categoryId === cat.id)).length;
+                            const orderCount = orderSales.filter(s => s.items.some(item => item.categoryId === cat.id)).length;
                             return (
                                 <button
                                     key={cat.id}
@@ -713,7 +601,7 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
                                             return (
                                                 <div
                                                     key={order.id}
-                                                    onClick={() => openEditModal(order)}
+                                                    onClick={() => handleEditOrder(order)}
                                                     className={`p-3 rounded-2xl border shadow-sm hover:shadow-md transition-all cursor-pointer relative group flex flex-col h-fit ${getCardColor(order.fulfillmentStatus)} animate-scale-in`}
                                                 >
                                                     {/* Category Indicators at top */}
@@ -857,17 +745,17 @@ export const Orders: React.FC<OrdersProps> = ({ onUpdate }) => {
 
                                                         try {
                                                             await db.updateSaleStatus(order.id, newStatus);
-                                                            refresh();
                                                             if (onUpdate) onUpdate();
                                                         } catch (e: any) {
                                                             showToast(e.message || 'Error al actualizar estado', 'error');
+                                                            if (onUpdate) onUpdate();
                                                         }
                                                     }}
                                                     className="w-4 h-4 accent-green-600"
                                                 />
                                                 <span className="text-xs font-bold">Entregado</span>
                                             </label>
-                                            <Button size="sm" variant="secondary" className="flex-1 md:flex-none" onClick={() => openEditModal(order)}>Gestionar</Button>
+                                            <Button size="sm" variant="secondary" className="flex-1 md:flex-none" onClick={() => handleEditOrder(order)}>Gestionar</Button>
                                         </div>
                                     </div>
                                 </Card>

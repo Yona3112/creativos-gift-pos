@@ -75,9 +75,26 @@ export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, 
     const currentMonthPrefix = today.substring(0, 7);
 
     const stats = useMemo(() => {
-        // Sales Logic
-        const salesToday = sales.filter(s => getLocalDate(new Date(s.date)) === today && s.status === 'active');
-        const totalSalesToday = salesToday.reduce((acc, s) => acc + (s.total || 0), 0);
+        // --- NEW REVENUE-BASED LOGIC ---
+        // 1. Initial deposits from sales created today
+        const initialDepositsToday = sales
+            .filter(s => getLocalDate(new Date(s.date)) === today && s.status === 'active')
+            .reduce((acc, s) => acc + (s.deposit || 0), 0);
+
+        // 2. Balance payments for orders completed today
+        const balancePaymentsToday = sales
+            .filter(s => s.balancePaymentDate && getLocalDate(new Date(s.balancePaymentDate)) === today && s.status === 'active')
+            .reduce((acc, s) => acc + (s.balancePaid || 0), 0);
+
+        // 3. Payments on credit accounts received today
+        const creditPaymentsToday = (credits || []).reduce((acc, credit) => {
+            const paymentsToday = (credit.payments || [])
+                .filter(p => getLocalDate(new Date(p.date)) === today)
+                .reduce((pAcc, p) => pAcc + p.amount, 0);
+            return acc + paymentsToday;
+        }, 0);
+
+        const totalSalesToday = initialDepositsToday + balancePaymentsToday + creditPaymentsToday;
 
         // Inventory Logic
         const lowStock = products.filter(p => (p.enableLowStockAlert !== false) && (p.stock || 0) <= (p.minStock || 0)).length;
@@ -105,7 +122,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, 
             activeProducts: products.length,
             lowStockConsumables
         };
-    }, [products, sales, credits, consumables]);
+    }, [products, sales, credits, consumables, today]);
 
     // Chart Data: Last 7 Days Sales Trend
     const salesData = useMemo(() => {
@@ -116,31 +133,83 @@ export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, 
         }).reverse();
 
         return last7Days.map(dateStr => {
-            const daySales = sales.filter(s => getLocalDate(new Date(s.date)) === dateStr && s.status === 'active');
-            const dayName = new Date(dateStr + 'T00:00:00').toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric' });
+            // Revenue breakdown for this specific day
+            const initialDeposits = sales
+                .filter(s => getLocalDate(new Date(s.date)) === dateStr && s.status === 'active')
+                .reduce((acc, s) => acc + (s.deposit || 0), 0);
 
-            const total = daySales.reduce((acc, s) => acc + s.total, 0);
-            const tax = daySales.reduce((acc, s) => acc + (s.taxAmount || 0), 0);
+            const balancePayments = sales
+                .filter(s => s.balancePaymentDate && getLocalDate(new Date(s.balancePaymentDate)) === dateStr && s.status === 'active')
+                .reduce((acc, s) => acc + (s.balancePaid || 0), 0);
 
-            // Calculate Cost of Goods Sold (COGS) for the day
-            const cost = daySales.reduce((acc, s) => {
-                return acc + s.items.reduce((sumItem, item) => sumItem + ((item.cost || 0) * item.quantity), 0);
+            const creditPayments = (credits || []).reduce((acc, credit) => {
+                const dayPayments = (credit.payments || [])
+                    .filter(p => getLocalDate(new Date(p.date)) === dateStr)
+                    .reduce((pAcc, p) => pAcc + p.amount, 0);
+                return acc + dayPayments;
             }, 0);
 
-            // Net Revenue = Total Sales - Tax
-            const netRevenue = total - tax;
+            const totalRevenue = initialDeposits + balancePayments + creditPayments;
 
-            // Gross Profit = Net Revenue - COGS
-            const profit = netRevenue - cost;
+            // --- PROPORTIONAL PROFIT CALCULATION ---
+            // To calculate profit accurately on partial payments, we find the "Cost of Goods" 
+            // proportional to the amount collected today.
+
+            // 1. Cost from newly created sales today (proportional to deposit/total)
+            const salesCreatedToday = sales.filter(s => getLocalDate(new Date(s.date)) === dateStr && s.status === 'active');
+            const proportionalCostNewSales = salesCreatedToday.reduce((acc, s) => {
+                const totalOrderCost = s.items.reduce((sum, item) => sum + ((item.cost || 0) * item.quantity), 0);
+                const paymentRatio = s.total > 0 ? (s.deposit || 0) / s.total : 1;
+                return acc + (totalOrderCost * paymentRatio);
+            }, 0);
+
+            // 2. Cost from balances paid today
+            const salesBalancedToday = sales.filter(s => s.balancePaymentDate && getLocalDate(new Date(s.balancePaymentDate)) === dateStr && s.status === 'active');
+            const proportionalCostBalances = salesBalancedToday.reduce((acc, s) => {
+                const totalOrderCost = s.items.reduce((sum, item) => sum + ((item.cost || 0) * item.quantity), 0);
+                const paymentRatio = s.total > 0 ? (s.balancePaid || 0) / s.total : 0;
+                return acc + (totalOrderCost * paymentRatio);
+            }, 0);
+
+            // 3. Cost from credit payments (proportional to payment/totalAmount)
+            // Note: We need to find the original sale to get the cost
+            const creditPaymentsCost = (credits || []).reduce((acc, credit) => {
+                const dayAmount = (credit.payments || [])
+                    .filter(p => getLocalDate(new Date(p.date)) === dateStr)
+                    .reduce((pAcc, p) => pAcc + p.amount, 0);
+
+                if (dayAmount <= 0) return acc;
+
+                // Find the original sale associated with this credit
+                const originalSale = sales.find(s => s.id === credit.saleId);
+                if (!originalSale) return acc;
+
+                const totalOrderCost = originalSale.items.reduce((sum, item) => sum + ((item.cost || 0) * item.quantity), 0);
+                const paymentRatio = originalSale.total > 0 ? dayAmount / originalSale.total : 0;
+                return acc + (totalOrderCost * paymentRatio);
+            }, 0);
+
+            const totalProportionalCost = proportionalCostNewSales + proportionalCostBalances + creditPaymentsCost;
+
+            // Simple tax estimate for chart (optional, usually we care about cash profit)
+            const estimatedTax = salesCreatedToday.reduce((acc, s) => {
+                const paymentRatio = s.total > 0 ? (s.deposit || 0) / s.total : 1;
+                return acc + (s.taxAmount * paymentRatio);
+            }, 0);
+
+            const netRevenue = totalRevenue - estimatedTax;
+            const profit = netRevenue - totalProportionalCost;
+
+            const dayName = new Date(dateStr + 'T00:00:00').toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric' });
 
             return {
                 name: dayName,
-                total,
+                total: totalRevenue,
                 netRevenue,
                 profit
             };
         });
-    }, [sales]);
+    }, [sales, credits]);
 
     // Top Products Data (Grouped by ID for consistency)
     const topProducts = useMemo(() => {
