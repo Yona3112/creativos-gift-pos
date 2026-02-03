@@ -122,7 +122,7 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
     const getCustomerName = (order: Sale) => order.customerName || customers.find(c => c.id === order.customerId)?.name || 'Consumidor Final';
 
     const handleQuickStatusUpdate = async (order: Sale, direction: 'next' | 'prev') => {
-        const workflow: FulfillmentStatus[] = ['pending', 'production', 'ready', 'shipped', 'delivered'];
+        const workflow: FulfillmentStatus[] = ['pending', 'design', 'printing', 'qc', 'production', 'ready', 'shipped', 'delivered'];
         const currentIndex = workflow.indexOf(order.fulfillmentStatus || 'pending');
 
         let newIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1;
@@ -332,7 +332,7 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
             }
 
             // Check for rollback (from delivered or any previous state)
-            const workflow: FulfillmentStatus[] = ['pending', 'production', 'ready', 'shipped', 'delivered'];
+            const workflow: FulfillmentStatus[] = ['pending', 'design', 'printing', 'qc', 'production', 'ready', 'shipped', 'delivered'];
             const oldIndex = workflow.indexOf(selectedOrder.fulfillmentStatus || 'pending');
             const newIndex = workflow.indexOf(editForm.status);
 
@@ -625,10 +625,14 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
 
             {viewMode === 'list' && (
                 <div className="flex gap-2 shrink-0 overflow-x-auto pb-2">
-                    <button onClick={() => setStatusFilter('all')} className={`whitespace-nowrap px-4 py-2 rounded-lg font-bold text-sm ${statusFilter === 'all' ? 'bg-gray-800 text-white' : 'bg-white text-gray-600'}`}>Todos</button>
-                    <button onClick={() => setStatusFilter('pending')} className={`whitespace-nowrap px-4 py-2 rounded-lg font-bold text-sm ${statusFilter === 'pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-white text-gray-600'}`}>Pendientes</button>
-                    <button onClick={() => setStatusFilter('production')} className={`whitespace-nowrap px-4 py-2 rounded-lg font-bold text-sm ${statusFilter === 'production' ? 'bg-blue-100 text-blue-800' : 'bg-white text-gray-600'}`}>Producción</button>
-                    <button onClick={() => setStatusFilter('delivered')} className={`whitespace-nowrap px-4 py-2 rounded-lg font-bold text-sm ${statusFilter === 'delivered' ? 'bg-gray-200 text-gray-800' : 'bg-white text-gray-600'}`}>Entregados</button>
+                    <button onClick={() => setStatusFilter('all')} className={`whitespace-nowrap px-4 py-2 rounded-lg font-bold text-sm ${statusFilter === 'all' ? 'bg-gray-800 text-white' : 'bg-white text-gray-600 border border-gray-100'}`}>Todos</button>
+                    <button onClick={() => setStatusFilter('pending')} className={`whitespace-nowrap px-4 py-2 rounded-lg font-bold text-sm ${statusFilter === 'pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-white text-gray-600 border border-gray-100'}`}>🟡 Pendientes</button>
+                    <button onClick={() => setStatusFilter('design')} className={`whitespace-nowrap px-4 py-2 rounded-lg font-bold text-sm ${statusFilter === 'design' ? 'bg-pink-100 text-pink-800' : 'bg-white text-gray-600 border border-gray-100'}`}>🎨 Diseño</button>
+                    <button onClick={() => setStatusFilter('printing')} className={`whitespace-nowrap px-4 py-2 rounded-lg font-bold text-sm ${statusFilter === 'printing' ? 'bg-purple-100 text-purple-800' : 'bg-white text-gray-600 border border-gray-100'}`}>🖨️ Impresión</button>
+                    <button onClick={() => setStatusFilter('qc')} className={`whitespace-nowrap px-4 py-2 rounded-lg font-bold text-sm ${statusFilter === 'qc' ? 'bg-cyan-100 text-cyan-800' : 'bg-white text-gray-600 border border-gray-100'}`}>🔍 QC</button>
+                    <button onClick={() => setStatusFilter('production')} className={`whitespace-nowrap px-4 py-2 rounded-lg font-bold text-sm ${statusFilter === 'production' ? 'bg-blue-100 text-blue-800' : 'bg-white text-gray-600 border border-gray-100'}`}>🛠️ Taller</button>
+                    <button onClick={() => setStatusFilter('ready')} className={`whitespace-nowrap px-4 py-2 rounded-lg font-bold text-sm ${statusFilter === 'ready' ? 'bg-green-100 text-green-800' : 'bg-white text-gray-600 border border-gray-100'}`}>📦 Listos</button>
+                    <button onClick={() => setStatusFilter('delivered')} className={`whitespace-nowrap px-4 py-2 rounded-lg font-bold text-sm ${statusFilter === 'delivered' ? 'bg-gray-200 text-gray-800' : 'bg-white text-gray-600 border border-gray-100'}`}>🏁 Entregados</button>
                 </div>
             )}
 
@@ -883,8 +887,11 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                                 onChange={(e) => setEditForm({ ...editForm, status: e.target.value as any })}
                             >
                                 <option value="pending">🟡 Pendiente (En Cola)</option>
-                                <option value="production">🔵 En Producción / Taller</option>
-                                <option value="ready">🟢 Listo / Empaquetado</option>
+                                <option value="design">🎨 Diseño / Personalización</option>
+                                <option value="printing">🖨️ Impresión / DTF</option>
+                                <option value="qc">🔍 Control de Calidad</option>
+                                <option value="production">🛠️ En Producción / Taller</option>
+                                <option value="ready">📦 Listo / Empaquetado</option>
                                 <option value="shipped">🚚 Enviado (En Ruta)</option>
                                 <option value="delivered">🏁 Entregado (Finalizado)</option>
                             </select>

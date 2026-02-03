@@ -105,7 +105,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, 
 
         // Orders Logic
         const pendingOrders = sales.filter(s => s.fulfillmentStatus === 'pending' && s.status === 'active').length;
-        const inProductionOrders = sales.filter(s => s.fulfillmentStatus === 'production' && s.status === 'active').length;
+        const designOrders = sales.filter(s => s.fulfillmentStatus === 'design' && s.status === 'active').length;
+        const printingOrders = sales.filter(s => s.fulfillmentStatus === 'printing' && s.status === 'active').length;
+        const productionOrders = sales.filter(s => s.fulfillmentStatus === 'production' && s.status === 'active').length;
         const readyOrders = sales.filter(s => s.fulfillmentStatus === 'ready' && s.status === 'active').length;
 
         // Credits Logic
@@ -115,12 +117,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, 
             totalSalesToday,
             lowStock,
             inventoryValue,
-            pendingOrders,
-            inProductionOrders,
-            readyOrders,
             totalReceivable,
             activeProducts: products.length,
-            lowStockConsumables
+            lowStockConsumables,
+            pendingOrders,
+            designOrders,
+            printingOrders,
+            productionOrders,
+            readyOrders
         };
     }, [products, sales, credits, consumables, today]);
 
@@ -392,17 +396,25 @@ export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, 
                         <h3 className="font-bold text-gray-700">Pedidos Activos</h3>
                         <div className="w-8 h-8 bg-orange-100 text-orange-600 rounded-lg flex items-center justify-center"><i className="fas fa-tasks"></i></div>
                     </div>
-                    <div className="space-y-3">
-                        <div className="flex justify-between items-center text-sm">
-                            <span className="flex items-center gap-2 text-gray-600"><span className="w-2 h-2 rounded-full bg-yellow-400"></span>Pendientes</span>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                        <div className="flex justify-between items-center text-[10px]">
+                            <span className="flex items-center gap-1.5 text-gray-600"><span className="w-1.5 h-1.5 rounded-full bg-yellow-400"></span>Pendiente</span>
                             <span className="font-bold">{stats.pendingOrders}</span>
                         </div>
-                        <div className="flex justify-between items-center text-sm">
-                            <span className="flex items-center gap-2 text-gray-600"><span className="w-2 h-2 rounded-full bg-blue-400"></span>En Taller</span>
-                            <span className="font-bold">{stats.inProductionOrders}</span>
+                        <div className="flex justify-between items-center text-[10px]">
+                            <span className="flex items-center gap-1.5 text-gray-600"><span className="w-1.5 h-1.5 rounded-full bg-pink-400"></span>Diseño</span>
+                            <span className="font-bold">{stats.designOrders}</span>
                         </div>
-                        <div className="flex justify-between items-center text-sm">
-                            <span className="flex items-center gap-2 text-gray-600"><span className="w-2 h-2 rounded-full bg-green-400"></span>Listos</span>
+                        <div className="flex justify-between items-center text-[10px]">
+                            <span className="flex items-center gap-1.5 text-gray-600"><span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span>Impresión</span>
+                            <span className="font-bold">{stats.printingOrders}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-[10px]">
+                            <span className="flex items-center gap-1.5 text-gray-600"><span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span>Taller</span>
+                            <span className="font-bold">{stats.productionOrders}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-[10px]">
+                            <span className="flex items-center gap-1.5 text-gray-600"><span className="w-1.5 h-1.5 rounded-full bg-green-400"></span>Listos</span>
                             <span className="font-bold">{stats.readyOrders}</span>
                         </div>
                     </div>
@@ -521,6 +533,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, 
                                             const statuses = {
                                                 'ready': { emoji: '✅', label: 'PEDIDOS LISTOS' },
                                                 'production': { emoji: '🛠️', label: 'EN TALLER' },
+                                                'qc': { emoji: '🔍', label: 'CONTROL CALIDAD' },
+                                                'printing': { emoji: '🖨️', label: 'IMPRESIÓN' },
+                                                'design': { emoji: '🎨', label: 'DISEÑO' },
                                                 'pending': { emoji: '⏳', label: 'PENDIENTES' }
                                             };
 
