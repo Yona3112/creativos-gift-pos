@@ -233,7 +233,8 @@ export class StorageService {
       legalCity: 'Tegucigalpa',
       themeColor: '#e62e8a',
       logo: 'https://i.imgur.com/K6mXQ0j.png', // New brand logo
-      deviceId: undefined
+      deviceId: undefined,
+      lastCloudPush: null
     };
 
     if (saved && !saved.deviceId) {

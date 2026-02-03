@@ -161,8 +161,13 @@ export class SupabaseService {
         }
 
         const settings = await db.getSettings();
-        const lastSync = settings.lastCloudSync ? new Date(settings.lastCloudSync).getTime() : 0;
-        const now = await db.getLocalNowISO(); // Use unified timestamp
+        const lastPush = settings.lastCloudPush ? new Date(settings.lastCloudPush).getTime() : 0;
+        const now = await db.getLocalNowISO();
+        console.log(`📤 SyncAll: Usando marca de tiempo PUSH dedicada: ${settings.lastCloudPush || '0'}`);
+
+        // SAFE PUSH DRIFT: We look back 30 seconds from the last push to ensure 
+        // no local changes were missed due to race conditions with pullDelta.
+        const safeLastPush = Math.max(0, lastPush - (30 * 1000));
 
         const data = await db.getAllData();
         const results: any = {};
@@ -192,13 +197,13 @@ export class SupabaseService {
                 const recordsToSync = forceFull ? table.data : table.data.filter((item: any) => {
                     // Always prefer updatedAt (has precision)
                     if (item.updatedAt) {
-                        return new Date(item.updatedAt).getTime() > lastSync;
+                        return new Date(item.updatedAt).getTime() > safeLastPush;
                     }
                     // Fallback to business date if updatedAt is missing
                     // We extract just the date part to avoid ISO/Timezone issues
                     const itemDate = item.date ? item.date.substring(0, 10) : '';
-                    const lastSyncDate = new Date(lastSync).toISOString().substring(0, 10);
-                    return itemDate >= lastSyncDate;
+                    const lastPushDate = new Date(safeLastPush).toISOString().substring(0, 10);
+                    return itemDate >= lastPushDate;
                 });
 
                 if (recordsToSync.length === 0) {
@@ -262,12 +267,13 @@ export class SupabaseService {
                 }
             });
 
-            // Update local and cloud last sync time
-            settingsToSync.lastCloudSync = now;
+            // Update local and cloud last push time (and sync time if full)
+            settingsToSync.lastCloudPush = now;
+            if (forceFull) settingsToSync.lastCloudSync = now;
 
             const { error: settingsError } = await client.from('settings').upsert(settingsToSync);
             if (!settingsError) {
-                await db.saveSettings({ ...data.settings, lastCloudSync: now });
+                await db.saveSettings({ ...data.settings, lastCloudPush: now, lastCloudSync: forceFull ? now : data.settings.lastCloudSync });
                 results['settings'] = 'OK';
             } else {
                 console.error("❌ Error sincronizando ajustes (Settings):", settingsError);
@@ -366,9 +372,9 @@ export class SupabaseService {
 
         if (hasAnyData) {
             await db.restoreData(dexieData);
-            // Update lastCloudSync after full pull
+            // Update both timestamps after full pull
             const currentSett = await db.getSettings();
-            await db.saveSettings({ ...currentSett, lastCloudSync: now });
+            await db.saveSettings({ ...currentSett, lastCloudSync: now, lastCloudPush: now });
             return dexieData;
         }
 
@@ -383,11 +389,13 @@ export class SupabaseService {
         if (!client) return null;
         const settings = await db.getSettings();
         const lastSync = settings.lastCloudSync;
-        if (!lastSync) return this.pullAll(); // If no last sync, do full pull
+        if (!lastSync) return this.pullAll();
+        console.log(`📥 PullDelta: Usando marca de tiempo PULL dedicada: ${lastSync}`);
 
-        // CLOCK DRIFT PROTECTION: Reducido de 2 min a 30 seg para evitar redundancia masiva
+        // CLOCK DRIFT PROTECTION: Aumentado a 5 min para ser mucho más robusto
+        // ante dispositivos con relojes desincronizados.
         const lastSyncDate = new Date(lastSync);
-        const driftedSync = new Date(lastSyncDate.getTime() - (30 * 1000)).toISOString();
+        const driftedSync = new Date(lastSyncDate.getTime() - (5 * 60 * 1000)).toISOString();
 
         const now = await db.getLocalNowISO(); // Use unified timestamp
         const tables = [

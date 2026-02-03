@@ -248,7 +248,8 @@ export interface CompanySettings {
   supabaseKey?: string;
   autoSync?: boolean;
   lastBackupDate?: string | null;
-  lastCloudSync?: string | null; // Timestamp of the last successful full or delta sync
+  lastCloudSync?: string | null; // Timestamp of the last successful pull (delta or full)
+  lastCloudPush?: string | null; // Timestamp of the last successful push (upload) to cloud
   logoObjectFit?: 'cover' | 'contain';
   thanksMessage?: string;
   warrantyPolicy?: string;
