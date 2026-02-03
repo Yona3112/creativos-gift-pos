@@ -275,7 +275,7 @@ export class StorageService {
           console.error("❌ Error en auto-sync:", e);
         }
       }
-    }, 5000); // Wait 5s after last change before syncing
+    }, 2000); // Wait 2s (reduced from 5s) after last change before syncing
   }
 
   async checkAndAutoSync() {
@@ -1535,7 +1535,13 @@ export class StorageService {
 
     await db_engine.sales.put(sale);
     const settings = await this.getSettings();
-    if (settings.autoSync) this.triggerAutoSync();
+    if (settings.autoSync) {
+      this.triggerAutoSync();
+      // Also try an IMMEDIATE push for critical state changes
+      import('./supabaseService').then(({ SupabaseService }) => {
+        SupabaseService.syncAll().catch(e => console.warn("Falla en push inmediato:", e));
+      });
+    }
   }
 
   async deleteBranch(id: string) {

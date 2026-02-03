@@ -470,13 +470,35 @@ export class SupabaseService {
             const data = delta[map.cloud];
             if (data && data.length > 0) {
                 for (const item of data) {
-                    // SMART MERGE: Use update if exists to preserve columns not included in delta (like product images)
                     const table = (db_engine as any)[map.dexie];
-                    const id = item.id || (map.dexie === 'settings' ? 'main' : null);
+
+                    // Special case: Settings (Isolate device-local metadata)
+                    if (map.dexie === 'settings') {
+                        const local = await table.get('main');
+                        if (local) {
+                            // Only update non-sync fields from cloud
+                            const { lastCloudSync, lastCloudPush, deviceId, ...cloudData } = item;
+                            await table.update('main', cloudData);
+                        } else {
+                            await table.put(item);
+                        }
+                        continue;
+                    }
+
+                    // Standard case: Smart Merge with updatedAt check
+                    const id = item.id;
                     const existing = id ? await table.get(id) : null;
 
                     if (existing) {
-                        await table.update(id, item);
+                        const remoteU = item.updatedAt ? new Date(item.updatedAt).getTime() : 0;
+                        const localU = existing.updatedAt ? new Date(existing.updatedAt).getTime() : 0;
+
+                        // ONLY update if remote is strictly newer
+                        if (remoteU > localU) {
+                            await table.update(id, item);
+                        } else {
+                            // console.log(`[mergeDelta] Ignored older remote update for ${map.dexie}:${id}`);
+                        }
                     } else {
                         await table.put(item);
                     }
