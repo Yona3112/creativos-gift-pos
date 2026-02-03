@@ -263,6 +263,8 @@ export interface CompanySettings {
   enableBeep?: boolean;
   currentSeason?: string;
   deviceId?: string;
+  boxfulApiKey?: string;
+  boxfulSandbox?: boolean;
   updatedAt?: string;
 }
 

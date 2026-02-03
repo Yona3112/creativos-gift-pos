@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Sale, Customer, FulfillmentStatus, ShippingDetails, CompanySettings, PaymentDetails, Category } from '../types';
 import { Card, Button, Input, Badge, Modal, showToast } from '../components/UIComponents';
 import { db } from '../services/storageService';
+import { BoxfulService } from '../services/boxfulService';
 
 interface OrdersProps {
     sales: Sale[];
@@ -55,6 +56,7 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
     const [payDetails, setPayDetails] = useState<any>({});
     const [generateInvoice, setGenerateInvoice] = useState(false);
     const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+    const [isGeneratingBoxful, setIsGeneratingBoxful] = useState(false);
 
     // Removal of redundant sync on mount to favor App.tsx unification
     /* 
@@ -395,6 +397,27 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
             showToast(e.message || 'Error al completar pago', 'error');
         } finally {
             setIsProcessingPayment(false);
+        }
+    };
+
+    const handleGenerateBoxful = async () => {
+        if (!selectedOrder) return;
+        setIsGeneratingBoxful(true);
+        try {
+            const result = await BoxfulService.createShipment(selectedOrder, editForm.sharePhone);
+            setEditForm(prev => ({
+                ...prev,
+                tracking: result.trackingNumber,
+                shippingCompany: 'Boxful',
+                guideFile: result.guideUrl,
+                guideFileType: 'pdf',
+                guideFileName: `guia-${selectedOrder.folio}.pdf`
+            }));
+            showToast("Guía de Boxful generada con éxito", "success");
+        } catch (e: any) {
+            showToast(e.message || "Error al generar guía con Boxful", "error");
+        } finally {
+            setIsGeneratingBoxful(false);
         }
     };
 
@@ -907,9 +930,21 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                     </div>
 
                     <div className="bg-purple-50 p-4 rounded-xl border border-purple-100 space-y-3">
-                        <h4 className="font-bold text-purple-900 text-sm uppercase flex items-center gap-2">
-                            <i className="fas fa-truck"></i> Datos de Envío
-                        </h4>
+                        <div className="flex justify-between items-center mb-1">
+                            <h4 className="font-bold text-purple-900 text-sm uppercase flex items-center gap-2">
+                                <i className="fas fa-truck"></i> Datos de Envío
+                            </h4>
+                            {settings?.boxfulApiKey && (
+                                <button
+                                    onClick={handleGenerateBoxful}
+                                    disabled={isGeneratingBoxful || editForm.isLocalDelivery}
+                                    className="text-[10px] font-black bg-purple-600 text-white px-2 py-1 rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-all flex items-center gap-1 shadow-sm"
+                                >
+                                    <i className={`fas fa-${isGeneratingBoxful ? 'spinner fa-spin' : 'magic'}`}></i>
+                                    Generar Boxful
+                                </button>
+                            )}
+                        </div>
                         <div className="space-y-3">
                             <div className="grid grid-cols-2 gap-3">
                                 <Input label="Empresa de Envío" placeholder="Ej: Cargo Expreso" value={editForm.shippingCompany} onChange={e => setEditForm({ ...editForm, shippingCompany: e.target.value })} style={{ background: 'white' }} disabled={editForm.isLocalDelivery} />
@@ -974,14 +1009,17 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                                             variant="success"
                                             icon="whatsapp"
                                             onClick={() => {
-                                                const cleanPhone = editForm.sharePhone.replace(/\D/g, '');
+                                                let cleanPhone = editForm.sharePhone.replace(/\D/g, '');
+                                                if (cleanPhone.length === 8) cleanPhone = '504' + cleanPhone;
+
                                                 const message = `👋 Hola *${selectedOrder?.customerName}*, te compartimos los datos de tu envío:\n\n` +
                                                     `📦 *Empresa:* ${editForm.shippingCompany}\n` +
                                                     `🆔 *Guía/Tracking:* ${editForm.tracking}\n` +
                                                     (editForm.address ? `📍 *Dirección:* ${editForm.address}\n` : '') +
                                                     `📑 *Pedido:* ${selectedOrder?.folio}\n\n` +
+                                                    (editForm.guideFile && editForm.guideFile.startsWith('http') ? `🔗 *Ver Guía:* ${editForm.guideFile}\n\n` : '') +
                                                     `_Tu pedido está en camino. ¡Gracias por tu compra!_`;
-                                                window.open(`https://wa.me/${cleanPhone.length > 8 ? cleanPhone : '504' + cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
+                                                window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
                                             }}
                                         >
                                             Texto
@@ -994,12 +1032,20 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                                                 icon="share-alt"
                                                 onClick={async () => {
                                                     try {
+                                                        // Ayuda para búsqueda: Copiar nombre del cliente al portapapeles
+                                                        if (selectedOrder?.customerName) {
+                                                            await navigator.clipboard.writeText(selectedOrder.customerName);
+                                                            showToast(`Nombre '${selectedOrder.customerName}' copiado. Pégalo en el buscador de WhatsApp.`, "info");
+                                                        }
+
                                                         const response = await fetch(editForm.guideFile);
                                                         const blob = await response.blob();
                                                         const extension = editForm.guideFileType === 'pdf' ? 'pdf' : 'jpg';
                                                         const file = new File([blob], `guia-${selectedOrder?.folio}.${extension}`, { type: blob.type });
 
-                                                        const cleanPhone = editForm.sharePhone.replace(/\D/g, '');
+                                                        let cleanPhone = editForm.sharePhone.replace(/\D/g, '');
+                                                        if (cleanPhone.length === 8) cleanPhone = '504' + cleanPhone;
+
                                                         const message = `Guía de envío - Pedido ${selectedOrder?.folio}`;
 
                                                         if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {

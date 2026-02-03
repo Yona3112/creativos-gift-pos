@@ -744,6 +744,7 @@ export class StorageService {
       if (sale && sale.status === 'active') {
         const settings = await this.getSettings();
         sale.status = 'cancelled';
+        sale.updatedAt = this.getLocalNowISO();
         await db_engine.sales.put(sale);
 
         // Cancelar Cuenta de Crédito (Contrato) si existe
@@ -929,6 +930,7 @@ export class StorageService {
     const s = await db_engine.suppliers.get(id);
     if (s) {
       s.active = false;
+      s.updatedAt = this.getLocalNowISO();
       await db_engine.suppliers.put(s);
       const settings = await this.getSettings();
       if (settings.autoSync) this.triggerAutoSync();
@@ -950,6 +952,7 @@ export class StorageService {
     const c = await db_engine.consumables.get(id);
     if (c) {
       c.active = false;
+      c.updatedAt = this.getLocalNowISO();
       await db_engine.consumables.put(c);
       const settings = await this.getSettings();
       if (settings.autoSync) this.triggerAutoSync();
@@ -967,6 +970,7 @@ export class StorageService {
     const p = await db_engine.promotions.get(id);
     if (p) {
       p.active = false;
+      p.updatedAt = this.getLocalNowISO();
       await db_engine.promotions.put(p);
       const settings = await this.getSettings();
       if (settings.autoSync) this.triggerAutoSync();
@@ -995,6 +999,7 @@ export class StorageService {
     const u = await db_engine.users.get(id);
     if (u) {
       u.active = false;
+      u.updatedAt = this.getLocalNowISO();
       await db_engine.users.put(u);
       const settings = await this.getSettings();
       if (settings.autoSync) this.triggerAutoSync();
@@ -1334,6 +1339,7 @@ export class StorageService {
     if (c) {
       c.paidAmount += details.finalAmount;
       c.status = 'paid';
+      c.updatedAt = this.getLocalNowISO();
       c.payments.push({
         id: Date.now().toString(),
         date: this.getLocalNowISO(),
@@ -1535,6 +1541,7 @@ export class StorageService {
     const b = await db_engine.branches.get(id);
     if (b) {
       b.active = false;
+      b.updatedAt = this.getLocalNowISO();
       await db_engine.branches.put(b);
       const settings = await this.getSettings();
       if (settings.autoSync) this.triggerAutoSync();
@@ -1591,6 +1598,7 @@ export class StorageService {
     sale.folio = newFolio;
     sale.documentType = newDocType;
     sale.cai = newCAI;
+    sale.updatedAt = this.getLocalNowISO(); // CRITICAL: Update for multi-device sync
 
     // CASH FLOW TRACKING: Record payment date, method, and amount for today's cash flow
     sale.balancePaymentDate = this.getLocalNowISO(); // Payment received TODAY

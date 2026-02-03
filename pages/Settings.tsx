@@ -510,6 +510,21 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
               <Input label="Supabase URL" name="supabaseUrl" value={settings.supabaseUrl || ''} onChange={handleChange} className="text-xs" />
               <Input label="Supabase Key" type="password" name="supabaseKey" value={settings.supabaseKey || ''} onChange={handleChange} className="text-xs" />
 
+              {/* BOXFUL INTEGRATION SECTION */}
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+                  <i className="fas fa-truck mr-2"></i>Integración Boxful
+                </h3>
+                <Input label="Boxful API Key" name="boxfulApiKey" value={settings.boxfulApiKey || ''} onChange={handleChange} className="text-xs" placeholder="Ingresa tu API Key de Boxful" />
+                <div className="flex items-center justify-between mt-2 px-2 py-1 bg-amber-50 rounded-lg">
+                  <span className="text-[10px] font-bold text-amber-700">Modo Sandbox (Pruebas)</span>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" className="sr-only peer" checked={settings.boxfulSandbox || false} onChange={e => setSettings(s => s ? ({ ...s, boxfulSandbox: e.target.checked }) : null)} />
+                    <div className="w-7 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-amber-500"></div>
+                  </label>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
                 <Button size="sm" variant="secondary" onClick={handleBackup} icon="download" className="w-full">Respaldo Local</Button>
                 <Button size="sm" variant="primary" onClick={handleCloudSync} disabled={isSyncing} icon={isSyncing ? 'spinner fa-spin' : 'cloud-download-alt'} className="w-full">

@@ -297,8 +297,8 @@ function App() {
       }
     };
 
-    // Inicializar polling cada 15 segundos
-    pollInterval = setInterval(fastSync, 15000);
+    // Inicializar polling cada 45 segundos (Optimización para ahorro de Egress/Datos)
+    pollInterval = setInterval(fastSync, 45000);
 
     return () => {
       if (pollInterval) clearInterval(pollInterval);

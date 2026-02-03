@@ -265,9 +265,13 @@ export class SupabaseService {
             // Update local and cloud last sync time
             settingsToSync.lastCloudSync = now;
 
-            const { error } = await client.from('settings').upsert(settingsToSync);
-            if (!error) {
+            const { error: settingsError } = await client.from('settings').upsert(settingsToSync);
+            if (!settingsError) {
                 await db.saveSettings({ ...data.settings, lastCloudSync: now });
+                results['settings'] = 'OK';
+            } else {
+                console.error("❌ Error sincronizando ajustes (Settings):", settingsError);
+                results['settings'] = `Error: ${settingsError.message}`;
             }
         }
 
@@ -381,16 +385,17 @@ export class SupabaseService {
         const lastSync = settings.lastCloudSync;
         if (!lastSync) return this.pullAll(); // If no last sync, do full pull
 
-        // CLOCK DRIFT PROTECTION: Subtract 2 minutes from lastSync to account for client/server time difference
+        // CLOCK DRIFT PROTECTION: Reducido de 2 min a 30 seg para evitar redundancia masiva
         const lastSyncDate = new Date(lastSync);
-        const driftedSync = new Date(lastSyncDate.getTime() - (2 * 60 * 1000)).toISOString();
+        const driftedSync = new Date(lastSyncDate.getTime() - (30 * 1000)).toISOString();
 
         const now = await db.getLocalNowISO(); // Use unified timestamp
         const tables = [
             'products', 'categories', 'customers', 'sales', 'users',
             'branches', 'credits', 'promotions', 'suppliers',
             'consumables', 'quotes', 'cash_cuts', 'credit_notes',
-            'expenses', 'inventory_history', 'price_history', 'settings'
+            'expenses', 'settings'
+            // OPTIMIZACIÓN: Excluimos history del polling rápido porque es pesado y no crítico para ventas
         ];
 
         let totalChanges = 0;
@@ -401,8 +406,13 @@ export class SupabaseService {
                 // Stagger requests
                 await new Promise(r => setTimeout(r, 150));
 
+                // OPTIMIZACIÓN: Si es la tabla de productos, no traer la columna 'image' (Base64) en el polling rápido
+                const columns = table === 'products'
+                    ? 'id, code, name, description, price, cost, stock, minStock, enableLowStockAlert, categoryId, providerId, active, isTaxable, updatedAt'
+                    : '*';
+
                 const data = await this.requestWithRetry<any[]>(
-                    () => client.from(table).select('*').gte('updatedAt', driftedSync).limit(500),
+                    () => client.from(table).select(columns).gte('updatedAt', driftedSync).limit(500),
                     table
                 );
 
@@ -451,9 +461,17 @@ export class SupabaseService {
         for (const map of genericTables) {
             const data = delta[map.cloud];
             if (data && data.length > 0) {
-                // Use put to update or add directly to the database engine
                 for (const item of data) {
-                    await (db_engine as any)[map.dexie].put(item);
+                    // SMART MERGE: Use update if exists to preserve columns not included in delta (like product images)
+                    const table = (db_engine as any)[map.dexie];
+                    const id = item.id || (map.dexie === 'settings' ? 'main' : null);
+                    const existing = id ? await table.get(id) : null;
+
+                    if (existing) {
+                        await table.update(id, item);
+                    } else {
+                        await table.put(item);
+                    }
                 }
             }
         }
