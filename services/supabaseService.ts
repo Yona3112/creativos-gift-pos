@@ -163,11 +163,10 @@ export class SupabaseService {
         const settings = await db.getSettings();
         const lastPush = settings.lastCloudPush ? new Date(settings.lastCloudPush).getTime() : 0;
         const now = await db.getLocalNowISO();
-        console.log(`📤 SyncAll: Usando marca de tiempo PUSH dedicada: ${settings.lastCloudPush || '0'}`);
 
-        // SAFE PUSH DRIFT: We look back 30 seconds from the last push to ensure 
-        // no local changes were missed due to race conditions with pullDelta.
-        const safeLastPush = Math.max(0, lastPush - (30 * 1000));
+        // SAFE PUSH DRIFT: Aumentado a 10 MINUTOS para garantizar que si un teléfono 
+        // tiene el reloj levemente desincronizado, sus cambios siempre se suban.
+        const safeLastPush = Math.max(0, lastPush - (10 * 60 * 1000));
 
         const data = await db.getAllData();
         const results: any = {};
@@ -392,10 +391,10 @@ export class SupabaseService {
         if (!lastSync) return this.pullAll();
         console.log(`📥 PullDelta: Usando marca de tiempo PULL dedicada: ${lastSync}`);
 
-        // CLOCK DRIFT PROTECTION: Aumentado a 5 min para ser mucho más robusto
-        // ante dispositivos con relojes desincronizados.
+        // CLOCK DRIFT PROTECTION: Aumentado a 60 min (1 hora) para máxima robustez.
+        // Esto previene que pedidos se queden "perdidos" por desincronización de reloj.
         const lastSyncDate = new Date(lastSync);
-        const driftedSync = new Date(lastSyncDate.getTime() - (5 * 60 * 1000)).toISOString();
+        const driftedSync = new Date(lastSyncDate.getTime() - (60 * 60 * 1000)).toISOString();
 
         const now = await db.getLocalNowISO(); // Use unified timestamp
         const tables = [

@@ -1518,6 +1518,11 @@ export class StorageService {
     sale.fulfillmentStatus = status;
     if (shippingDetails) sale.shippingDetails = { ...sale.shippingDetails, ...shippingDetails } as ShippingDetails;
 
+    // AUTO-CLOSE ORDER: If delivered and fully paid, it's no longer an active "order"
+    if (status === 'delivered' && (sale.balance || 0) <= 0) {
+      sale.isOrder = false;
+    }
+
     // Record HISTORY of status change
     if (!sale.fulfillmentHistory) sale.fulfillmentHistory = [];
 

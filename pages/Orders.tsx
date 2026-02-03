@@ -72,16 +72,32 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
             const { SupabaseService } = await import('../services/supabaseService');
             const sett = await db.getSettings();
             if (sett.supabaseUrl && sett.supabaseKey) {
+                // INCREMENTAL SYNC
                 await SupabaseService.syncAll();
                 const changed = await SupabaseService.pullDelta();
-                if (changed && changed > 0 && onUpdate) {
-                    onUpdate();
-                }
-                showToast("Sincronización completada", "success");
+                if (onUpdate) onUpdate();
+                showToast("Sincronización rápida completada", "success");
             }
         } catch (e) {
             console.error("❌ Error en sync manual:", e);
             showToast("Fallo al sincronizar", "error");
+        } finally {
+            setIsSyncing(false);
+        }
+    };
+
+    const handleDeepRefresh = async () => {
+        if (!window.confirm("¿Deseas realizar una descarga profunda? Esto bajará todos los pedidos de la nube para corregir cualquier diferencia. Puede tardar unos segundos.")) return;
+
+        setIsSyncing(true);
+        try {
+            const { SupabaseService } = await import('../services/supabaseService');
+            await SupabaseService.pullAll();
+            if (onUpdate) onUpdate();
+            showToast("Descarga profunda completada con éxito", "success");
+        } catch (e) {
+            console.error("❌ Error en deep refresh:", e);
+            showToast("Error en descarga profunda", "error");
         } finally {
             setIsSyncing(false);
         }
@@ -94,13 +110,16 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
             // Exclude cancelled/returned sales
             if (s.status === 'cancelled' || s.status === 'returned') return false;
 
-            // Include if explicitly marked as order
+            // NEW RULE: Hide if delivered and fully paid (it belongs to Sales History now, not Orders)
+            if (s.fulfillmentStatus === 'delivered' && (s.balance || 0) <= 0) return false;
+
+            // Include if explicitly marked as order (Pending work or Pending collection)
             if (s.isOrder === true) return true;
 
-            // Include if has pending balance (partial payment)
+            // Include if has pending balance (even if delivered, we need to collect)
             if (s.balance && s.balance > 0) return true;
 
-            // Include if has a fulfillment status that is NOT delivered (workflow in progress)
+            // Include if workflow in progress (not delivered)
             if (s.fulfillmentStatus && s.fulfillmentStatus !== 'delivered') return true;
 
             return false;
@@ -551,9 +570,17 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                         onClick={handleManualSync}
                         disabled={isSyncing}
                         className={`p-2 rounded-lg text-xs font-bold transition-all ${isSyncing ? 'text-primary' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
-                        title="Sincronizar ahora"
+                        title="Sincronización rápida"
                     >
                         <i className={`fas fa-${isSyncing ? 'sync-alt' : 'cloud-download-alt'}`}></i>
+                    </button>
+                    <button
+                        onClick={handleDeepRefresh}
+                        disabled={isSyncing}
+                        className={`p-2 rounded-lg text-xs font-bold transition-all ${isSyncing ? 'text-primary' : 'bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-100'}`}
+                        title="Descarga profunda (Si un pedido no se actualiza)"
+                    >
+                        <i className="fas fa-database"></i>
                     </button>
                 </div>
             </div>
