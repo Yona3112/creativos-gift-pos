@@ -506,6 +506,13 @@ function App() {
         {renderPage()}
       </Layout>
       <ToastContainer />
+      {isSyncing && (
+        <div className="fixed top-2 right-2 z-[9999] pointer-events-none">
+          <div className="bg-primary/20 p-2 rounded-full animate-pulse transition-all">
+            <div className="bg-primary w-1.5 h-1.5 rounded-full shadow-[0_0_8px_rgba(79,70,229,0.5)]"></div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

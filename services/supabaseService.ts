@@ -476,7 +476,12 @@ export class SupabaseService {
                         const local = await table.get('main');
                         if (local) {
                             // Only update non-sync fields from cloud
-                            const { lastCloudSync, lastCloudPush, deviceId, ...cloudData } = item;
+                            const cloudData = JSON.parse(JSON.stringify(item));
+                            delete cloudData.lastCloudSync;
+                            delete cloudData.lastCloudPush;
+                            delete cloudData.deviceId;
+                            delete cloudData.id; // IMPORTANT: Never update primary key 'main'
+
                             await table.update('main', cloudData);
                         } else {
                             await table.put(item);
