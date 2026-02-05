@@ -535,10 +535,27 @@ export class SupabaseService {
                     ? 'id, code, name, description, price, cost, stock, minStock, enableLowStockAlert, categoryId, providerId, active, isTaxable, updatedAt'
                     : '*';
 
+                // OPTIMIZACIÓN EXTREMA: Si es la tabla de ventas, pedir lotes muy pequeños
+                const limitRows = table === 'sales' ? 20 : 50;
+
                 const data = await this.requestWithRetry<any[]>(
-                    () => client.from(table).select(columns).gte('updatedAt', driftedSync).limit(50),
+                    () => client.from(table).select(columns).gte('updatedAt', driftedSync).limit(limitRows),
                     table
                 );
+
+                // Si aún así falla la tabla de ventas por timeout, intentamos con solo 5 (último recurso)
+                if (data === null && table === 'sales') {
+                    console.warn("⚠️ Reintentando ventas con límite ultra-bajo (5 registros)...");
+                    const ultraLowData = await this.requestWithRetry<any[]>(
+                        () => client.from(table).select(columns).gte('updatedAt', driftedSync).limit(5),
+                        table
+                    );
+                    if (ultraLowData) {
+                        results[table] = ultraLowData;
+                        totalChanges += ultraLowData.length;
+                    }
+                    continue;
+                }
 
                 if (data && data.length > 0) {
                     results[table] = data;
