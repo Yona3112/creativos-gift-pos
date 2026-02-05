@@ -56,6 +56,17 @@ export async function subscribeToSales(onSaleChange: SalesChangeCallback): Promi
                     if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
                         const remoteSale = payload.new as Sale;
 
+                        // CRITICAL: Validate remote sale has required fields
+                        if (!remoteSale || !remoteSale.id) {
+                            console.warn('⚠️ [Realtime] Datos de venta inválidos, ignorando');
+                            return;
+                        }
+
+                        // Ensure items is always an array (Supabase may return null)
+                        if (!Array.isArray(remoteSale.items)) {
+                            remoteSale.items = [];
+                        }
+
                         // Conflict resolution: Only apply if remote is newer
                         const localSale = await db_engine.sales.get(remoteSale.id);
 
