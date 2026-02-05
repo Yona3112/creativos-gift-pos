@@ -11,7 +11,8 @@ export class SupabaseService {
         let lastError: any = null;
         for (let attempt = 0; attempt < maxRetries; attempt++) {
             try {
-                const { data, error, status, statusText } = await operation();
+                const response = await operation();
+                const { data, error, status } = response;
 
                 if (error) {
                     console.error(`🚨 [${tableName}] Error de Supabase (Status ${status}):`, {
@@ -21,18 +22,19 @@ export class SupabaseService {
                         hint: error.hint
                     });
 
-                    // PGRST002: Service Unavailable / Database starting up
-                    // 503/502: Gateway timeout or Load balancer issues
-                    if (error.code === 'PGRST002' || status === 503 || status === 502 || error.message?.includes('timeout')) {
+                    // Errores de Timeout o saturación (Reintentables)
+                    if (error.code === 'PGRST002' || status === 503 || status === 502 || error.message?.includes('timeout') || error.code === '57014') {
                         const delay = Math.pow(2, attempt) * 1500 + (Math.random() * 1000);
-                        console.warn(`🔄 [${tableName}] Reintentando en ${Math.round(delay)}ms...`);
+                        console.warn(`🔄 [${tableName}] Reintentando en ${Math.round(delay)}ms (Intento ${attempt + 1}/${maxRetries})...`);
                         await new Promise(r => setTimeout(r, delay));
                         lastError = error;
                         continue;
                     }
                     throw error;
                 }
-                return data;
+
+                // CRITICAL: Return data if present, or an empty array/object to signal success (since upsert might return null data)
+                return data !== null && data !== undefined ? data : ([] as unknown as T);
             } catch (err: any) {
                 lastError = err;
                 console.error(`⚠️ [${tableName}] Excepción en intento ${attempt + 1}:`, err.message || err);
@@ -41,8 +43,8 @@ export class SupabaseService {
                 await new Promise(r => setTimeout(r, delay));
             }
         }
-        console.error(`❌ [${tableName}] Falló tras reintentos:`, lastError);
-        return null;
+        console.error(`❌ [${tableName}] Falló definitivamente tras ${maxRetries} reintentos:`, lastError);
+        return null; // Return null to signal hard failure
     }
 
     /**
