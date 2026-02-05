@@ -45,11 +45,15 @@ export class SupabaseService {
         for (let i = 0; i < records.length; i += chunkSize) {
             const chunk = records.slice(i, i + chunkSize);
 
-            // Saneamiento Crítico: Asegurar que items y payments no sean null antes de subir
+            // Saneamiento Selectivo: Solo tablas que poseen estas columnas
             const sanitizedChunk = chunk.map(record => {
                 const cleaned = { ...record };
-                if (cleaned.items === null || cleaned.items === undefined) cleaned.items = [];
-                if (cleaned.payments === null || cleaned.payments === undefined) cleaned.payments = [];
+                if (tableName === 'sales' || tableName === 'quotes') {
+                    if (cleaned.items === null || cleaned.items === undefined) cleaned.items = [];
+                }
+                if (tableName === 'credits' || tableName === 'sales') {
+                    if (cleaned.payments === null || cleaned.payments === undefined) cleaned.payments = [];
+                }
                 return cleaned;
             });
 
@@ -501,10 +505,14 @@ export class SupabaseService {
                     const id = item.id;
                     const existing = id ? await table.get(id) : null;
 
-                    // Saneamiento al recibir de la nube
+                    // Saneamiento selectivo al recibir de la nube
                     const sanitizedItem = { ...item };
-                    if (sanitizedItem.items === null || sanitizedItem.items === undefined) sanitizedItem.items = [];
-                    if (sanitizedItem.payments === null || sanitizedItem.payments === undefined) sanitizedItem.payments = [];
+                    if (map.dexie === 'sales' || map.dexie === 'quotes') {
+                        if (sanitizedItem.items === null || sanitizedItem.items === undefined) sanitizedItem.items = [];
+                    }
+                    if (map.dexie === 'credits') {
+                        if (sanitizedItem.payments === null || sanitizedItem.payments === undefined) sanitizedItem.payments = [];
+                    }
 
                     if (existing) {
                         const remoteU = sanitizedItem.updatedAt ? new Date(sanitizedItem.updatedAt).getTime() : 0;
