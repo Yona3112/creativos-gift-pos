@@ -219,7 +219,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, 
     const topProducts = useMemo(() => {
         const counts: Record<string, { name: string, qty: number }> = {};
         sales.filter(s => s.status === 'active' && getLocalDate(new Date(s.date)).startsWith(currentMonthPrefix)).forEach(s => {
-            s.items.forEach(i => {
+            (s.items || []).forEach(i => {
                 const id = i.id;
                 if (counts[id]) {
                     counts[id].qty += i.quantity;
@@ -546,7 +546,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, 
                                                     filtered.forEach(s => {
                                                         sec += `• 🆔 *${s.folio}* | 👤 ${s.customerName || 'C. Final'}\n`;
                                                         // Listamos items principales
-                                                        const itemsDesc = s.items.map(i => `${i.quantity}x ${i.name}`).join(', ');
+                                                        const itemsDesc = (s.items || []).map(i => `${i.quantity}x ${i.name}`).join(', ');
                                                         sec += `  📦 _${itemsDesc.length > 40 ? itemsDesc.substring(0, 40) + '...' : itemsDesc}_\n`;
                                                     });
                                                     sec += `\n`;

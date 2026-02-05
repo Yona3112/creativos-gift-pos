@@ -113,7 +113,7 @@ export const Reports: React.FC<ReportsProps> = ({ sales: allSales, products: all
         const map: Record<string, any> = {};
 
         filteredSales.forEach(sale => {
-            sale.items.forEach(item => {
+            (sale.items || []).forEach(item => {
                 const id = item.id;
                 if (!map[id]) {
                     map[id] = {
@@ -142,7 +142,7 @@ export const Reports: React.FC<ReportsProps> = ({ sales: allSales, products: all
     const categoryData = useMemo(() => {
         const data: Record<string, number> = {};
         filteredSales.forEach(s => {
-            s.items.forEach(i => {
+            (s.items || []).forEach(i => {
                 const prod = allProducts.find(p => p.id === i.id);
                 const catName = allCategories.find(c => c.id === prod?.categoryId)?.name || 'Sin Categoría';
                 data[catName] = (data[catName] || 0) + (i.price * i.quantity);

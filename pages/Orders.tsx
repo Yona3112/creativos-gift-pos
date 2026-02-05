@@ -695,7 +695,7 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                                     <div className="flex-1 overflow-y-auto space-y-1 p-0.5 pb-10 scrollbar-thin">
                                         {colOrders.map(order => {
                                             // Get unique categories for this order
-                                            const orderCategories = [...new Set(order.items.map(item => item.categoryId))];
+                                            const orderCategories = [...new Set((order.items || []).map(item => item.categoryId))];
                                             const orderCatDetails = orderCategories.map(catId => categories.find(c => c.id === catId)).filter(Boolean);
 
                                             return (
@@ -795,7 +795,7 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                     <div className="grid grid-cols-1 gap-3">
                         {filteredOrders.map(order => {
                             // Get unique categories for this order
-                            const orderCategories = [...new Set(order.items.map(item => item.categoryId))];
+                            const orderCategories = [...new Set((order.items || []).map(item => item.categoryId))];
                             const orderCatDetails = orderCategories.map(catId => categories.find(c => c.id === catId)).filter(Boolean);
 
                             return (
@@ -831,7 +831,7 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                                                     </span>
                                                 )}
                                             </div>
-                                            <div className="text-sm text-gray-500 mt-1">{order.items.map(i => `${i.quantity}x ${i.name}`).join(', ')}</div>
+                                            <div className="text-sm text-gray-500 mt-1">{(order.items || []).map(i => `${i.quantity}x ${i.name}`).join(', ')}</div>
                                         </div>
 
                                         {order.shippingDetails?.trackingNumber && (
@@ -905,7 +905,7 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                                 )}
                             </div>
                             <ul className="list-disc pl-4 font-medium text-gray-800 space-y-1">
-                                {selectedOrder?.items.map((item, idx) => (
+                                {(selectedOrder?.items || []).map((item, idx) => (
                                     <li key={idx} className="leading-tight">{item.quantity} x {item.name} {item.notes && <span className="text-gray-500 italic">({item.notes})</span>}</li>
                                 ))}
                             </ul>
