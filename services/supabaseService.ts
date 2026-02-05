@@ -536,7 +536,7 @@ export class SupabaseService {
                     : '*';
 
                 const data = await this.requestWithRetry<any[]>(
-                    () => client.from(table).select(columns).gte('updatedAt', driftedSync).limit(500),
+                    () => client.from(table).select(columns).gte('updatedAt', driftedSync).limit(50),
                     table
                 );
 

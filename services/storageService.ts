@@ -132,6 +132,34 @@ export class StorageService {
         active: true
       });
     }
+
+    // NEW: Limpieza de imágenes en ventas existentes para optimizar sincronización
+    await this.cleanupSalesData();
+  }
+
+  /**
+   * Elimina las imágenes Base64 de las ventas antiguas en Dexie.
+   * Esto soluciona los errores de 'Statement Timeout' en Supabase.
+   */
+  private async cleanupSalesData() {
+    try {
+      const sales = await db_engine.sales.toArray();
+      const bulkySales = sales.filter(s => s.items?.some(i => (i as any).image));
+
+      if (bulkySales.length > 0) {
+        console.log(`🧹 Limpiando imágenes de ${bulkySales.length} ventas pesadas...`);
+        for (const sale of bulkySales) {
+          const cleanedItems = sale.items.map(item => {
+            const { image, ...rest } = item as any;
+            return rest;
+          });
+          await db_engine.sales.update(sale.id, { items: cleanedItems });
+        }
+        console.log("✅ Limpieza de ventas completada.");
+      }
+    } catch (e) {
+      console.warn("Error en cleanupSalesData", e);
+    }
   }
 
   private async migrateFromLocalStorage() {
@@ -601,7 +629,11 @@ export class StorageService {
         id: `sale-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
         folio,
         date: this.getLocalNowISO(),
-        items: data.items || [],
+        items: (data.items || []).map(item => {
+          const cleanedItem = { ...item };
+          delete cleanedItem.image; // Eliminar imagen pesada para no duplicar en cada venta
+          return cleanedItem;
+        }),
         subtotal: data.subtotal || 0,
         taxAmount: data.taxAmount || 0,
         discount: data.discount || 0,
