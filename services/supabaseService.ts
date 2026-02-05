@@ -1,4 +1,3 @@
-
 import { createClient } from '@supabase/supabase-js';
 import { db, db_engine } from './storageService';
 
@@ -39,32 +38,42 @@ export class SupabaseService {
     }
 
     /**
+     * Saneamiento Estricto Centralizado: Solo enviar columnas que existen en el esquema de Supabase.
+     */
+    private static sanitizeRecord(tableName: string, record: any): any {
+        const cleaned = { ...record };
+
+        // 1. Eliminar metadatos exclusivos de Dexie que NO existen en ninguna tabla de Supabase
+        delete (cleaned as any).lastCloudSync;
+        delete (cleaned as any).lastCloudPush;
+        delete (cleaned as any).deviceId;
+
+        // 2. Manejo estricto de 'items' (solo en sales y quotes)
+        if (tableName !== 'sales' && tableName !== 'quotes') {
+            delete cleaned.items;
+        } else if (cleaned.items === null || cleaned.items === undefined) {
+            cleaned.items = [];
+        }
+
+        // 3. Manejo estricto de 'payments' (solo en credits)
+        if (tableName !== 'credits') {
+            delete cleaned.payments;
+        } else if (cleaned.payments === null || cleaned.payments === undefined) {
+            cleaned.payments = [];
+        }
+
+        return cleaned;
+    }
+
+    /**
      * Batch upsert to avoid compute limits/timeouts
      */
     private static async batchUpsert(client: any, tableName: string, records: any[], chunkSize = 50): Promise<boolean> {
         for (let i = 0; i < records.length; i += chunkSize) {
             const chunk = records.slice(i, i + chunkSize);
 
-            // Saneamiento Estricto: Solo enviar columnas que existen en el esquema de Supabase
-            const sanitizedChunk = chunk.map(record => {
-                const cleaned = { ...record };
-
-                // Si la tabla NO es de ventas o cotizaciones, ELIMINAR 'items' para evitar error 400
-                if (tableName !== 'sales' && tableName !== 'quotes') {
-                    delete cleaned.items;
-                } else if (cleaned.items === null || cleaned.items === undefined) {
-                    cleaned.items = [];
-                }
-
-                // Si la tabla NO es de créditos, ELIMINAR 'payments' para evitar error 400
-                if (tableName !== 'credits') {
-                    delete cleaned.payments;
-                } else if (cleaned.payments === null || cleaned.payments === undefined) {
-                    cleaned.payments = [];
-                }
-
-                return cleaned;
-            });
+            // Saneamiento Estricto Centralizado
+            const sanitizedChunk = chunk.map(record => this.sanitizeRecord(tableName, record));
 
             console.log(`📦 [${tableName}] Enviando lote ${Math.floor(i / chunkSize) + 1} (${chunk.length} registros)...`);
 
@@ -241,8 +250,9 @@ export class SupabaseService {
                     if (table.name === 'users') {
                         let successCount = 0;
                         for (const user of recordsToSync) {
+                            const sanitizedUser = this.sanitizeRecord('users', user);
                             const res = await this.requestWithRetry<any>(
-                                () => client.from('users').upsert(user, { onConflict: 'id' }),
+                                () => client.from('users').upsert(sanitizedUser, { onConflict: 'id' }),
                                 'users'
                             );
                             if (res !== null) successCount++;
@@ -514,20 +524,8 @@ export class SupabaseService {
                     const id = item.id;
                     const existing = id ? await table.get(id) : null;
 
-                    // Saneamiento estricto al recibir de la nube
-                    const sanitizedItem = { ...item };
-
-                    if (map.dexie !== 'sales' && map.dexie !== 'quotes') {
-                        delete sanitizedItem.items;
-                    } else if (sanitizedItem.items === null || sanitizedItem.items === undefined) {
-                        sanitizedItem.items = [];
-                    }
-
-                    if (map.dexie !== 'credits') {
-                        delete sanitizedItem.payments;
-                    } else if (sanitizedItem.payments === null || sanitizedItem.payments === undefined) {
-                        sanitizedItem.payments = [];
-                    }
+                    // Saneamiento estricto centralizado al recibir de la nube
+                    const sanitizedItem = this.sanitizeRecord(map.dexie, item);
 
                     if (existing) {
                         const remoteU = sanitizedItem.updatedAt ? new Date(sanitizedItem.updatedAt).getTime() : 0;
