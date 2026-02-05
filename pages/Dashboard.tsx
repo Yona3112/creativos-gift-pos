@@ -77,12 +77,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, 
     const stats = useMemo(() => {
         // --- NEW REVENUE-BASED LOGIC ---
         // 1. Initial deposits from sales created today
-        const initialDepositsToday = sales
+        const initialDepositsToday = (sales || [])
             .filter(s => getLocalDate(new Date(s.date)) === today && s.status === 'active')
             .reduce((acc, s) => acc + (s.deposit || 0), 0);
 
         // 2. Balance payments for orders completed today
-        const balancePaymentsToday = sales
+        const balancePaymentsToday = (sales || [])
             .filter(s => s.balancePaymentDate && getLocalDate(new Date(s.balancePaymentDate)) === today && s.status === 'active')
             .reduce((acc, s) => acc + (s.balancePaid || 0), 0);
 
@@ -104,11 +104,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, 
         const lowStockConsumables = (consumables || []).filter(c => (c.stock || 0) <= (c.minStock || 0));
 
         // Orders Logic
-        const pendingOrders = sales.filter(s => s.fulfillmentStatus === 'pending' && s.status === 'active').length;
-        const designOrders = sales.filter(s => s.fulfillmentStatus === 'design' && s.status === 'active').length;
-        const printingOrders = sales.filter(s => s.fulfillmentStatus === 'printing' && s.status === 'active').length;
-        const productionOrders = sales.filter(s => s.fulfillmentStatus === 'production' && s.status === 'active').length;
-        const readyOrders = sales.filter(s => s.fulfillmentStatus === 'ready' && s.status === 'active').length;
+        const pendingOrders = (sales || []).filter(s => s.fulfillmentStatus === 'pending' && s.status === 'active').length;
+        const designOrders = (sales || []).filter(s => s.fulfillmentStatus === 'design' && s.status === 'active').length;
+        const printingOrders = (sales || []).filter(s => s.fulfillmentStatus === 'printing' && s.status === 'active').length;
+        const productionOrders = (sales || []).filter(s => s.fulfillmentStatus === 'production' && s.status === 'active').length;
+        const readyOrders = (sales || []).filter(s => s.fulfillmentStatus === 'ready' && s.status === 'active').length;
 
         // Credits Logic
         const totalReceivable = (credits || []).filter(c => c.status !== 'cancelled' && c.status !== 'paid').reduce((acc, c) => acc + ((c.totalAmount || 0) - (c.paidAmount || 0)), 0);
@@ -138,11 +138,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, 
 
         return last7Days.map(dateStr => {
             // Revenue breakdown for this specific day
-            const initialDeposits = sales
+            const initialDeposits = (sales || [])
                 .filter(s => getLocalDate(new Date(s.date)) === dateStr && s.status === 'active')
                 .reduce((acc, s) => acc + (s.deposit || 0), 0);
 
-            const balancePayments = sales
+            const balancePayments = (sales || [])
                 .filter(s => s.balancePaymentDate && getLocalDate(new Date(s.balancePaymentDate)) === dateStr && s.status === 'active')
                 .reduce((acc, s) => acc + (s.balancePaid || 0), 0);
 
@@ -160,7 +160,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, 
             // proportional to the amount collected today.
 
             // 1. Cost from newly created sales today (proportional to deposit/total)
-            const salesCreatedToday = sales.filter(s => getLocalDate(new Date(s.date)) === dateStr && s.status === 'active');
+            const salesCreatedToday = (sales || []).filter(s => getLocalDate(new Date(s.date)) === dateStr && s.status === 'active');
             const proportionalCostNewSales = salesCreatedToday.reduce((acc, s) => {
                 const totalOrderCost = (s.items || []).reduce((sum, item) => sum + ((item.cost || 0) * item.quantity), 0);
                 const paymentRatio = s.total > 0 ? (s.deposit || 0) / s.total : 1;
@@ -168,7 +168,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, 
             }, 0);
 
             // 2. Cost from balances paid today
-            const salesBalancedToday = sales.filter(s => s.balancePaymentDate && getLocalDate(new Date(s.balancePaymentDate)) === dateStr && s.status === 'active');
+            const salesBalancedToday = (sales || []).filter(s => s.balancePaymentDate && getLocalDate(new Date(s.balancePaymentDate)) === dateStr && s.status === 'active');
             const proportionalCostBalances = salesBalancedToday.reduce((acc, s) => {
                 const totalOrderCost = (s.items || []).reduce((sum, item) => sum + ((item.cost || 0) * item.quantity), 0);
                 const paymentRatio = s.total > 0 ? (s.balancePaid || 0) / s.total : 0;
