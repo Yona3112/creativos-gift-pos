@@ -322,7 +322,7 @@ export class NotificationService {
         // Calculate items sold per product
         const salesMap = new Map<string, number>();
         recentSales.forEach(sale => {
-            sale.items.forEach(item => {
+            (sale.items || []).forEach(item => {
                 const current = salesMap.get(item.id) || 0;
                 salesMap.set(item.id, current + item.quantity);
             });
