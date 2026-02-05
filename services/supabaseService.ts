@@ -45,13 +45,15 @@ export class SupabaseService {
         for (let i = 0; i < records.length; i += chunkSize) {
             const chunk = records.slice(i, i + chunkSize);
 
-            // Saneamiento Selectivo: Solo tablas que poseen estas columnas
+            // Saneamiento Selectivo: Solo tablas que poseen estas columnas en Supabase
             const sanitizedChunk = chunk.map(record => {
                 const cleaned = { ...record };
+                // 'items' solo existe en sales y quotes
                 if (tableName === 'sales' || tableName === 'quotes') {
                     if (cleaned.items === null || cleaned.items === undefined) cleaned.items = [];
                 }
-                if (tableName === 'credits' || tableName === 'sales') {
+                // 'payments' solo existe en credits
+                if (tableName === 'credits') {
                     if (cleaned.payments === null || cleaned.payments === undefined) cleaned.payments = [];
                 }
                 return cleaned;
