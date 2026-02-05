@@ -303,8 +303,9 @@ function App() {
       }
     };
 
-    // Inicializar polling cada 15 segundos (Fallback when Realtime is unavailable)
-    pollInterval = setInterval(fastSync, 15000);
+    // Inicializar polling cada 60 segundos (Relajado para evitar 504/Timeout)
+    // Con Realtime activo, el polling solo sirve como respaldo
+    pollInterval = setInterval(fastSync, 60000);
 
     return () => {
       if (pollInterval) clearInterval(pollInterval);

@@ -520,11 +520,10 @@ export class SupabaseService {
 
         const now = await db.getLocalNowISO(); // Use unified timestamp
         const tables = [
-            'products', 'categories', 'customers', 'sales', 'users',
-            'branches', 'credits', 'promotions', 'suppliers',
+            'categories', 'branches', 'products', 'users', 'customers',
+            'sales', 'credits', 'promotions', 'suppliers',
             'consumables', 'quotes', 'cash_cuts', 'credit_notes',
             'expenses', 'settings'
-            // OPTIMIZACIÓN: Excluimos history del polling rápido porque es pesado y no crítico para ventas
         ];
 
         let totalChanges = 0;
@@ -568,6 +567,10 @@ export class SupabaseService {
                     results[table] = data;
                     totalChanges += data.length;
                     console.log(`📥 ${table}: ${data.length} cambios detectados desde ${driftedSync}`);
+                } else if (data === null) {
+                    // Si la tabla falló permanentemente (null), salimos del loop para no saturar más el gateway
+                    console.warn(`🛑 [pullDelta] Abortando sincronización parcial por saturación en tabla ${table}`);
+                    break;
                 }
             } catch (err) {
                 console.warn(`⚠️ Excepción en pullDelta para tabla ${table}:`, err);
