@@ -106,21 +106,14 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
     };
 
     // Simplified Order List Filter
-    // Include sales that are: (1) not cancelled, AND (2) are orders, have balance, or are in a non-delivered workflow state
+    // Include sales that are: (1) not cancelled, AND (2) are orders, have balance, or are in workflow
     const orderSales = useMemo(() => {
         return allSales.filter(s => {
             // Exclude cancelled/returned sales
             if (s.status === 'cancelled' || s.status === 'returned') return false;
 
-            // VISIBILITY RULE: 
-            // 1. If we are explicitly filtering by "Delivered" state, show them all
-            if (statusFilter === 'delivered') {
-                return s.fulfillmentStatus === 'delivered';
-            }
-
-            // 2. Otherwise (Board view or other filters), hide if delivered and fully paid
-            // UNLESS the user has toggled "showDelivered" to see archived orders
-            if (!showDelivered && s.fulfillmentStatus === 'delivered' && (s.balance || 0) <= 0) return false;
+            // ALWAYS include delivered orders (they go to "Entregados" column)
+            if (s.fulfillmentStatus === 'delivered') return true;
 
             // Include if explicitly marked as order (Pending work or Pending collection)
             if (s.isOrder === true) return true;
@@ -133,7 +126,7 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
 
             return false;
         });
-    }, [allSales, showDelivered]);
+    }, [allSales]);
 
     // Track local changes removed to ensure single source of truth from props
     // const [localOrders, setLocalOrders] = useState<Record<string, Partial<Sale>>>({});
