@@ -20,7 +20,6 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
     const [dateFilter, setDateFilter] = useState<string>('');
     const [isSyncing, setIsSyncing] = useState(false);
     const [categoryFilter, setCategoryFilter] = useState<string>('all');
-    const [showDelivered, setShowDelivered] = useState(false);
 
     // Filter states
     const [datePreset, setDatePreset] = useState<'all' | 'today' | 'yesterday' | 'week' | 'month'>('all');
@@ -74,8 +73,9 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
             const sett = await db.getSettings();
             if (sett.supabaseUrl && sett.supabaseKey) {
                 // INCREMENTAL SYNC
+                // CRITICAL: Always PULL before PUSH to avoid overwriting cloud with stale local data
+                await SupabaseService.pullDelta();
                 await SupabaseService.syncAll();
-                const changed = await SupabaseService.pullDelta();
                 if (onUpdate) onUpdate();
                 showToast("Sincronización rápida completada", "success");
             }
@@ -111,8 +111,15 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
             // Exclude cancelled/returned sales
             if (s.status === 'cancelled' || s.status === 'returned') return false;
 
-            // NEW RULE: Hide if delivered and fully paid (unless showDelivered is toggled)
-            if (!showDelivered && s.fulfillmentStatus === 'delivered' && (s.balance || 0) <= 0) return false;
+            // VISIBILITY RULE: 
+            // 1. If we are explicitly filtering by "Delivered" state, show them all
+            if (statusFilter === 'delivered') {
+                return s.fulfillmentStatus === 'delivered';
+            }
+
+            // 2. Otherwise (Board view or other filters), hide if delivered and fully paid
+            // This keeps the workboard clean of "archived" orders
+            if (s.fulfillmentStatus === 'delivered' && (s.balance || 0) <= 0) return false;
 
             // Include if explicitly marked as order (Pending work or Pending collection)
             if (s.isOrder === true) return true;
@@ -122,9 +129,6 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
 
             // Include if workflow in progress (not delivered)
             if (s.fulfillmentStatus && s.fulfillmentStatus !== 'delivered') return true;
-
-            // If showDelivered is on, include them too
-            if (showDelivered && s.fulfillmentStatus === 'delivered') return true;
 
             return false;
         });
@@ -652,19 +656,6 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                         {preset.label}
                     </button>
                 ))}
-
-                <div className="w-px h-4 bg-gray-200 self-center mx-1"></div>
-
-                <button
-                    onClick={() => setShowDelivered(!showDelivered)}
-                    className={`whitespace-nowrap px-2.5 py-1 rounded-lg font-bold text-[10px] uppercase tracking-tighter transition-all flex items-center gap-1 ${showDelivered
-                        ? 'bg-green-600 text-white shadow-sm'
-                        : 'bg-white text-gray-500 border border-gray-100 hover:border-gray-300'
-                        }`}
-                >
-                    <i className={`fas fa-check-double text-[8px]`}></i>
-                    Ver Entregados
-                </button>
             </div>
 
             {viewMode === 'list' && (
