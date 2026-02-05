@@ -20,6 +20,7 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
     const [dateFilter, setDateFilter] = useState<string>('');
     const [isSyncing, setIsSyncing] = useState(false);
     const [categoryFilter, setCategoryFilter] = useState<string>('all');
+    const [showDelivered, setShowDelivered] = useState(false);
 
     // Filter states
     const [datePreset, setDatePreset] = useState<'all' | 'today' | 'yesterday' | 'week' | 'month'>('all');
@@ -118,8 +119,8 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
             }
 
             // 2. Otherwise (Board view or other filters), hide if delivered and fully paid
-            // This keeps the workboard clean of "archived" orders
-            if (s.fulfillmentStatus === 'delivered' && (s.balance || 0) <= 0) return false;
+            // UNLESS the user has toggled "showDelivered" to see archived orders
+            if (!showDelivered && s.fulfillmentStatus === 'delivered' && (s.balance || 0) <= 0) return false;
 
             // Include if explicitly marked as order (Pending work or Pending collection)
             if (s.isOrder === true) return true;
@@ -132,7 +133,7 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
 
             return false;
         });
-    }, [allSales]);
+    }, [allSales, showDelivered]);
 
     // Track local changes removed to ensure single source of truth from props
     // const [localOrders, setLocalOrders] = useState<Record<string, Partial<Sale>>>({});
@@ -589,6 +590,14 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                         title="Descarga profunda (Si un pedido no se actualiza)"
                     >
                         <i className="fas fa-database"></i>
+                    </button>
+                    <button
+                        onClick={() => setShowDelivered(!showDelivered)}
+                        className={`p-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${showDelivered ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                        title={showDelivered ? 'Ocultar pedidos entregados' : 'Ver pedidos entregados archivados'}
+                    >
+                        <i className={`fas fa-${showDelivered ? 'eye-slash' : 'archive'}`}></i>
+                        {showDelivered ? 'Ocultar Entregados' : 'Ver Entregados'}
                     </button>
                 </div>
             </div>

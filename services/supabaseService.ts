@@ -500,11 +500,19 @@ export class SupabaseService {
                         // ONLY update if remote is strictly newer
                         if (remoteU > localU) {
                             await table.update(id, item);
+                            // Enhanced logging for sales to debug sync issues
+                            if (map.dexie === 'sales') {
+                                console.log(`✅ [sales] Actualizado: ${item.folio || item.id} → ${item.fulfillmentStatus || 'N/A'}`);
+                            }
                         } else {
                             // console.log(`[mergeDelta] Ignored older remote update for ${map.dexie}:${id}`);
                         }
                     } else {
                         await table.put(item);
+                        // Enhanced logging for new sales from cloud
+                        if (map.dexie === 'sales') {
+                            console.log(`🆕 [sales] Nuevo desde nube: ${item.folio || item.id} → ${item.fulfillmentStatus || 'N/A'}`);
+                        }
                     }
                 }
             }
