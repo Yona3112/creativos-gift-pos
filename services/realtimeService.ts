@@ -155,12 +155,19 @@ export async function updateOrderStatusViaRPC(
             throw new Error('Cliente Supabase no disponible');
         }
 
-        // Call the RPC function
-        const { data, error } = await client.rpc('update_order_status', {
+        // Create a timeout promise
+        const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('TIMEOUT_EXCEEDED')), 5000)
+        );
+
+        // Call the RPC function with a 5-second timeout
+        const rpcPromise = client.rpc('update_order_status', {
             p_sale_id: saleId,
             p_new_status: newStatus,
             p_shipping_details: shippingDetails ? JSON.stringify(shippingDetails) : null
         });
+
+        const { data, error } = await Promise.race([rpcPromise, timeoutPromise]) as any;
 
         if (error) {
             // Fallback: If RPC doesn't exist, use direct update
@@ -171,14 +178,14 @@ export async function updateOrderStatusViaRPC(
             throw error;
         }
 
-        if (data && data.length > 0 && data[0].success) {
-            const updatedSale = data[0].updated_sale as Sale;
+        if (data && data.success) {
+            const updatedSale = data.updated_sale as Sale;
             // Update local immediately
             await db_engine.sales.put(updatedSale);
             console.log(`✅ [RPC] Estado actualizado atómicamente: ${saleId} → ${newStatus}`);
             return { success: true, message: 'Estado actualizado', sale: updatedSale };
         } else {
-            return { success: false, message: data?.[0]?.message || 'Error desconocido' };
+            return { success: false, message: data?.message || 'Error desconocido' };
         }
 
     } catch (error: any) {
