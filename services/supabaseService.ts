@@ -374,7 +374,7 @@ export class SupabaseService {
                 'printerSize', 'moneyPerPoint', 'pointValue', 'defaultCreditRate', 'defaultCreditTerm',
                 'creditDueDateAlertDays', 'enableCreditAlerts', 'showFloatingWhatsapp', 'whatsappTemplate',
                 'logo', 'themeColor', 'whatsappNumber', 'masterPassword', 'supabaseUrl', 'supabaseKey',
-                'autoSync', 'lastBackupDate', 'lastCloudSync', 'logoObjectFit', 'thanksMessage', 'warrantyPolicy', 'returnPolicy',
+                'autoSync', 'lastBackupDate', 'lastCloudSync', 'lastCloudPush', 'logoObjectFit', 'thanksMessage', 'warrantyPolicy', 'returnPolicy',
                 'barcodeWidth', 'barcodeHeight', 'showLogoOnBarcode', 'barcodeLogoSize', 'legalOwnerName', 'legalCity',
                 'darkMode', 'enableBeep', 'currentSeason', 'updatedAt', 'deviceId'
             ];
@@ -533,7 +533,9 @@ export class SupabaseService {
                 // Stagger requests
                 await new Promise(r => setTimeout(r, 150));
 
-                // OPTIMIZACIÓN: Si es la tabla de productos, no traer la columna 'image' (Base64) en el polling rápido
+                // OPTIMIZACIÓN: Si es la tabla de productos o ventas, no traer columnas pesadas si no es necesario
+                // Para ventas, traemos todo por ahora pero limitado en filas, 
+                // pero podrías excluir 'fulfillmentHistory' si fuera muy grande.
                 const columns = table === 'products'
                     ? 'id, code, name, description, price, cost, stock, minStock, enableLowStockAlert, categoryId, providerId, active, isTaxable, updatedAt'
                     : '*';
