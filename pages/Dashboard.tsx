@@ -162,7 +162,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, 
             // 1. Cost from newly created sales today (proportional to deposit/total)
             const salesCreatedToday = sales.filter(s => getLocalDate(new Date(s.date)) === dateStr && s.status === 'active');
             const proportionalCostNewSales = salesCreatedToday.reduce((acc, s) => {
-                const totalOrderCost = s.items.reduce((sum, item) => sum + ((item.cost || 0) * item.quantity), 0);
+                const totalOrderCost = (s.items || []).reduce((sum, item) => sum + ((item.cost || 0) * item.quantity), 0);
                 const paymentRatio = s.total > 0 ? (s.deposit || 0) / s.total : 1;
                 return acc + (totalOrderCost * paymentRatio);
             }, 0);
@@ -170,7 +170,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, 
             // 2. Cost from balances paid today
             const salesBalancedToday = sales.filter(s => s.balancePaymentDate && getLocalDate(new Date(s.balancePaymentDate)) === dateStr && s.status === 'active');
             const proportionalCostBalances = salesBalancedToday.reduce((acc, s) => {
-                const totalOrderCost = s.items.reduce((sum, item) => sum + ((item.cost || 0) * item.quantity), 0);
+                const totalOrderCost = (s.items || []).reduce((sum, item) => sum + ((item.cost || 0) * item.quantity), 0);
                 const paymentRatio = s.total > 0 ? (s.balancePaid || 0) / s.total : 0;
                 return acc + (totalOrderCost * paymentRatio);
             }, 0);
@@ -188,7 +188,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, 
                 const originalSale = sales.find(s => s.id === credit.saleId);
                 if (!originalSale) return acc;
 
-                const totalOrderCost = originalSale.items.reduce((sum, item) => sum + ((item.cost || 0) * item.quantity), 0);
+                const totalOrderCost = (originalSale.items || []).reduce((sum, item) => sum + ((item.cost || 0) * item.quantity), 0);
                 const paymentRatio = originalSale.total > 0 ? dayAmount / originalSale.total : 0;
                 return acc + (totalOrderCost * paymentRatio);
             }, 0);
