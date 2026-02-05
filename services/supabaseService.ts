@@ -45,17 +45,24 @@ export class SupabaseService {
         for (let i = 0; i < records.length; i += chunkSize) {
             const chunk = records.slice(i, i + chunkSize);
 
-            // Saneamiento Selectivo: Solo tablas que poseen estas columnas en Supabase
+            // Saneamiento Estricto: Solo enviar columnas que existen en el esquema de Supabase
             const sanitizedChunk = chunk.map(record => {
                 const cleaned = { ...record };
-                // 'items' solo existe en sales y quotes
-                if (tableName === 'sales' || tableName === 'quotes') {
-                    if (cleaned.items === null || cleaned.items === undefined) cleaned.items = [];
+
+                // Si la tabla NO es de ventas o cotizaciones, ELIMINAR 'items' para evitar error 400
+                if (tableName !== 'sales' && tableName !== 'quotes') {
+                    delete cleaned.items;
+                } else if (cleaned.items === null || cleaned.items === undefined) {
+                    cleaned.items = [];
                 }
-                // 'payments' solo existe en credits
-                if (tableName === 'credits') {
-                    if (cleaned.payments === null || cleaned.payments === undefined) cleaned.payments = [];
+
+                // Si la tabla NO es de créditos, ELIMINAR 'payments' para evitar error 400
+                if (tableName !== 'credits') {
+                    delete cleaned.payments;
+                } else if (cleaned.payments === null || cleaned.payments === undefined) {
+                    cleaned.payments = [];
                 }
+
                 return cleaned;
             });
 
@@ -507,13 +514,19 @@ export class SupabaseService {
                     const id = item.id;
                     const existing = id ? await table.get(id) : null;
 
-                    // Saneamiento selectivo al recibir de la nube
+                    // Saneamiento estricto al recibir de la nube
                     const sanitizedItem = { ...item };
-                    if (map.dexie === 'sales' || map.dexie === 'quotes') {
-                        if (sanitizedItem.items === null || sanitizedItem.items === undefined) sanitizedItem.items = [];
+
+                    if (map.dexie !== 'sales' && map.dexie !== 'quotes') {
+                        delete sanitizedItem.items;
+                    } else if (sanitizedItem.items === null || sanitizedItem.items === undefined) {
+                        sanitizedItem.items = [];
                     }
-                    if (map.dexie === 'credits') {
-                        if (sanitizedItem.payments === null || sanitizedItem.payments === undefined) sanitizedItem.payments = [];
+
+                    if (map.dexie !== 'credits') {
+                        delete sanitizedItem.payments;
+                    } else if (sanitizedItem.payments === null || sanitizedItem.payments === undefined) {
+                        sanitizedItem.payments = [];
                     }
 
                     if (existing) {
