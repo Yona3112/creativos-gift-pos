@@ -375,28 +375,34 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
             console.log(`📤 Guardando pedido ${selectedOrder.folio}: ${selectedOrder.fulfillmentStatus} → ${editForm.status}`);
             console.log(`📦 Guía: ${editForm.guideFile ? 'SÍ' : 'NO'}, Local: ${editForm.isLocalDelivery ? 'SÍ' : 'NO'}`);
 
-            // OPTIMISTIC UI REMOVED: Now relying on database -> onUpdate -> Re-render cycle
-            // updateOrderInState(selectedOrder.id, editForm.status, details);
+            // Close modal optimistically
             setIsEditModalOpen(false);
 
-            await db.updateSaleStatus(selectedOrder.id, editForm.status, details);
+            // Try RPC first for atomic update (prevents race conditions)
+            let rpcSuccess = false;
+            try {
+                const { updateOrderStatusViaRPC } = await import('../services/realtimeService');
+                const result = await updateOrderStatusViaRPC(selectedOrder.id, editForm.status, details);
+
+                if (result.success) {
+                    console.log(`✅ [RPC] Estado actualizado atómicamente: ${selectedOrder.folio}`);
+                    rpcSuccess = true;
+                    showToast(`Pedido actualizado: ${editForm.status}`, 'success');
+                } else {
+                    console.warn(`⚠️ [RPC] Fallback a local: ${result.message}`);
+                }
+            } catch (rpcError) {
+                console.warn('⚠️ [RPC] No disponible, usando actualización local:', rpcError);
+            }
+
+            // Fallback: Use local update if RPC failed
+            if (!rpcSuccess) {
+                await db.updateSaleStatus(selectedOrder.id, editForm.status, details);
+                showToast(`Pedido actualizado: ${editForm.status}`, 'success');
+            }
+
             if (onUpdate) onUpdate(); // Refresh global state
 
-            // BACKGROUND SYNC: Push to cloud (don't await - let it happen in background)
-            (async () => {
-                try {
-                    const settings = await db.getSettings();
-                    if (settings.supabaseUrl && settings.supabaseKey) {
-                        const { SupabaseService } = await import('../services/supabaseService');
-                        await SupabaseService.syncAll();
-                        console.log('☁️ Cambio sincronizado con la nube');
-                    }
-                } catch (syncErr) {
-                    console.warn('⚠️ No se pudo sincronizar (se reintentará después):', syncErr);
-                }
-            })();
-
-            showToast(`Pedido actualizado: ${editForm.status}`, 'success');
         } catch (e: any) {
             console.error('❌ Error guardando pedido:', e);
             if (onUpdate) onUpdate(); // Forced revert to global state

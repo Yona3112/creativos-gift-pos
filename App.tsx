@@ -303,11 +303,64 @@ function App() {
       }
     };
 
-    // Inicializar polling cada 15 segundos (Sync más rápido para mejor experiencia)
+    // Inicializar polling cada 15 segundos (Fallback when Realtime is unavailable)
     pollInterval = setInterval(fastSync, 15000);
 
     return () => {
       if (pollInterval) clearInterval(pollInterval);
+    };
+  }, [user?.id]);
+
+  // =========== SUPABASE REALTIME SUBSCRIPTION ===========
+  // This provides instant updates when another device changes an order
+  // Falls back to polling if Realtime is unavailable
+  useEffect(() => {
+    let unsubscribe: (() => void) | null = null;
+
+    const setupRealtime = async () => {
+      if (!user) return;
+
+      try {
+        const sett = await db.getSettings();
+        if (!sett?.supabaseUrl || !sett?.supabaseKey) {
+          console.log('📡 [Realtime] Supabase no configurado, usando solo polling');
+          return;
+        }
+
+        const { subscribeToSales } = await import('./services/realtimeService');
+
+        // Subscribe to real-time sales changes
+        unsubscribe = await subscribeToSales((sale, eventType) => {
+          console.log(`📡 [Realtime] UI Update: ${sale.folio} (${eventType})`);
+          // Update sales state with the new/updated sale
+          setSales(prevSales => {
+            const existingIndex = prevSales.findIndex(s => s.id === sale.id);
+            if (existingIndex >= 0) {
+              // Update existing sale
+              const updated = [...prevSales];
+              updated[existingIndex] = sale;
+              return updated;
+            } else {
+              // Add new sale
+              return [...prevSales, sale];
+            }
+          });
+        });
+
+        console.log('📡 [Realtime] Suscripción global iniciada');
+      } catch (error) {
+        console.warn('⚠️ [Realtime] Error al configurar, usando polling:', error);
+      }
+    };
+
+    setupRealtime();
+
+    // CRITICAL: Cleanup subscription when user logs out or component unmounts
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+        console.log('📡 [Realtime] Suscripción limpiada');
+      }
     };
   }, [user?.id]);
 
