@@ -14,22 +14,18 @@ export class SupabaseService {
                 const { data, error, status, statusText } = await operation();
 
                 if (error) {
-                    // DIAGNÓSTICO PARA ERROR 500: Extraer detalles si están disponibles
-                    if (status === 500) {
-                        console.error(`🚨 [${tableName}] INTERNAL SERVER ERROR (500):`, {
-                            message: error.message,
-                            details: error.details,
-                            hint: error.hint,
-                            code: error.code,
-                            statusText
-                        });
-                    }
+                    console.error(`🚨 [${tableName}] Error de Supabase (Status ${status}):`, {
+                        message: error.message,
+                        code: error.code,
+                        details: error.details,
+                        hint: error.hint
+                    });
 
                     // PGRST002: Service Unavailable / Database starting up
                     // 503/502: Gateway timeout or Load balancer issues
                     if (error.code === 'PGRST002' || status === 503 || status === 502 || error.message?.includes('timeout')) {
                         const delay = Math.pow(2, attempt) * 1500 + (Math.random() * 1000);
-                        console.warn(`🔄 [${tableName}] Supabase ocupado (status ${status}). Reintentando en ${Math.round(delay)}ms...`);
+                        console.warn(`🔄 [${tableName}] Reintentando en ${Math.round(delay)}ms...`);
                         await new Promise(r => setTimeout(r, delay));
                         lastError = error;
                         continue;
@@ -39,6 +35,7 @@ export class SupabaseService {
                 return data;
             } catch (err: any) {
                 lastError = err;
+                console.error(`⚠️ [${tableName}] Excepción en intento ${attempt + 1}:`, err.message || err);
                 if (attempt === maxRetries - 1) break;
                 const delay = Math.pow(2, attempt) * 2000;
                 await new Promise(r => setTimeout(r, delay));
@@ -171,7 +168,10 @@ export class SupabaseService {
                 tableName
             );
 
-            if (res === null) return false;
+            if (res === null) {
+                console.error(`❌ [${tableName}] Lote fallido permanentemente. Deteniendo sincronización de esta tabla.`);
+                return false;
+            }
 
             if (i + chunkSize < records.length) {
                 await new Promise(r => setTimeout(r, 300));
