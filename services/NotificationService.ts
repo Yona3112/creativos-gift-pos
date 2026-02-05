@@ -324,7 +324,7 @@ export class NotificationService {
         recentSales.forEach(sale => {
             (sale.items || []).forEach(item => {
                 const current = salesMap.get(item.id) || 0;
-                salesMap.set(item.id, current + item.quantity);
+                salesMap.set(item.id, current + (item.quantity || 0));
             });
         });
 

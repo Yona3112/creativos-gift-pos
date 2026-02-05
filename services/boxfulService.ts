@@ -24,7 +24,7 @@ export class BoxfulService {
             customer_name: order.customerName || 'Consumidor Final',
             customer_phone: customerPhone,
             customer_address: order.shippingDetails?.address || '',
-            items: order.items.map(i => ({
+            items: (order.items || []).map(i => ({
                 name: i.name,
                 quantity: i.quantity,
                 price: i.price

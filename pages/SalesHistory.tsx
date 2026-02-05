@@ -55,33 +55,33 @@ export const SalesHistory: React.FC<SalesHistoryProps> = ({ sales, customers, us
 
     // Robust Sorting and Filtering for History
     const filteredSales = useMemo(() => {
-        const safeSales = Array.isArray(sales) ? sales : [];
-        const lowerSearch = debouncedSearch.toLowerCase();
+        try {
+            const safeSales = Array.isArray(sales) ? sales : [];
+            const lowerSearch = debouncedSearch.toLowerCase();
 
-        return safeSales.filter(s => {
-            if (!s || !s.items) return false;
+            return safeSales.filter(s => {
+                if (!s) return false;
 
-            // Relaxed visibility: Allow vendors to see all branch sales
-            // if (user?.role === UserRole.VENDEDOR && s.userId !== user.id) {
-            //     return false;
-            // }
+                const client = customers.find(c => c.id === s.customerId);
+                const clientName = client?.name || 'Consumidor Final';
+                const clientRTN = client?.rtn || '';
 
-            const client = customers.find(c => c.id === s.customerId);
-            const clientName = client?.name || 'Consumidor Final';
-            const clientRTN = client?.rtn || '';
+                const matchFolio = (s.folio || '').toLowerCase().includes(lowerSearch);
+                const matchCustomer = (clientName || '').toLowerCase().includes(lowerSearch) || (clientRTN || '').includes(lowerSearch);
+                const matchProduct = (s.items || []).some(item =>
+                    (item?.name && item.name.toLowerCase().includes(lowerSearch)) ||
+                    (item?.code && item.code.toLowerCase().includes(lowerSearch))
+                );
 
-            const matchFolio = (s.folio || '').toLowerCase().includes(lowerSearch);
-            const matchCustomer = (clientName || '').toLowerCase().includes(lowerSearch) || (clientRTN || '').includes(lowerSearch);
-            const matchProduct = s.items.some(item =>
-                (item.name && item.name.toLowerCase().includes(lowerSearch)) ||
-                (item.code && item.code.toLowerCase().includes(lowerSearch))
-            );
+                const matchesSearch = matchFolio || matchCustomer || matchProduct;
+                const matchesDate = dateFilter ? (s.date || '').startsWith(dateFilter) : true;
 
-            const matchesSearch = matchFolio || matchCustomer || matchProduct;
-            const matchesDate = dateFilter ? s.date.startsWith(dateFilter) : true;
-
-            return matchesSearch && matchesDate;
-        }).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+                return matchesSearch && matchesDate;
+            }).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+        } catch (error) {
+            console.error("❌ Error en filtrado de historial de ventas:", error);
+            return [];
+        }
     }, [sales, debouncedSearch, dateFilter, customers, user]);
 
     const totalPages = Math.ceil(filteredSales.length / ITEMS_PER_PAGE);

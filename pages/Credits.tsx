@@ -42,7 +42,7 @@ export const Credits: React.FC<CreditsProps> = ({ settings }) => {
         const flatList: (CreditPayment & { customerName: string, creditRef: string, creditId: string })[] = [];
         credits.forEach(credit => {
             const customer = customers.find(c => c.id === credit.customerId);
-            credit.payments.forEach(payment => {
+            (credit.payments || []).forEach(payment => {
                 flatList.push({
                     ...payment,
                     customerName: customer?.name || 'Desconocido',
@@ -138,7 +138,7 @@ export const Credits: React.FC<CreditsProps> = ({ settings }) => {
         const customer = customers.find(c => c.id === credit.customerId);
         const win = window.open('', '', 'width=800,height=600');
         if (win) {
-            const paymentsRows = credit.payments.map(p => `
+            const paymentsRows = (credit.payments || []).map(p => `
                 <tr>
                     <td>${getLocalDate(p.date)}</td>
                     <td>${p.method}</td>

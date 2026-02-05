@@ -44,16 +44,24 @@ export class SupabaseService {
     private static async batchUpsert(client: any, tableName: string, records: any[], chunkSize = 50): Promise<boolean> {
         for (let i = 0; i < records.length; i += chunkSize) {
             const chunk = records.slice(i, i + chunkSize);
+
+            // Saneamiento Crítico: Asegurar que items y payments no sean null antes de subir
+            const sanitizedChunk = chunk.map(record => {
+                const cleaned = { ...record };
+                if (cleaned.items === null || cleaned.items === undefined) cleaned.items = [];
+                if (cleaned.payments === null || cleaned.payments === undefined) cleaned.payments = [];
+                return cleaned;
+            });
+
             console.log(`📦 [${tableName}] Enviando lote ${Math.floor(i / chunkSize) + 1} (${chunk.length} registros)...`);
 
             const res = await this.requestWithRetry<any>(
-                () => client.from(tableName).upsert(chunk),
+                () => client.from(tableName).upsert(sanitizedChunk),
                 tableName
             );
 
-            if (res === null) return false; // Fail fast if a batch failed after retries
+            if (res === null) return false;
 
-            // Add a small delay between batches
             if (i + chunkSize < records.length) {
                 await new Promise(r => setTimeout(r, 300));
             }
@@ -493,25 +501,25 @@ export class SupabaseService {
                     const id = item.id;
                     const existing = id ? await table.get(id) : null;
 
+                    // Saneamiento al recibir de la nube
+                    const sanitizedItem = { ...item };
+                    if (sanitizedItem.items === null || sanitizedItem.items === undefined) sanitizedItem.items = [];
+                    if (sanitizedItem.payments === null || sanitizedItem.payments === undefined) sanitizedItem.payments = [];
+
                     if (existing) {
-                        const remoteU = item.updatedAt ? new Date(item.updatedAt).getTime() : 0;
+                        const remoteU = sanitizedItem.updatedAt ? new Date(sanitizedItem.updatedAt).getTime() : 0;
                         const localU = existing.updatedAt ? new Date(existing.updatedAt).getTime() : 0;
 
-                        // ONLY update if remote is strictly newer
                         if (remoteU > localU) {
-                            await table.update(id, item);
-                            // Enhanced logging for sales to debug sync issues
+                            await table.update(id, sanitizedItem);
                             if (map.dexie === 'sales') {
-                                console.log(`✅ [sales] Actualizado: ${item.folio || item.id} → ${item.fulfillmentStatus || 'N/A'}`);
+                                console.log(`✅ [sales] Actualizado: ${sanitizedItem.folio || sanitizedItem.id} → ${sanitizedItem.fulfillmentStatus || 'N/A'}`);
                             }
-                        } else {
-                            // console.log(`[mergeDelta] Ignored older remote update for ${map.dexie}:${id}`);
                         }
                     } else {
-                        await table.put(item);
-                        // Enhanced logging for new sales from cloud
+                        await table.put(sanitizedItem);
                         if (map.dexie === 'sales') {
-                            console.log(`🆕 [sales] Nuevo desde nube: ${item.folio || item.id} → ${item.fulfillmentStatus || 'N/A'}`);
+                            console.log(`🆕 [sales] Nuevo desde nube: ${sanitizedItem.folio || sanitizedItem.id} → ${sanitizedItem.fulfillmentStatus || 'N/A'}`);
                         }
                     }
                 }

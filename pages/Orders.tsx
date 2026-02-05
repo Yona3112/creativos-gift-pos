@@ -477,33 +477,38 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
     };
 
     const filteredOrders = useMemo(() => {
-        let result = [...orderSales];
+        try {
+            let result = [...orderSales];
 
-        // Apply filters directly to orderSales which is derived from props
-        return result.filter(s => {
-            const matchStatus = statusFilter === 'all' ? true : s.fulfillmentStatus === statusFilter;
+            // Apply filters directly to orderSales which is derived from props
+            return result.filter(s => {
+                const matchStatus = statusFilter === 'all' ? true : s.fulfillmentStatus === statusFilter;
 
-            let matchDate = true;
-            const range = getDateRange(datePreset);
-            if (range) {
-                const orderDate = s.date.split('T')[0];
-                matchDate = orderDate >= range.from && orderDate <= range.to;
-            } else if (dateFilter) {
-                matchDate = s.date.startsWith(dateFilter);
-            }
+                let matchDate = true;
+                const range = getDateRange(datePreset);
+                if (range) {
+                    const orderDate = (s.date || '').split('T')[0];
+                    matchDate = orderDate >= range.from && orderDate <= range.to;
+                } else if (dateFilter) {
+                    matchDate = (s.date || '').startsWith(dateFilter);
+                }
 
-            const matchCategory = categoryFilter === 'all'
-                ? true
-                : s.items.some(item => item.categoryId === categoryFilter);
+                const matchCategory = categoryFilter === 'all'
+                    ? true
+                    : (s.items || []).some(item => item.categoryId === categoryFilter);
 
-            const customerName = getCustomerName(s);
-            const matchSearch =
-                (s.folio || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                (customerName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                (s.shippingDetails?.trackingNumber || '').toLowerCase().includes(searchTerm.toLowerCase());
+                const customerName = getCustomerName(s);
+                const matchSearch =
+                    (s.folio || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    (customerName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    (s.shippingDetails?.trackingNumber || '').toLowerCase().includes(searchTerm.toLowerCase());
 
-            return matchStatus && matchSearch && matchDate && matchCategory;
-        }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                return matchStatus && matchSearch && matchDate && matchCategory;
+            }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        } catch (error) {
+            console.error("❌ Error en filtrado de pedidos:", error);
+            return [];
+        }
     }, [orderSales, searchTerm, statusFilter, customers, categoryFilter, dateFilter, datePreset]);
 
     const columns: { id: FulfillmentStatus, label: string, color: string, icon: string }[] = [
@@ -616,7 +621,12 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                         </button>
                         {categories.map(cat => {
                             const isSelected = categoryFilter === cat.id;
-                            const orderCount = orderSales.filter(s => s.items.some(item => item.categoryId === cat.id)).length;
+                            let orderCount = 0;
+                            try {
+                                orderCount = orderSales.filter(s => (s.items || []).some(item => item.categoryId === cat.id)).length;
+                            } catch (e) {
+                                console.error(`❌ Error al contar pedidos para categoría ${cat.name}:`, e);
+                            }
                             return (
                                 <button
                                     key={cat.id}
@@ -742,12 +752,12 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                                                     </div>
 
                                                     <div className="mb-3 space-y-0.5">
-                                                        {order.items.slice(0, 3).map((item, idx) => (
+                                                        {(order.items || []).slice(0, 3).map((item, idx) => (
                                                             <div key={idx} className="text-[10px] text-gray-600 line-clamp-1 flex items-center gap-1">
-                                                                <span className="font-black text-gray-300">{item.quantity}x</span> {item.name}
+                                                                <span className="font-black text-gray-300">{(item?.quantity || 0)}x</span> {item?.name}
                                                             </div>
                                                         ))}
-                                                        {order.items.length > 3 && <p className="text-[9px] text-gray-400 font-bold italic">+{order.items.length - 3} más...</p>}
+                                                        {(order.items || []).length > 3 && <p className="text-[9px] text-gray-400 font-bold italic">+{(order.items || []).length - 3} más...</p>}
                                                     </div>
 
                                                     <div className="flex justify-between items-center bg-white/40 p-2 rounded-xl mt-auto">

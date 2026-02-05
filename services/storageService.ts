@@ -634,7 +634,7 @@ export class StorageService {
 
       // Actualizar Stock y Kardex
       await this.updateStock(
-        newSale.items.filter(i => !i.id.startsWith('manual-')),
+        (newSale.items || []).filter(i => !i.id.startsWith('manual-')),
         'SALE',
         newSale.userId,
         newSale.folio
@@ -1341,6 +1341,7 @@ export class StorageService {
       c.paidAmount += details.finalAmount;
       c.status = 'paid';
       c.updatedAt = this.getLocalNowISO();
+      if (!Array.isArray(c.payments)) c.payments = [];
       c.payments.push({
         id: Date.now().toString(),
         date: this.getLocalNowISO(),
@@ -1358,8 +1359,8 @@ export class StorageService {
     const credits = await db_engine.credits.toArray();
     let cash = 0, card = 0, transfer = 0;
     credits.forEach(c => {
-      c.payments.forEach(p => {
-        if (p.date.startsWith(date)) {
+      (c.payments || []).forEach(p => {
+        if (p && p.date && p.date.startsWith(date)) {
           if (p.method === 'Efectivo') cash += p.amount;
           else if (p.method === 'Tarjeta') card += p.amount;
           else if (p.method === 'Transferencia') transfer += p.amount;
@@ -1706,7 +1707,7 @@ export class StorageService {
     const title = isOrder ? 'TICKET DE PEDIDO' : (isFiscal ? 'FACTURA' : 'TICKET DE VENTA');
     const dateStr = new Date(sale.date).toLocaleString('es-HN');
 
-    const itemsHtml = sale.items.map(item => `
+    const itemsHtml = (sale.items || []).map(item => `
       <tr style="border-bottom: 1px dashed #eee;">
         <td style="padding: 5px 0;">${item.quantity} x ${item.name}</td>
         <td style="padding: 5px 0; text-align: right;">L ${(item.price * item.quantity).toFixed(2)}</td>

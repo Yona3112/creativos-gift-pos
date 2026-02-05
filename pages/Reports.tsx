@@ -364,7 +364,7 @@ export const Reports: React.FC<ReportsProps> = ({ sales: allSales, products: all
                     {(() => {
                         // Calculate credit payments in date range
                         const creditPayments = credits.flatMap(c =>
-                            c.payments.filter(p => {
+                            (c.payments || []).filter(p => {
                                 const payDate = getLocalDate(new Date(p.date));
                                 return payDate >= startDate && payDate <= endDate;
                             }).map(p => ({ ...p, customerId: c.customerId }))
