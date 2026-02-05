@@ -520,10 +520,9 @@ export class SupabaseService {
 
         const now = await db.getLocalNowISO(); // Use unified timestamp
         const tables = [
-            'categories', 'branches', 'products', 'users', 'customers',
-            'sales', 'credits', 'promotions', 'suppliers',
-            'consumables', 'quotes', 'cash_cuts', 'credit_notes',
-            'expenses', 'settings'
+            'settings', 'cash_cuts', 'branches', 'categories', 'users',
+            'products', 'customers', 'sales', 'credits', 'promotions',
+            'suppliers', 'consumables', 'quotes', 'credit_notes', 'expenses'
         ];
 
         let totalChanges = 0;

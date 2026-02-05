@@ -575,34 +575,38 @@ export const POS: React.FC<POSProps> = ({
 
     return (
         <div className="h-[calc(100vh-100px)] flex flex-col lg:flex-row gap-4 relative overflow-hidden">
-            {/* MODAL DE BLOQUEO POR CORTE DE CAJA PENDIENTE */}
+            {/* MODAL DE BLOQUEO POR CORTE DE CAJA PENDIENTE (REQUERIDO POR SEGURIDAD) */}
             {cashCutBlocked && (
                 <div className="fixed inset-0 z-[100] bg-gray-900/80 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="bg-white rounded-3xl p-8 max-w-md w-full text-center shadow-2xl animate-scale-in">
+                    <div className="bg-white rounded-3xl p-8 max-w-md w-full text-center shadow-2xl animate-scale-in border-t-4 border-red-500">
                         <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                            <i className="fas fa-exclamation-triangle text-4xl text-red-500"></i>
+                            <i className="fas fa-lock text-4xl text-red-600"></i>
                         </div>
-                        <h2 className="text-2xl font-black text-gray-800 mb-3">Corte de Caja Pendiente</h2>
+                        <h2 className="text-2xl font-black text-gray-800 mb-3">Acción Requerida</h2>
                         <p className="text-gray-600 mb-2">
-                            No puedes realizar ventas hasta completar el corte de caja del turno anterior.
+                            El sistema ha detectado que aún no cierras la caja del turno anterior.
+                        </p>
+                        <p className="text-xs text-blue-600 mb-6 font-medium">
+                            <i className="fas fa-shield-alt mr-2"></i>
+                            Tus datos están seguros. Solo debemos cerrar ayer para empezar hoy con orden.
                         </p>
                         <div className="bg-red-50 p-4 rounded-xl mb-6 text-sm">
                             <p className="text-red-700 font-bold">
                                 <i className="fas fa-info-circle mr-2"></i>
-                                {pendingCutInfo.salesCount} venta(s) sin cierre de caja
+                                {pendingCutInfo.salesCount} venta(s) de ayer esperando cierre
                             </p>
                             {pendingCutInfo.lastCutDate && (
                                 <p className="text-red-600 text-xs mt-1">
-                                    Último corte: {pendingCutInfo.lastCutDate}
+                                    Último cierre detectado: {pendingCutInfo.lastCutDate}
                                 </p>
                             )}
                         </div>
                         <Button
-                            className="w-full py-4"
+                            className="w-full py-4 text-lg"
                             onClick={() => onNavigate && onNavigate('cashCut')}
                             icon="calculator"
                         >
-                            Ir a Corte de Caja
+                            Ir a Realizar Cierre
                         </Button>
                     </div>
                 </div>
