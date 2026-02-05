@@ -11,13 +11,25 @@ export class SupabaseService {
         let lastError: any = null;
         for (let attempt = 0; attempt < maxRetries; attempt++) {
             try {
-                const { data, error } = await operation();
+                const { data, error, status, statusText } = await operation();
+
                 if (error) {
+                    // DIAGNÓSTICO PARA ERROR 500: Extraer detalles si están disponibles
+                    if (status === 500) {
+                        console.error(`🚨 [${tableName}] INTERNAL SERVER ERROR (500):`, {
+                            message: error.message,
+                            details: error.details,
+                            hint: error.hint,
+                            code: error.code,
+                            statusText
+                        });
+                    }
+
                     // PGRST002: Service Unavailable / Database starting up
                     // 503/502: Gateway timeout or Load balancer issues
-                    if (error.code === 'PGRST002' || error.status === 503 || error.status === 502 || error.message?.includes('timeout')) {
+                    if (error.code === 'PGRST002' || status === 503 || status === 502 || error.message?.includes('timeout')) {
                         const delay = Math.pow(2, attempt) * 1500 + (Math.random() * 1000);
-                        console.warn(`🔄 [${tableName}] Supabase ocupado (intento ${attempt + 1}/${maxRetries}). Reintentando en ${Math.round(delay)}ms...`);
+                        console.warn(`🔄 [${tableName}] Supabase ocupado (status ${status}). Reintentando en ${Math.round(delay)}ms...`);
                         await new Promise(r => setTimeout(r, delay));
                         lastError = error;
                         continue;
@@ -28,7 +40,6 @@ export class SupabaseService {
             } catch (err: any) {
                 lastError = err;
                 if (attempt === maxRetries - 1) break;
-                // For connection errors (not from Supabase SDK), just retry with backoff
                 const delay = Math.pow(2, attempt) * 2000;
                 await new Promise(r => setTimeout(r, delay));
             }
@@ -41,25 +52,100 @@ export class SupabaseService {
      * Saneamiento Estricto Centralizado: Solo enviar columnas que existen en el esquema de Supabase.
      */
     private static sanitizeRecord(tableName: string, record: any): any {
-        const cleaned = { ...record };
+        // ESQUEMAS DE COLUMNAS PERMITIDAS (White-List) por tabla
+        // Esto previene enviar columnas que no existen en Supabase.
+        const TABLE_SCHEMAS: Record<string, string[]> = {
+            sales: [
+                'id', 'folio', 'date', 'items', 'subtotal', 'taxAmount', 'discount',
+                'total', 'paymentMethod', 'paymentDetails', 'customerId', 'customerName',
+                'userId', 'branchId', 'status', 'cai', 'documentType', 'pointsUsed',
+                'pointsMonetaryValue', 'fulfillmentStatus', 'shippingDetails',
+                'originalQuoteId', 'isOrder', 'deposit', 'balance', 'updatedAt',
+                'createdAt', 'fulfillmentHistory', 'balancePaymentDate',
+                'balancePaymentMethod', 'balancePaid'
+            ],
+            products: [
+                'id', 'code', 'name', 'description', 'price', 'cost', 'stock',
+                'minStock', 'enableLowStockAlert', 'categoryId', 'providerId',
+                'image', 'active', 'isTaxable', 'updatedAt'
+            ],
+            customers: [
+                'id', 'type', 'name', 'legalRepresentative', 'phone', 'rtn', 'dni',
+                'email', 'address', 'birthDate', 'points', 'totalSpent', 'level',
+                'active', 'updatedAt'
+            ],
+            quotes: [
+                'id', 'folio', 'date', 'items', 'subtotal', 'taxAmount', 'discount',
+                'total', 'customerId', 'userId', 'branchId', 'expirationDate',
+                'status', 'updatedAt'
+            ],
+            categories: ['id', 'name', 'color', 'icon', 'defaultMinStock', 'active', 'updatedAt'],
+            branches: ['id', 'name', 'address', 'phone', 'manager', 'active', 'updatedAt'],
+            users: ['id', 'name', 'email', 'password', 'role', 'branchId', 'active', 'updatedAt'],
+            credits: [
+                'id', 'customerId', 'saleId', 'principal', 'totalAmount', 'paidAmount',
+                'status', 'dueDate', 'createdAt', 'payments', 'interestRate',
+                'termMonths', 'monthlyPayment', 'updatedAt'
+            ],
+            expenses: [
+                'id', 'date', 'description', 'amount', 'categoryId', 'paymentMethod',
+                'userId', 'branchId', 'updatedAt'
+            ],
+            inventory_history: [
+                'id', 'productId', 'date', 'type', 'quantity', 'previousStock',
+                'newStock', 'reason', 'userId', 'referenceId', 'updatedAt'
+            ],
+            promotions: [
+                'id', 'name', 'type', 'value', 'startDate', 'endDate', 'active',
+                'productIds', 'categoryIds', 'updatedAt'
+            ],
+            suppliers: [
+                'id', 'companyName', 'contactName', 'email', 'phone', 'rtn',
+                'address', 'active', 'updatedAt'
+            ],
+            consumables: [
+                'id', 'name', 'stock', 'minStock', 'category', 'cost', 'unit',
+                'active', 'updatedAt'
+            ],
+            cash_cuts: [
+                'id', 'date', 'userId', 'branchId', 'totalSales', 'cashExpected',
+                'cashCounted', 'difference', 'details', 'updatedAt'
+            ],
+            credit_notes: [
+                'id', 'folio', 'saleId', 'customerId', 'originalTotal',
+                'remainingAmount', 'reason', 'date', 'status', 'updatedAt'
+            ],
+            price_history: [
+                'id', 'productId', 'date', 'oldPrice', 'newPrice', 'oldCost',
+                'newCost', 'userId', 'updatedAt'
+            ]
+        };
 
-        // 1. Eliminar metadatos exclusivos de Dexie que NO existen en ninguna tabla de Supabase
-        delete (cleaned as any).lastCloudSync;
-        delete (cleaned as any).lastCloudPush;
-        delete (cleaned as any).deviceId;
+        const allowedColumns = TABLE_SCHEMAS[tableName];
+        const cleaned: any = {};
 
-        // 2. Manejo estricto de 'items' (solo en sales y quotes)
-        if (tableName !== 'sales' && tableName !== 'quotes') {
-            delete cleaned.items;
-        } else if (cleaned.items === null || cleaned.items === undefined) {
-            cleaned.items = [];
+        if (allowedColumns) {
+            // Saneamiento por Lista Blanca
+            allowedColumns.forEach(col => {
+                if (record[col] !== undefined) {
+                    cleaned[col] = record[col];
+                }
+            });
+        } else {
+            // Saneamiento Genérico por Lista Negra para tablas no configuradas
+            Object.assign(cleaned, record);
+            delete cleaned.lastCloudSync;
+            delete cleaned.lastCloudPush;
+            delete cleaned.deviceId;
+            delete cleaned.id_old; // Si existiera
         }
 
-        // 3. Manejo estricto de 'payments' (solo en credits)
-        if (tableName !== 'credits') {
-            delete cleaned.payments;
-        } else if (cleaned.payments === null || cleaned.payments === undefined) {
-            cleaned.payments = [];
+        // Correcciones de tipo para columnas JSONB que no pueden ser null en esquemas estrictos
+        if (cleaned.items === null || cleaned.items === undefined) {
+            if (tableName === 'sales' || tableName === 'quotes') cleaned.items = [];
+        }
+        if (cleaned.payments === null || cleaned.payments === undefined) {
+            if (tableName === 'credits') cleaned.payments = [];
         }
 
         return cleaned;
