@@ -155,8 +155,11 @@ export class SupabaseService {
      * Batch upsert to avoid compute limits/timeouts
      */
     private static async batchUpsert(client: any, tableName: string, records: any[], chunkSize = 50): Promise<boolean> {
-        for (let i = 0; i < records.length; i += chunkSize) {
-            const chunk = records.slice(i, i + chunkSize);
+        // OPTIMIZACIÓN CRÍTICA: Lotes pequeños para ventas para evitar Timeouts
+        const effectiveChunkSize = tableName === 'sales' ? 10 : chunkSize;
+
+        for (let i = 0; i < records.length; i += effectiveChunkSize) {
+            const chunk = records.slice(i, i + effectiveChunkSize);
 
             // Saneamiento Estricto Centralizado
             const sanitizedChunk = chunk.map(record => this.sanitizeRecord(tableName, record));

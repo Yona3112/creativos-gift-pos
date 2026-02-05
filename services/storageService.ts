@@ -138,27 +138,28 @@ export class StorageService {
   }
 
   /**
-   * Elimina las imágenes Base64 de las ventas antiguas en Dexie.
-   * Esto soluciona los errores de 'Statement Timeout' en Supabase.
+   * Elimina las imágenes Base64 de las ventas antiguas en Dexie de forma eficiente.
+   * Evita bloqueos de memoria y asegura que los datos locales sean ligeros.
    */
   private async cleanupSalesData() {
     try {
-      const sales = await db_engine.sales.toArray();
-      const bulkySales = sales.filter(s => s.items?.some(i => (i as any).image));
-
-      if (bulkySales.length > 0) {
-        console.log(`🧹 Limpiando imágenes de ${bulkySales.length} ventas pesadas...`);
-        for (const sale of bulkySales) {
-          const cleanedItems = sale.items.map(item => {
-            const { image, ...rest } = item as any;
-            return rest;
+      // Usar modify() en lugar de toArray() para procesar registros uno a uno sin consumir RAM masiva
+      await db_engine.sales.toCollection().modify((sale: any) => {
+        let modified = false;
+        if (sale.items && Array.isArray(sale.items)) {
+          sale.items.forEach((item: any) => {
+            if (item.image) {
+              delete item.image;
+              modified = true;
+            }
           });
-          await db_engine.sales.update(sale.id, { items: cleanedItems });
         }
-        console.log("✅ Limpieza de ventas completada.");
-      }
+        // Si no se modificó nada, retornar falso para no disparar escrituras innecesarias
+        if (!modified) return false;
+      });
+      console.log("✅ Auditoría de peso de ventas finalizada.");
     } catch (e) {
-      console.warn("Error en cleanupSalesData", e);
+      console.warn("⚠️ Error en cleanupSalesData (Optimizado):", e);
     }
   }
 
