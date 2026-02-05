@@ -1050,39 +1050,54 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                                 <i className="fas fa-file-alt"></i> Guía de Envío
                             </h4>
 
-                            {/* WhatsApp Share Action */}
-                            {editForm.tracking && (
-                                <div className="flex items-center gap-2 bg-white p-3 rounded-xl border border-sky-200 shadow-sm">
-                                    <div className="flex-1">
-                                        <p className="text-[10px] font-bold text-sky-600 uppercase">Compartir con Cliente</p>
-                                        <p className="text-xs text-gray-500">Enviar guía por WhatsApp</p>
-                                    </div>
-                                    <div className="flex gap-2">
+                            {/* WhatsApp Share Action - shows when there's a guide file OR tracking number */}
+                            {(editForm.guideFile || editForm.tracking) && (
+                                <div className="flex flex-col gap-2 bg-white p-3 rounded-xl border border-sky-200 shadow-sm">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex-1">
+                                            <p className="text-[10px] font-bold text-sky-600 uppercase">Compartir con Cliente</p>
+                                            <p className="text-xs text-gray-500">Enviar guía por WhatsApp</p>
+                                        </div>
                                         <Input
                                             placeholder="Teléfono"
                                             value={editForm.sharePhone}
                                             className="!py-1 !text-xs w-28"
                                             onChange={(e) => setEditForm({ ...editForm, sharePhone: e.target.value })}
                                         />
+                                    </div>
+                                    <div className="flex gap-2">
                                         <Button
                                             size="sm"
                                             variant="success"
                                             icon="whatsapp"
+                                            className="flex-1"
                                             onClick={() => {
                                                 let cleanPhone = editForm.sharePhone.replace(/\D/g, '');
                                                 if (cleanPhone.length === 8) cleanPhone = '504' + cleanPhone;
 
-                                                const message = `👋 Hola *${selectedOrder?.customerName}*, te compartimos los datos de tu envío:\n\n` +
-                                                    `📦 *Empresa:* ${editForm.shippingCompany}\n` +
-                                                    `🆔 *Guía/Tracking:* ${editForm.tracking}\n` +
-                                                    (editForm.address ? `📍 *Dirección:* ${editForm.address}\n` : '') +
-                                                    `📑 *Pedido:* ${selectedOrder?.folio}\n\n` +
-                                                    (editForm.guideFile && editForm.guideFile.startsWith('http') ? `🔗 *Ver Guía:* ${editForm.guideFile}\n\n` : '') +
-                                                    `_Tu pedido está en camino. ¡Gracias por tu compra!_`;
+                                                // Build message with thank you and order info
+                                                let message = `👋 Hola *${selectedOrder?.customerName}*,\n\n`;
+                                                message += `¡Tu pedido *${selectedOrder?.folio}* está listo!\n\n`;
+
+                                                if (editForm.shippingCompany || editForm.tracking) {
+                                                    message += `📦 *Datos de Envío:*\n`;
+                                                    if (editForm.shippingCompany) message += `• Empresa: ${editForm.shippingCompany}\n`;
+                                                    if (editForm.tracking) message += `• Guía/Tracking: ${editForm.tracking}\n`;
+                                                    if (editForm.address) message += `• Dirección: ${editForm.address}\n`;
+                                                    message += `\n`;
+                                                }
+
+                                                if (editForm.guideFile && editForm.guideFile.startsWith('http')) {
+                                                    message += `🔗 *Ver Guía:* ${editForm.guideFile}\n\n`;
+                                                }
+
+                                                message += `_¡Gracias por tu compra! Es un placer atenderte. Si tienes alguna duda, no dudes en escribirnos._\n\n`;
+                                                message += `✨ *${settings?.name || 'Tu tienda favorita'}*`;
+
                                                 window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
                                             }}
                                         >
-                                            Texto
+                                            Enviar Texto
                                         </Button>
 
                                         {editForm.guideFile && (
@@ -1090,9 +1105,10 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                                                 size="sm"
                                                 variant="primary"
                                                 icon="share-alt"
+                                                className="flex-1"
                                                 onClick={async () => {
                                                     try {
-                                                        // Ayuda para búsqueda: Copiar nombre del cliente al portapapeles
+                                                        // Copy customer name to clipboard for WhatsApp search
                                                         if (selectedOrder?.customerName) {
                                                             await navigator.clipboard.writeText(selectedOrder.customerName);
                                                             showToast(`Nombre '${selectedOrder.customerName}' copiado. Pégalo en el buscador de WhatsApp.`, "info");
@@ -1101,22 +1117,21 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                                                         const response = await fetch(editForm.guideFile);
                                                         const blob = await response.blob();
                                                         const extension = editForm.guideFileType === 'pdf' ? 'pdf' : 'jpg';
+
+                                                        // Create message for file sharing
+                                                        const fileMessage = `📦 Guía de envío - Pedido ${selectedOrder?.folio}\n\n¡Hola ${selectedOrder?.customerName}! Aquí está tu guía de envío.\n\n¡Gracias por tu compra! ✨ ${settings?.name || ''}`;
+
                                                         const file = new File([blob], `guia-${selectedOrder?.folio}.${extension}`, { type: blob.type });
-
-                                                        let cleanPhone = editForm.sharePhone.replace(/\D/g, '');
-                                                        if (cleanPhone.length === 8) cleanPhone = '504' + cleanPhone;
-
-                                                        const message = `Guía de envío - Pedido ${selectedOrder?.folio}`;
 
                                                         if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
                                                             await navigator.share({
                                                                 files: [file],
-                                                                title: message,
-                                                                text: message
+                                                                title: `Guía de envío - ${selectedOrder?.folio}`,
+                                                                text: fileMessage
                                                             });
                                                             showToast("Menú de compartir abierto", "success");
                                                         } else {
-                                                            // Fallback: Descargar
+                                                            // Fallback: Download
                                                             const link = document.createElement('a');
                                                             link.href = editForm.guideFile;
                                                             link.download = `guia-${selectedOrder?.folio}.${extension}`;
@@ -1129,12 +1144,13 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                                                     }
                                                 }}
                                             >
-                                                Archivo
+                                                Compartir Archivo
                                             </Button>
                                         )}
                                     </div>
                                 </div>
                             )}
+
 
                             {editForm.guideFile ? (
                                 <div className="space-y-2">

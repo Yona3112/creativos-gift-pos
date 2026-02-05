@@ -4,6 +4,17 @@ import { db } from '../services/storageService';
 import { CashCut as ICashCut, Sale, CompanySettings } from '../types';
 import { Button, Input, Card, ConfirmDialog, Modal, Badge, showToast } from '../components/UIComponents';
 
+// Extended CashCut type for detailed printing
+interface CashCutPrintData extends ICashCut {
+  cardTotal?: number;
+  transferTotal?: number;
+  creditTotal?: number;
+  creditPayments?: number;
+  orderPayments?: number;
+  cashExpenses?: number;
+  cashRefunds?: number;
+}
+
 export const CashCut: React.FC = () => {
   const [todaySales, setTodaySales] = useState<Sale[]>([]);
   const [totals, setTotals] = useState({
@@ -120,7 +131,15 @@ export const CashCut: React.FC = () => {
       cashExpected: netCashExpected, // Net expected in drawer
       cashCounted: countedTotal,
       difference,
-      details: denominations
+      details: denominations,
+      // Payment method breakdown
+      cardTotal: totals.card,
+      transferTotal: totals.transfer,
+      creditTotal: totals.credit,
+      creditPayments: totals.creditPayments,
+      orderPayments: totals.orderPayments,
+      cashExpenses: totals.cashExpenses,
+      cashRefunds: totals.cashRefunds
     };
     await db.saveCashCut(cut);
     showToast('Corte de caja guardado exitosamente', 'success');
@@ -149,6 +168,124 @@ export const CashCut: React.FC = () => {
       showToast('Corte de caja revertido exitosamente', 'success');
       setRevertModalOpen(false);
       loadData();
+    }
+  };
+
+  // Print Cash Cut Receipt
+  const printCashCut = (cut: ICashCut) => {
+    const s = settings;
+    if (!s) return;
+
+    const d = cut.details;
+    const dateFormatted = new Date(cut.date).toLocaleString('es-HN', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+
+    // Calculate denominations total for verification
+    const denomTotal = (d.bill500 * 500) + (d.bill200 * 200) + (d.bill100 * 100) + (d.bill50 * 50) +
+      (d.bill20 * 20) + (d.bill10 * 10) + (d.bill5 * 5) + (d.bill2 * 2) + (d.bill1 * 1) + d.coins;
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          @page { margin: 5mm; }
+          body { 
+            font-family: 'Courier New', monospace; 
+            font-size: 11px; 
+            width: ${s.printerSize === '58mm' ? '48mm' : '72mm'}; 
+            margin: 0 auto; 
+            padding: 5px; 
+          }
+          .center { text-align: center; }
+          .bold { font-weight: bold; }
+          .hr { border-top: 1px dashed #333; margin: 8px 0; }
+          .row { display: flex; justify-content: space-between; margin: 2px 0; }
+          .section { margin: 8px 0; }
+          .section-title { font-weight: bold; background: #f0f0f0; padding: 3px 5px; margin-bottom: 5px; }
+          .big { font-size: 14px; font-weight: bold; }
+          .diff-ok { color: green; }
+          .diff-over { color: blue; }
+          .diff-short { color: red; }
+        </style>
+      </head>
+      <body>
+        <div class="center">
+          ${s.logo ? `<img src="${s.logo}" style="max-height: 40px; margin-bottom: 5px;">` : ''}
+          <div class="bold" style="font-size: 13px;">${s.name}</div>
+          <div style="font-size: 10px;">RTN: ${s.rtn}</div>
+          <div style="font-size: 10px;">${s.address}</div>
+        </div>
+
+        <div class="hr"></div>
+        <div class="center bold big">CORTE DE CAJA</div>
+        <div class="center" style="font-size: 10px;">${dateFormatted}</div>
+        <div class="hr"></div>
+
+        <div class="section">
+          <div class="section-title">📊 RESUMEN DE VENTAS</div>
+          <div class="row"><span>Total Ventas:</span><span class="bold">L ${cut.totalSales.toFixed(2)}</span></div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">💳 DESGLOSE POR MÉTODO</div>
+          <div class="row"><span>💵 Efectivo:</span><span>L ${cut.cashExpected.toFixed(2)}</span></div>
+          ${cut.cardTotal ? `<div class="row"><span>💳 Tarjetas:</span><span>L ${cut.cardTotal.toFixed(2)}</span></div>` : ''}
+          ${cut.transferTotal ? `<div class="row"><span>📲 Transferencias:</span><span>L ${cut.transferTotal.toFixed(2)}</span></div>` : ''}
+          ${cut.creditTotal ? `<div class="row"><span>📋 Créditos (CxC):</span><span>L ${cut.creditTotal.toFixed(2)}</span></div>` : ''}
+          ${cut.creditPayments ? `<div class="row"><span>💰 Abonos Créditos:</span><span>L ${cut.creditPayments.toFixed(2)}</span></div>` : ''}
+          ${cut.orderPayments ? `<div class="row"><span>📦 Pagos Pedidos:</span><span>L ${cut.orderPayments.toFixed(2)}</span></div>` : ''}
+          ${cut.cashExpenses ? `<div class="row" style="color: #c00;"><span>📤 Gastos Efectivo:</span><span>-L ${cut.cashExpenses.toFixed(2)}</span></div>` : ''}
+          ${cut.cashRefunds ? `<div class="row" style="color: #c00;"><span>↩️ Reembolsos:</span><span>-L ${cut.cashRefunds.toFixed(2)}</span></div>` : ''}
+        </div>
+
+        <div class="section">
+          <div class="section-title">💵 EFECTIVO EN CAJA</div>
+          <div class="row"><span>Esperado (Sistema):</span><span>L ${cut.cashExpected.toFixed(2)}</span></div>
+          <div class="row"><span>Contado (Físico):</span><span>L ${cut.cashCounted.toFixed(2)}</span></div>
+          <div class="hr"></div>
+          <div class="row big ${Math.abs(cut.difference) < 1 ? 'diff-ok' : cut.difference > 0 ? 'diff-over' : 'diff-short'}">
+            <span>DIFERENCIA:</span>
+            <span>${cut.difference > 0 ? '+' : ''}L ${cut.difference.toFixed(2)}</span>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">🧾 DENOMINACIONES CONTADAS</div>
+          ${d.bill500 > 0 ? `<div class="row"><span>L 500 x ${d.bill500}</span><span>L ${(d.bill500 * 500).toFixed(2)}</span></div>` : ''}
+          ${d.bill200 > 0 ? `<div class="row"><span>L 200 x ${d.bill200}</span><span>L ${(d.bill200 * 200).toFixed(2)}</span></div>` : ''}
+          ${d.bill100 > 0 ? `<div class="row"><span>L 100 x ${d.bill100}</span><span>L ${(d.bill100 * 100).toFixed(2)}</span></div>` : ''}
+          ${d.bill50 > 0 ? `<div class="row"><span>L 50 x ${d.bill50}</span><span>L ${(d.bill50 * 50).toFixed(2)}</span></div>` : ''}
+          ${d.bill20 > 0 ? `<div class="row"><span>L 20 x ${d.bill20}</span><span>L ${(d.bill20 * 20).toFixed(2)}</span></div>` : ''}
+          ${d.bill10 > 0 ? `<div class="row"><span>L 10 x ${d.bill10}</span><span>L ${(d.bill10 * 10).toFixed(2)}</span></div>` : ''}
+          ${d.bill5 > 0 ? `<div class="row"><span>L 5 x ${d.bill5}</span><span>L ${(d.bill5 * 5).toFixed(2)}</span></div>` : ''}
+          ${d.bill2 > 0 ? `<div class="row"><span>L 2 x ${d.bill2}</span><span>L ${(d.bill2 * 2).toFixed(2)}</span></div>` : ''}
+          ${d.bill1 > 0 ? `<div class="row"><span>L 1 x ${d.bill1}</span><span>L ${(d.bill1 * 1).toFixed(2)}</span></div>` : ''}
+          ${d.coins > 0 ? `<div class="row"><span>Monedas</span><span>L ${d.coins.toFixed(2)}</span></div>` : ''}
+          <div class="hr"></div>
+          <div class="row bold"><span>TOTAL CONTADO:</span><span>L ${denomTotal.toFixed(2)}</span></div>
+        </div>
+
+        <div class="hr"></div>
+        <div class="center" style="font-size: 9px; margin-top: 10px;">
+          <p>Documento generado automáticamente</p>
+          <p>${new Date().toLocaleString('es-HN')}</p>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const win = window.open('', '_blank', 'width=400,height=600');
+    if (win) {
+      win.document.write(html);
+      win.document.close();
+      setTimeout(() => { win.print(); win.close(); }, 500);
     }
   };
 
@@ -374,7 +511,10 @@ export const CashCut: React.FC = () => {
                       L {cut.difference.toFixed(2)}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-4 py-3 text-right flex gap-2 justify-end">
+                    <Button size="sm" variant="secondary" onClick={() => printCashCut(cut)} icon="print" title="Imprimir Corte">
+                      Imprimir
+                    </Button>
                     <Button size="sm" variant="danger" onClick={() => handleRevertClick(cut.id)} icon="undo" title="Revertir Corte">
                       Revertir
                     </Button>

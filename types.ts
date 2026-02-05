@@ -294,6 +294,14 @@ export interface CashCut {
     bill20: number; bill10: number; bill5: number; bill2: number;
     bill1: number; coins: number;
   };
+  // Payment method breakdown
+  cardTotal?: number;
+  transferTotal?: number;
+  creditTotal?: number;
+  creditPayments?: number;
+  orderPayments?: number;
+  cashExpenses?: number;
+  cashRefunds?: number;
   updatedAt?: string;
 }
 
