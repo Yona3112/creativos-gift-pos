@@ -760,6 +760,41 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                                                         {(order.items || []).length > 3 && <p className="text-[9px] text-gray-400 font-bold italic">+{(order.items || []).length - 3} más...</p>}
                                                     </div>
 
+                                                    {/* Production Images Gallery */}
+                                                    {order.shippingDetails?.productionImages && order.shippingDetails.productionImages.length > 0 && (
+                                                        <div className="mb-2">
+                                                            <div className="flex items-center gap-1 mb-1">
+                                                                <i className="fas fa-images text-amber-500 text-[10px]"></i>
+                                                                <span className="text-[9px] font-bold text-amber-700 uppercase">Producción ({order.shippingDetails.productionImages.length})</span>
+                                                            </div>
+                                                            <div className="flex gap-1 flex-wrap">
+                                                                {order.shippingDetails.productionImages.map((img, imgIdx) => (
+                                                                    <div
+                                                                        key={imgIdx}
+                                                                        className="relative group/img"
+                                                                        onClick={(e) => e.stopPropagation()}
+                                                                    >
+                                                                        <img
+                                                                            src={img}
+                                                                            alt={`Producción ${imgIdx + 1}`}
+                                                                            className="w-10 h-10 object-cover rounded-lg border-2 border-amber-200 shadow-sm cursor-pointer hover:scale-110 transition-transform"
+                                                                            onClick={() => window.open(img, '_blank')}
+                                                                        />
+                                                                        <a
+                                                                            href={img}
+                                                                            download={`produccion-${order.folio}-${imgIdx + 1}.jpg`}
+                                                                            className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover/img:opacity-100 transition-opacity text-[8px] shadow-md hover:bg-amber-600"
+                                                                            onClick={(e) => e.stopPropagation()}
+                                                                            title="Descargar"
+                                                                        >
+                                                                            <i className="fas fa-download"></i>
+                                                                        </a>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
                                                     <div className="flex justify-between items-center bg-white/40 p-2 rounded-xl mt-auto">
                                                         <div>
                                                             <p className="text-[9px] text-gray-400 font-black uppercase leading-none">Saldo</p>

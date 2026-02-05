@@ -1550,7 +1550,19 @@ export class StorageService {
     }
 
     sale.fulfillmentStatus = status;
-    if (shippingDetails) sale.shippingDetails = { ...sale.shippingDetails, ...shippingDetails } as ShippingDetails;
+    // CRITICAL: Deep merge shippingDetails to preserve productionImages and other nested data
+    if (shippingDetails || sale.shippingDetails) {
+      const existingDetails: Partial<ShippingDetails> = sale.shippingDetails || {};
+      const newDetails: Partial<ShippingDetails> = shippingDetails || {};
+      sale.shippingDetails = {
+        ...existingDetails,
+        ...newDetails,
+        // Explicitly preserve productionImages unless explicitly being updated
+        productionImages: newDetails.productionImages !== undefined
+          ? newDetails.productionImages
+          : existingDetails.productionImages
+      } as ShippingDetails;
+    }
 
     // AUTO-CLOSE ORDER: If delivered and fully paid, it's no longer an active "order"
     if (status === 'delivered' && (sale.balance || 0) <= 0) {
@@ -1667,7 +1679,13 @@ export class StorageService {
 
     await db_engine.sales.put(sale);
     const settings = await this.getSettings();
-    if (settings.autoSync) this.triggerAutoSync();
+    if (settings.autoSync) {
+      this.triggerAutoSync();
+      // CRITICAL: Immediate push for payment changes to prevent realtime overwrite
+      import('./supabaseService').then(({ SupabaseService }) => {
+        SupabaseService.syncAll().catch(e => console.warn("Falla en push inmediato de pago:", e));
+      });
+    }
 
     return sale;
   }

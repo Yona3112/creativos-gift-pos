@@ -11,6 +11,7 @@ CREATE INDEX IF NOT EXISTS idx_sales_fulfillmentStatus ON sales("fulfillmentStat
 
 -- 3. PostgreSQL Function for atomic order status updates
 -- This prevents race conditions when multiple devices update simultaneously
+-- UPDATED: Uses JSONB merge (||) instead of COALESCE to preserve existing fields like productionImages
 CREATE OR REPLACE FUNCTION update_order_status(
     p_sale_id TEXT,
     p_new_status TEXT,
@@ -31,9 +32,11 @@ BEGIN
     END IF;
     
     -- Update the sale atomically
+    -- CRITICAL: Use || operator to MERGE shippingDetails instead of replacing
+    -- This preserves existing fields like productionImages when only updating other fields
     UPDATE sales SET
         "fulfillmentStatus" = p_new_status,
-        "shippingDetails" = COALESCE(p_shipping_details, "shippingDetails"),
+        "shippingDetails" = COALESCE("shippingDetails", '{}'::jsonb) || COALESCE(p_shipping_details, '{}'::jsonb),
         "updatedAt" = NOW()
     WHERE id = p_sale_id
     RETURNING to_jsonb(sales.*) INTO v_result;

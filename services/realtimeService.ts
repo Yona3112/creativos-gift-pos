@@ -67,20 +67,73 @@ export async function subscribeToSales(onSaleChange: SalesChangeCallback): Promi
                             remoteSale.items = [];
                         }
 
-                        // Conflict resolution: Only apply if remote is newer
+                        // Conflict resolution with tolerance and workflow priority
                         const localSale = await db_engine.sales.get(remoteSale.id);
 
                         if (localSale) {
                             const remoteTime = remoteSale.updatedAt ? new Date(remoteSale.updatedAt).getTime() : 0;
                             const localTime = localSale.updatedAt ? new Date(localSale.updatedAt).getTime() : 0;
+                            const timeDiff = remoteTime - localTime;
+                            const TOLERANCE_MS = 5000; // 5 seconds tolerance
 
-                            if (remoteTime > localTime) {
-                                // Remote is newer, update local
-                                await db_engine.sales.put(remoteSale);
-                                console.log(`✅ [Realtime] Actualizado: ${remoteSale.folio} → ${remoteSale.fulfillmentStatus}`);
-                                onSaleChange(remoteSale, payload.eventType);
+                            // Workflow order for priority comparison
+                            const workflow: FulfillmentStatus[] = ['pending', 'design', 'printing', 'qc', 'production', 'ready', 'shipped', 'delivered'];
+                            const remoteIndex = workflow.indexOf(remoteSale.fulfillmentStatus || 'pending');
+                            const localIndex = workflow.indexOf(localSale.fulfillmentStatus || 'pending');
+
+                            // Decision logic with tolerance and workflow priority
+                            let shouldUpdate = false;
+                            let reason = '';
+
+                            if (timeDiff > TOLERANCE_MS) {
+                                // Remote is clearly newer
+                                shouldUpdate = true;
+                                reason = 'remote claramente más nuevo';
+                            } else if (timeDiff < -TOLERANCE_MS) {
+                                // Local is clearly newer
+                                shouldUpdate = false;
+                                reason = 'local claramente más nuevo';
                             } else {
-                                console.log(`⏭️ [Realtime] Ignorado (local más reciente): ${remoteSale.folio}`);
+                                // Timestamps are very close - use workflow priority
+                                // Prefer the MORE ADVANCED status to prevent rollback
+                                if (remoteIndex > localIndex) {
+                                    shouldUpdate = true;
+                                    reason = 'remote tiene estado más avanzado';
+                                } else {
+                                    shouldUpdate = false;
+                                    reason = 'local tiene estado igual o más avanzado';
+                                }
+                            }
+
+                            if (shouldUpdate) {
+                                // CRITICAL: Preserve local shippingDetails data (productionImages, etc.)
+                                // and payment data if local has been paid more recently
+                                const localPaidMore = (localSale.balance || 0) < (remoteSale.balance || 0);
+
+                                const mergedSale = {
+                                    ...remoteSale,
+                                    shippingDetails: {
+                                        ...localSale.shippingDetails,
+                                        ...remoteSale.shippingDetails,
+                                        // Explicitly preserve productionImages if remote doesn't have them
+                                        productionImages: remoteSale.shippingDetails?.productionImages || localSale.shippingDetails?.productionImages
+                                    },
+                                    // CRITICAL: Preserve payment data if local has lower balance (payment was made)
+                                    ...(localPaidMore ? {
+                                        balance: localSale.balance,
+                                        deposit: localSale.deposit,
+                                        balancePaymentDate: localSale.balancePaymentDate,
+                                        balancePaid: localSale.balancePaid,
+                                        balancePaymentMethod: localSale.balancePaymentMethod,
+                                        paymentDetails: localSale.paymentDetails,
+                                        isOrder: localSale.isOrder
+                                    } : {})
+                                };
+                                await db_engine.sales.put(mergedSale);
+                                console.log(`✅ [Realtime] Actualizado: ${remoteSale.folio} → ${remoteSale.fulfillmentStatus} (${reason})${localPaidMore ? ' [pago local preservado]' : ''}`);
+                                onSaleChange(mergedSale, payload.eventType);
+                            } else {
+                                console.log(`⏭️ [Realtime] Ignorado: ${remoteSale.folio} (${reason})`);
                             }
                         } else {
                             // New record, insert directly
@@ -221,10 +274,17 @@ async function updateOrderStatusDirect(
             updatedAt: now
         };
 
-        if (shippingDetails) {
+        // CRITICAL: Deep merge shippingDetails to preserve productionImages and other nested data
+        if (shippingDetails || currentData.shippingDetails) {
+            const existingDetails = currentData.shippingDetails || {};
+            const newDetails = shippingDetails || {};
             updatePayload.shippingDetails = {
-                ...currentData.shippingDetails,
-                ...shippingDetails
+                ...existingDetails,
+                ...newDetails,
+                // Explicitly preserve productionImages unless explicitly being updated
+                productionImages: newDetails.productionImages !== undefined
+                    ? newDetails.productionImages
+                    : existingDetails.productionImages
             };
         }
 
