@@ -69,7 +69,7 @@ function App() {
   }, [user]);
 
 
-  const refreshData = async (shouldPushToCloud = false, isManual = false) => {
+  const refreshData = async (shouldPushToCloud = false, isManual = false, forceFull = false) => {
     try {
       if (shouldPushToCloud) {
         const sett = await db.getSettings();
@@ -82,8 +82,8 @@ function App() {
             console.log("🔄 Sincronizando: Descargando cambios...");
             await SupabaseService.pullDelta();
 
-            console.log("🔄 Sincronizando: Subiendo cambios...");
-            await SupabaseService.syncAll();
+            console.log(`🔄 Sincronizando: Subiendo cambios (${forceFull ? 'FULL' : 'DELTA'})...`);
+            await SupabaseService.syncAll(forceFull);
 
             console.log("✅ Sincronización completa (Pull + Push).");
 
@@ -198,7 +198,7 @@ function App() {
 
       // Estrategia: Carga Inmediata + Sync Fondo
       await refreshData(false);
-      refreshData(true); // Traer datos de la nube sin bloquear UI
+      refreshData(true, false, true); // Traer datos de la nube sin bloquear UI + ATOMIC FULL PUSH ON LOGIN
       const b = await db.getBranches();
       setCurrentBranch(b.find(br => br.id === dbUser.branchId) || b[0]);
       setPage('dashboard');
@@ -268,8 +268,8 @@ function App() {
             }
 
             if (needsPush) {
-              console.log("📤 [StartupSync] Realizando carga masiva de recuperación...");
-              await SupabaseService.syncAll();
+              console.log("📤 [StartupSync] Realizando carga masiva de recuperación (FORCED FULL SYNC)...");
+              await SupabaseService.syncAll(true);
               console.log("✅ [StartupSync] Recuperación completada.");
             } else {
               console.log("✅ [StartupSync] Integridad verificada. Local y Nube coinciden.");

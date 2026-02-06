@@ -75,9 +75,9 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
         if (isSyncing) return;
         setIsSyncing(true);
         try {
-            // Trigger centralized sync via App.tsx
+            // Trigger centralized sync via App.tsx with FORCE FULL PUSH
             if (onUpdate) await onUpdate(true, true);
-            showToast("Sincronización manual completada", "success");
+            showToast("Sincronización total iniciada", "success");
         } catch (e) {
             console.error("❌ Error en sync manual:", e);
             showToast("Fallo al sincronizar", "error");
