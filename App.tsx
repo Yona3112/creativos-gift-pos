@@ -277,69 +277,64 @@ function App() {
     initSync();
   }, [user?.id]);
 
-  // Global Unified Cloud Polling (Fast Sync) - AGGRESSIVE MODE
+  // Global Unified Cloud Polling (EFFICIENT MODE - Realtime is primary)
+  // Polling is just a safety net, Realtime handles instant updates
   useEffect(() => {
     let pollInterval: any = null;
-    let aggressiveInterval: any = null;
-    let syncCount = 0;
+    let lastSyncTime = Date.now();
 
-    const fastSync = async (isInitial = false) => {
+    const fastSync = async (force = false) => {
       // 1. Guard: Solo si hay usuario logueado
       if (!user) return;
 
-      // 2. Guard: Solo si la pestaña está visible (ahorro de datos/batería)
+      // 2. Guard: Solo si la pestaña está visible
       if (document.visibilityState !== 'visible') return;
+
+      // 3. Guard: Evitar syncs muy frecuentes (mínimo 3 minutos entre syncs, excepto si forzado)
+      const timeSinceLastSync = Date.now() - lastSyncTime;
+      if (!force && timeSinceLastSync < 180000) return; // 3 minutos
 
       try {
         const sett = await db.getSettings();
         if (!sett?.supabaseUrl || !sett?.supabaseKey) return;
 
         const { SupabaseService } = await import('./services/supabaseService');
-        // Pull changes
         const changed = await SupabaseService.pullDelta();
-        syncCount++;
+        lastSyncTime = Date.now();
 
-        // Update icon timestamp regardless of changes (to show we "checked" the cloud)
+        // Update icon timestamp
         const now = new Date().toISOString();
         await db.saveSettings({ ...sett, lastBackupDate: now });
 
         if (changed && changed > 0) {
-          console.log(`🔄 FastSync #${syncCount}: ${changed} cambios aplicados desde la nube`);
+          console.log(`🔄 Polling: ${changed} cambios aplicados desde la nube`);
           await db.fixDuplicateFolios();
           await refreshData(false);
-        } else if (isInitial) {
-          console.log(`🔄 FastSync #${syncCount}: Sin cambios (verificación)`);
         }
       } catch (e) {
-        console.warn("⚠️ FastSync failure:", e);
+        console.warn("⚠️ Polling failure:", e);
       }
     };
 
-    // Visibility change handler - sync immediately when tab becomes visible
+    // Visibility change handler - sync only if more than 3 minutes since last sync
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        console.log("👁️ Pestaña visible - sincronizando inmediatamente...");
-        fastSync(true);
+        const timeSinceLastSync = Date.now() - lastSyncTime;
+        if (timeSinceLastSync > 180000) { // 3 minutos
+          console.log("👁️ Pestaña visible después de 3+ min - sincronizando...");
+          fastSync(true);
+        }
       }
     };
 
-    // AGGRESSIVE: Run immediately, then every 15 seconds for first 2 minutes
-    fastSync(true);
-    aggressiveInterval = setInterval(() => fastSync(true), 15000);
-
-    // After 2 minutes, switch to relaxed polling (every 30 seconds)
-    setTimeout(() => {
-      if (aggressiveInterval) clearInterval(aggressiveInterval);
-      console.log("⏱️ Cambiando a polling relajado (cada 30 segundos)");
-      pollInterval = setInterval(fastSync, 30000);
-    }, 120000);
+    // EFFICIENT: Poll every 5 minutes as backup (Realtime is primary)
+    pollInterval = setInterval(() => fastSync(true), 300000); // 5 minutos
 
     // Listen for visibility changes
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       if (pollInterval) clearInterval(pollInterval);
-      if (aggressiveInterval) clearInterval(aggressiveInterval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [user?.id]);
