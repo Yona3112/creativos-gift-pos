@@ -147,7 +147,9 @@ function App() {
   useEffect(() => {
     const initApp = async () => {
       try {
+        console.log("🛠️ App: Iniciando base de datos...");
         await db.init();
+        console.log("🛠️ App: Cargando datos locales...");
         await refreshData(false);
 
         const storedUser = localStorage.getItem('creativos_gift_currentUser');
@@ -167,12 +169,14 @@ function App() {
           }
         }
       } catch (e) {
-        console.error("Error inicializando app:", e);
+        console.error("❌ Error inicializando app:", e);
       } finally {
+        console.log("🛠️ App: Inicialización finalizada (loading -> false)");
         setLoading(false);
       }
     };
 
+    initApp();
     return () => {
       // Background sync is handled by the dedicated useEffect pulse
     };
