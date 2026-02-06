@@ -76,16 +76,21 @@ function App() {
           try {
             setIsSyncing(true);
             const { SupabaseService } = await import('./services/supabaseService');
-            // CRITICAL: Pull before Push to avoid regressions
-            await SupabaseService.pullDelta();
-            await SupabaseService.syncAll();
-            console.log("☁️ Sincronización completa (Pull + Push).");
 
-            // Actualizar fecha de último backup
+            // CRITICAL: Pull before Push to avoid regressions
+            console.log("🔄 Sincronizando: Descargando cambios...");
+            await SupabaseService.pullDelta();
+
+            console.log("🔄 Sincronizando: Subiendo cambios...");
+            await SupabaseService.syncAll();
+
+            console.log("✅ Sincronización completa (Pull + Push).");
+
+            // Update last backup date
             const now = new Date().toISOString();
             await db.saveSettings({ ...sett, lastBackupDate: now });
           } catch (pushErr) {
-            console.warn("⚠️ No se pudo subir a la nube:", pushErr);
+            console.warn("⚠️ No se pudo sincronizar con la nube:", pushErr);
             if (isManual) showToast("Error al sincronizar con la nube", "error");
           } finally {
             setIsSyncing(false);
@@ -93,7 +98,7 @@ function App() {
         }
       }
     } catch (e) {
-      console.error("Error en sincronización:", e);
+      console.error("Error en refreshData:", e);
     }
 
     const [p, c, cust, s, b, u, cr, pr, con, sett, exp] = await Promise.all([
@@ -115,38 +120,35 @@ function App() {
     setExpenses(exp);
   };
 
+  // Centralized Background Sync (Pulse)
   useEffect(() => {
-    let intervalId: any;
-    let backupIntervalId: any;
+    if (!user) return;
 
+    let timeoutId: any;
+
+    const runBackgroundSync = async () => {
+      const sett = await db.getSettings();
+      if (sett.supabaseUrl && sett.supabaseKey && sett.autoSync) {
+        console.log("📡 [BackgroundSync] Iniciando pulso de sincronización...");
+        await refreshData(true);
+      }
+      // Schedule next run in 60 seconds
+      timeoutId = setTimeout(runBackgroundSync, 60000);
+    };
+
+    // Initial delay before starting background sync to avoid competing with startup sync
+    timeoutId = setTimeout(runBackgroundSync, 30000);
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [user?.id]);
+
+  useEffect(() => {
     const initApp = async () => {
       try {
         await db.init();
-        // Carga rápida desde IndexedDB - NO hacer pull/push aquí
-        // El pull se maneja en initSync cuando user cambia
         await refreshData(false);
-
-        // Auto-sync DESACTIVADO: El push automático cada 30s puede subir datos viejos
-        // El push ahora solo ocurre cuando el usuario hace un cambio real (guardar producto, venta, etc.)
-        // Esto se maneja en storageService.triggerAutoSync() que se llama después de cada operación
-        /*
-        intervalId = setInterval(async () => {
-         const fastSync = async () => {
-        const sett = await db.getSettings();
-        if (sett.supabaseUrl && sett.supabaseKey && sett.autoSync) {
-          try {
-            setIsSyncing(true);
-            const { SupabaseService } = await import('./services/supabaseService');
-            await SupabaseService.syncAll();
-            console.log("🔄 Autocompletado FastSync");
-          } catch (e) {
-            console.warn("FastSync failed, will retry next interval");
-          } finally {
-            setIsSyncing(false);
-          }
-        }
-      };
-        */
 
         const storedUser = localStorage.getItem('creativos_gift_currentUser');
         if (storedUser) {
@@ -171,9 +173,8 @@ function App() {
       }
     };
 
-    initApp();
     return () => {
-      if (intervalId) clearInterval(intervalId);
+      // Background sync is handled by the dedicated useEffect pulse
     };
   }, []);
 
@@ -234,35 +235,53 @@ function App() {
 
             const { SupabaseService } = await import('./services/supabaseService');
 
-            // Use pullDelta instead of pullAll to avoid Supabase timeouts
-            // pullDelta only fetches changes since last sync (lightweight)
+            // 1. Pull changes from cloud
             console.log("⬇️ Descargando cambios desde la nube (pullDelta)...");
             const changed = await SupabaseService.pullDelta();
 
-            if (changed && changed > 0) {
-              console.log(`✅ ${changed} cambios descargados de la nube`);
-            } else if (changed === 0) {
-              console.log("✅ Sin cambios nuevos en la nube");
+            // 2. [SYNC ON STARTUP] Verify integrity
+            console.log("🔍 [StartupSync] Verificando integridad local vs remota...");
+            const remoteCounts = await SupabaseService.getRemoteCounts();
+            const localData = await db.getAllData();
+
+            const tablesToVerify = [
+              { name: 'sales', remote: remoteCounts.sales || 0, local: localData.sales.length },
+              { name: 'products', remote: remoteCounts.products || 0, local: localData.products.length },
+              { name: 'customers', remote: remoteCounts.customers || 0, local: localData.customers.length }
+            ];
+
+            let needsPush = false;
+            for (const table of tablesToVerify) {
+              if (table.local > table.remote) {
+                console.warn(`⚠️ [StartupSync] Desajuste en ${table.name}: Local(${table.local}) > Remote(${table.remote})`);
+                needsPush = true;
+              }
+            }
+
+            // Also check for any unsynced records via timestamp
+            const unsyncedCount = await db.getUnsyncedCount();
+            if (unsyncedCount > 0) {
+              console.log(`⚠️ [StartupSync] Se detectaron ${unsyncedCount} registros sin sincronizar.`);
+              needsPush = true;
+            }
+
+            if (needsPush) {
+              console.log("📤 [StartupSync] Realizando carga masiva de recuperación...");
+              await SupabaseService.syncAll();
+              console.log("✅ [StartupSync] Recuperación completada.");
             } else {
-              console.log("☁️ Error de conexión o sin datos");
+              console.log("✅ [StartupSync] Integridad verificada. Local y Nube coinciden.");
             }
 
-            // Update lastBackupDate on successful pull
-            const freshSettings = await db.getSettings();
-            const now = new Date().toISOString();
-            await db.saveSettings({ ...freshSettings, lastBackupDate: now });
+            // Update lastBackupDate on successful sync
+            const freshNow = new Date().toISOString();
+            await db.saveSettings({ ...sett, lastBackupDate: freshNow, lastCloudSync: freshNow, lastCloudPush: freshNow });
 
-            // Fix any duplicate folios after pulling data from cloud
-            const fixResult = await db.fixDuplicateFolios();
-            if (fixResult.fixed > 0) {
-              console.log(`🔧 Corregidos ${fixResult.fixed} folios duplicados`);
-            }
-
-            // Recargar datos locales después del pull
+            // Fix folios and reload
+            await db.fixDuplicateFolios();
             await refreshData(false);
           } catch (pullErr) {
-            console.warn("⚠️ Error al descargar de la nube (continuando...):", pullErr);
-            // Si falla el pull, cargar datos locales
+            console.warn("⚠️ Error en Startup Sync:", pullErr);
             await refreshData(false);
           }
         } else {
@@ -490,21 +509,21 @@ function App() {
 
     switch (page) {
       case 'dashboard': return <Dashboard products={products} sales={sales} credits={credits} customers={customers} consumables={consumables} onNavigate={navigateTo} />;
-      case 'pos': return <POS products={products} customers={customers} categories={categories} user={user} branchId={currentBranch?.id || ''} onSaleComplete={refreshData} loadedQuote={quoteToLoad} onQuoteProcessed={() => setQuoteToLoad(null)} onRefreshData={refreshData} settings={safeSettings} onNavigate={navigateTo} />;
-      case 'expenses': return <Expenses user={user} onUpdate={refreshData} settings={safeSettings} />;
+      case 'pos': return <POS products={products} customers={customers} categories={categories} user={user} branchId={currentBranch?.id || ''} onSaleComplete={() => refreshData(true)} loadedQuote={quoteToLoad} onQuoteProcessed={() => setQuoteToLoad(null)} onRefreshData={() => refreshData(true)} settings={safeSettings} onNavigate={navigateTo} />;
+      case 'expenses': return <Expenses user={user} onUpdate={() => refreshData(true)} settings={safeSettings} />;
       case 'inventoryHistory': return <InventoryHistory products={products} users={users} />;
-      case 'products': return <Products products={products} categories={categories} users={users} onUpdate={refreshData} initialFilter={pageParams?.filter} initialTab={pageParams?.tab} settings={safeSettings} user={user} />;
-      case 'salesHistory': return <SalesHistory sales={sales} customers={customers} users={users} onUpdate={refreshData} user={user} branchId={currentBranch?.id} onLoadQuote={(quote) => { setQuoteToLoad(quote); setPage('pos'); }} settings={safeSettings} />;
-      case 'customers': return <Customers customers={customers} onUpdate={refreshData} user={user} settings={safeSettings} />;
-      case 'credits': return <Credits settings={safeSettings} />;
+      case 'products': return <Products products={products} categories={categories} users={users} onUpdate={() => refreshData(true)} initialFilter={pageParams?.filter} initialTab={pageParams?.tab} settings={safeSettings} user={user} />;
+      case 'salesHistory': return <SalesHistory sales={sales} customers={customers} users={users} onUpdate={() => refreshData(true)} user={user} branchId={currentBranch?.id} onLoadQuote={(quote) => { setQuoteToLoad(quote); setPage('pos'); }} settings={safeSettings} />;
+      case 'customers': return <Customers customers={customers} onUpdate={() => refreshData(true)} user={user} settings={safeSettings} />;
+      case 'credits': return <Credits settings={safeSettings} onUpdate={() => refreshData(true)} />;
       case 'reports': return <Reports sales={sales} products={products} customers={customers} categories={categories} />;
       case 'sarBooks': return <SARBooks />;
-      case 'settings': return <Settings onUpdate={refreshData} />;
-      case 'cashCut': return <CashCut />;
-      case 'orders': return <Orders sales={sales} customers={customers} categories={categories} settings={safeSettings} onUpdate={refreshData} />;
-      case 'promotions': return <Promotions />;
-      case 'users': return <Users />;
-      case 'branches': return <Branches />;
+      case 'settings': return <Settings onUpdate={() => refreshData(true)} />;
+      case 'cashCut': return <CashCut onUpdate={() => refreshData(true)} />;
+      case 'orders': return <Orders sales={sales} customers={customers} categories={categories} settings={safeSettings} onUpdate={(push, manual) => refreshData(push, manual)} />;
+      case 'promotions': return <Promotions onUpdate={() => refreshData(true)} />;
+      case 'users': return <Users onUpdate={() => refreshData(true)} />;
+      case 'branches': return <Branches onUpdate={() => refreshData(true)} />;
       default: return <Dashboard products={products} sales={sales} credits={credits} customers={customers} consumables={consumables} onNavigate={navigateTo} />;
     }
   };

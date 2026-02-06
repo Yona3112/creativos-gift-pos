@@ -218,7 +218,8 @@ export class StorageService {
       };
 
       await db_engine.auditLogs.put(log);
-      this.pushToCloud('audit_logs', log);
+      // Redundant immediate push removed to favor centralized sync
+      // this.pushToCloud('audit_logs', log);
     } catch (e) {
       console.warn("Could not save audit log", e);
     }
@@ -286,6 +287,36 @@ export class StorageService {
   /**
    * Helper to push a record to Supabase immediately
    */
+  /**
+   * Helper to identify modified data that hasn't been synced yet.
+   * This is useful for "Sync on Startup" verification.
+   */
+  async getUnsyncedCount(): Promise<number> {
+    const settings = await this.getSettings();
+    const lastPush = settings.lastCloudPush ? new Date(settings.lastCloudPush).getTime() : 0;
+    const safeLastPush = Math.max(0, lastPush - (10 * 60 * 1000)); // 10 min drift
+
+    const allData = await this.getAllData();
+    let unsynced = 0;
+
+    const tables = [
+      allData.products, allData.customers, allData.sales,
+      allData.categories, allData.users, allData.branches,
+      allData.credits, allData.expenses, allData.quotes
+    ];
+
+    for (const table of tables) {
+      if (table) {
+        unsynced += table.filter((item: any) => {
+          if (item.updatedAt) return new Date(item.updatedAt).getTime() > safeLastPush;
+          if (item.date) return item.date.substring(0, 10) >= new Date(safeLastPush).toISOString().substring(0, 10);
+          return false;
+        }).length;
+      }
+    }
+    return unsynced;
+  }
+
   private async pushToCloud(tableName: string, record: any) {
     try {
       const { SupabaseService } = await import('./supabaseService');
@@ -298,7 +329,8 @@ export class StorageService {
   async saveSettings(settings: CompanySettings) {
     settings.updatedAt = this.getLocalNowISO();
     await db_engine.settings.put({ id: 'main', ...settings });
-    this.pushToCloud('settings', settings);
+    // Redundant immediate push removed to favor centralized sync
+    // this.pushToCloud('settings', settings);
   }
 
 
@@ -439,7 +471,8 @@ export class StorageService {
       p.updatedAt = this.getLocalNowISO();
       await db_engine.products.put(p);
       await this.saveLog('inventory', 'DELETE_PRODUCT', `Producto "${p.name}" (${p.code}) eliminado.`);
-      this.pushToCloud('products', p);
+      // Redundant immediate push removed
+      // this.pushToCloud('products', p);
     }
   }
 
@@ -478,7 +511,8 @@ export class StorageService {
   // Método público para guardar movimientos de inventario (usado por auditorías)
   async saveInventoryMovement(movement: InventoryMovement) {
     await db_engine.inventoryHistory.add(movement);
-    this.pushToCloud('inventory_history', movement);
+    // Redundant immediate push removed
+    // this.pushToCloud('inventory_history', movement);
   }
 
   async getInventoryHistory(productId?: string): Promise<InventoryMovement[]> {
@@ -516,7 +550,8 @@ export class StorageService {
     if (cat.active === undefined) cat.active = true;
     cat.updatedAt = this.getLocalNowISO();
     await db_engine.categories.put(cat);
-    this.pushToCloud('categories', cat);
+    // Redundant immediate push removed
+    // this.pushToCloud('categories', cat);
   }
 
   async deleteCategory(id: string) {
@@ -541,7 +576,8 @@ export class StorageService {
     }
     c.updatedAt = this.getLocalNowISO();
     await db_engine.customers.put(c);
-    this.pushToCloud('customers', c);
+    // Redundant immediate push removed
+    // this.pushToCloud('customers', c);
   }
   async deleteCustomer(id: string) {
     const c = await db_engine.customers.get(id);
@@ -683,6 +719,8 @@ export class StorageService {
 
       // IMMEDIATE PUSH: Subir venta a Supabase inmediatamente para Realtime
       // Esto permite que otros dispositivos la reciban al instante
+      // Redundant immediate push removed. Centralized sync will handle this.
+      /*
       try {
         const { SupabaseService } = await import('./supabaseService');
         const client = await SupabaseService.getClient();
@@ -698,8 +736,9 @@ export class StorageService {
       } catch (pushErr) {
         console.warn('⚠️ Push inmediato falló (usará autoSync):', pushErr);
       }
+      */
 
-      this.pushToCloud('sales', newSale);
+      // this.pushToCloud('sales', newSale);
       return newSale;
     });
   }
@@ -865,7 +904,8 @@ export class StorageService {
 
         if (sale) {
           await db_engine.sales.put(sale);
-          this.pushToCloud('sales', sale);
+          // Redundant immediate push removed
+          // this.pushToCloud('sales', sale);
         }
       }
     });
@@ -882,7 +922,8 @@ export class StorageService {
     e.date = e.date.substring(0, 10);
     e.updatedAt = this.getLocalNowISO();
     await db_engine.expenses.put(e);
-    this.pushToCloud('expenses', e);
+    // Redundant immediate push removed
+    // this.pushToCloud('expenses', e);
     return e.id;
   }
 
@@ -909,7 +950,8 @@ export class StorageService {
       if (c.paidAmount >= c.totalAmount - 0.1) c.status = 'paid';
       c.updatedAt = this.getLocalNowISO();
       await db_engine.credits.put(c);
-      this.pushToCloud('credits', c);
+      // Redundant immediate push removed
+      // this.pushToCloud('credits', c);
     }
   }
 
@@ -946,7 +988,8 @@ export class StorageService {
     if (s.active === undefined) s.active = true;
     s.updatedAt = this.getLocalNowISO();
     await db_engine.suppliers.put(s);
-    this.pushToCloud('suppliers', s);
+    // Redundant immediate push removed
+    // this.pushToCloud('suppliers', s);
   }
   async deleteSupplier(id: string) {
     const s = await db_engine.suppliers.get(id);
@@ -966,7 +1009,8 @@ export class StorageService {
     if (c.active === undefined) c.active = true;
     c.updatedAt = this.getLocalNowISO();
     await db_engine.consumables.put(c);
-    this.pushToCloud('consumables', c);
+    // Redundant immediate push removed
+    // this.pushToCloud('consumables', c);
   }
   async deleteConsumable(id: string) {
     const c = await db_engine.consumables.get(id);
@@ -982,7 +1026,8 @@ export class StorageService {
     if (!p.id) p.id = Date.now().toString();
     p.updatedAt = this.getLocalNowISO();
     await db_engine.promotions.put(p);
-    this.pushToCloud('promotions', p);
+    // Redundant immediate push removed
+    // this.pushToCloud('promotions', p);
   }
   async deletePromotion(id: string) {
     const p = await db_engine.promotions.get(id);
@@ -1009,7 +1054,8 @@ export class StorageService {
     }
     u.updatedAt = this.getLocalNowISO();
     await db_engine.users.put(u);
-    this.pushToCloud('users', u);
+    // Redundant immediate push removed
+    // this.pushToCloud('users', u);
   }
   async deleteUser(id: string) {
     const u = await db_engine.users.get(id);
@@ -1028,7 +1074,8 @@ export class StorageService {
     if (!b.id) b.id = Date.now().toString();
     b.updatedAt = this.getLocalNowISO();
     await db_engine.branches.put(b);
-    this.pushToCloud('branches', b);
+    // Redundant immediate push removed
+    // this.pushToCloud('branches', b);
   }
   async getQuotes() {
     const quotes = await db_engine.quotes.toArray();
@@ -1039,7 +1086,8 @@ export class StorageService {
     if (!q.id) q.id = Date.now().toString();
     q.updatedAt = this.getLocalNowISO();
     await db_engine.quotes.put(q);
-    this.pushToCloud('quotes', q);
+    // Redundant immediate push removed
+    // this.pushToCloud('quotes', q);
   }
   async getCreditNotes() { return await db_engine.creditNotes.toArray(); }
 
@@ -1558,7 +1606,8 @@ export class StorageService {
     sale.updatedAt = this.getLocalNowISO();
 
     await db_engine.sales.put(sale);
-    this.pushToCloud('sales', sale);
+    // Redundant immediate push removed
+    // this.pushToCloud('sales', sale);
   }
 
   async deleteBranch(id: string) {
@@ -1568,7 +1617,8 @@ export class StorageService {
       b.updatedAt = this.getLocalNowISO();
       await db_engine.branches.put(b);
       const settings = await this.getSettings();
-      this.pushToCloud('branches', b);
+      // Redundant immediate push removed
+      // this.pushToCloud('branches', b);
     }
   }
 
@@ -1644,7 +1694,8 @@ export class StorageService {
     sale.updatedAt = this.getLocalNowISO();
 
     await db_engine.sales.put(sale);
-    this.pushToCloud('sales', sale);
+    // Redundant immediate push removed
+    // this.pushToCloud('sales', sale);
 
     return sale;
   }
@@ -1703,9 +1754,10 @@ export class StorageService {
     const exp = await db_engine.expenses.get(id);
     if (exp) {
       exp.date = date;
+      exp.updatedAt = this.getLocalNowISO();
       await db_engine.expenses.put(exp);
-      const settings = await this.getSettings();
-      this.pushToCloud('expenses', exp);
+      // Redundant immediate push removed
+      // this.pushToCloud('expenses', exp);
     }
   }
 

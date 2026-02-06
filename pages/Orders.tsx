@@ -71,16 +71,9 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
         if (isSyncing) return;
         setIsSyncing(true);
         try {
-            const { SupabaseService } = await import('../services/supabaseService');
-            const sett = await db.getSettings();
-            if (sett.supabaseUrl && sett.supabaseKey) {
-                // INCREMENTAL SYNC
-                // CRITICAL: Always PULL before PUSH to avoid overwriting cloud with stale local data
-                await SupabaseService.pullDelta();
-                await SupabaseService.syncAll();
-                if (onUpdate) onUpdate();
-                showToast("Sincronización rápida completada", "success");
-            }
+            // Trigger centralized sync via App.tsx
+            if (onUpdate) await onUpdate(true, true);
+            showToast("Sincronización manual completada", "success");
         } catch (e) {
             console.error("❌ Error en sync manual:", e);
             showToast("Fallo al sincronizar", "error");

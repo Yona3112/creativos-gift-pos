@@ -270,6 +270,31 @@ export class SupabaseService {
     }
 
     /**
+     * Get record counts for critical tables to verify sync status on startup
+     */
+    static async getRemoteCounts(): Promise<Record<string, number>> {
+        const client = await this.getClient();
+        if (!client) return {};
+
+        const tables = ['sales', 'products', 'customers', 'expenses', 'quotes'];
+        const counts: Record<string, number> = {};
+
+        for (const table of tables) {
+            try {
+                // Use head: true for light-weight count-only request
+                const { count, error } = await client
+                    .from(table)
+                    .select('*', { count: 'exact', head: true });
+
+                if (!error) counts[table] = count || 0;
+            } catch (e) {
+                console.warn(`⚠️ [Counts] Fallo al contar ${table}:`, e);
+            }
+        }
+        return counts;
+    }
+
+    /**
      * Delete a record from a specific Supabase table
      */
     static async deleteFromTable(tableName: string, id: string) {
