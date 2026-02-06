@@ -242,6 +242,10 @@ function App() {
             // NO hacer push para evitar que datos viejos locales sobrescriban la nube
             console.log("⬇️ Descargando datos de la nube...");
             const { SupabaseService } = await import('./services/supabaseService');
+
+            // CRITICAL FIX: Actually download data from cloud!
+            await SupabaseService.pullDelta();
+
             // CRITICAL: Update lastBackupDate on successful pull to keep icon green
             const now = new Date().toISOString();
             await db.saveSettings({ ...sett, lastBackupDate: now });

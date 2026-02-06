@@ -191,7 +191,18 @@ export class SupabaseService {
 
         if (envUrl && envKey) {
             try {
-                this.client = createClient(envUrl, envKey);
+                this.client = createClient(envUrl, envKey, {
+                    realtime: {
+                        params: {
+                            eventsPerSecond: 10
+                        }
+                    },
+                    auth: {
+                        persistSession: true,
+                        autoRefreshToken: true
+                    }
+                });
+                console.log('✅ [Supabase] Cliente creado con soporte Realtime');
                 return this.client;
             } catch (e) {
                 console.error("Error al crear cliente Supabase desde env:", e);
@@ -202,7 +213,18 @@ export class SupabaseService {
         const settings = await db.getSettings();
         if (settings.supabaseUrl && settings.supabaseKey) {
             try {
-                this.client = createClient(settings.supabaseUrl, settings.supabaseKey);
+                this.client = createClient(settings.supabaseUrl, settings.supabaseKey, {
+                    realtime: {
+                        params: {
+                            eventsPerSecond: 10
+                        }
+                    },
+                    auth: {
+                        persistSession: true,
+                        autoRefreshToken: true
+                    }
+                });
+                console.log('✅ [Supabase] Cliente creado desde settings con soporte Realtime');
                 return this.client;
             } catch (e) {
                 console.error("Error al crear cliente Supabase:", e);
