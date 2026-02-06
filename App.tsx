@@ -251,7 +251,8 @@ function App() {
             const tablesToVerify = [
               { name: 'sales', remote: remoteCounts.sales || 0, local: localData.sales.length },
               { name: 'products', remote: remoteCounts.products || 0, local: localData.products.length },
-              { name: 'customers', remote: remoteCounts.customers || 0, local: localData.customers.length }
+              { name: 'customers', remote: remoteCounts.customers || 0, local: localData.customers.length },
+              { name: 'cash_cuts', remote: remoteCounts.cash_cuts || 0, local: localData.cash_cuts.length }
             ];
 
             let needsPush = false;

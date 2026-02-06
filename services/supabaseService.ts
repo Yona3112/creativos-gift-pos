@@ -276,7 +276,7 @@ export class SupabaseService {
         const client = await this.getClient();
         if (!client) return {};
 
-        const tables = ['sales', 'products', 'customers', 'expenses', 'quotes'];
+        const tables = ['sales', 'products', 'customers', 'expenses', 'quotes', 'cash_cuts'];
         const counts: Record<string, number> = {};
 
         for (const table of tables) {

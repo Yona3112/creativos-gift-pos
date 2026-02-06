@@ -302,7 +302,8 @@ export class StorageService {
     const tables = [
       allData.products, allData.customers, allData.sales,
       allData.categories, allData.users, allData.branches,
-      allData.credits, allData.expenses, allData.quotes
+      allData.credits, allData.expenses, allData.quotes,
+      allData.cash_cuts
     ];
 
     for (const table of tables) {
