@@ -1,6 +1,6 @@
 import React from 'react';
 import { Sale, Category, Customer, FulfillmentStatus } from '../../types';
-import { Badge } from '../UIComponents';
+import { Badge, ImagePreviewModal } from '../UIComponents';
 
 interface OrderCardProps {
     order: Sale;
@@ -19,6 +19,8 @@ export const OrderCard: React.FC<OrderCardProps> = ({
     lastCloudPush,
     isProcessing
 }) => {
+    const [previewImage, setPreviewImage] = React.useState<string | null>(null);
+
     const customer = customers.find(c => c.id === order.customerId);
     const customerName = order.customerName || customer?.name || 'Consumidor Final';
 
@@ -142,13 +144,24 @@ export const OrderCard: React.FC<OrderCardProps> = ({
                             <img
                                 key={idx}
                                 src={img}
-                                className="w-8 h-8 object-cover rounded-md border border-gray-200 shadow-xs"
+                                className="w-8 h-8 object-cover rounded-md border border-gray-200 shadow-xs hover:scale-110 transition-transform cursor-zoom-in"
                                 alt="Producción"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setPreviewImage(img);
+                                }}
                             />
                         ))}
                     </div>
                 </div>
             )}
+
+            <ImagePreviewModal
+                isOpen={!!previewImage}
+                onClose={() => setPreviewImage(null)}
+                src={previewImage || ''}
+                title={`Producción - ${order.folio}`}
+            />
 
             <div className="flex justify-between items-center bg-white/40 p-2 rounded-xl mt-auto">
                 <div>

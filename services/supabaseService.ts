@@ -384,6 +384,7 @@ export class SupabaseService {
             { name: 'price_history', data: data.priceHistory }
         ];
 
+        let allTablesSuccess = true;
         for (const table of tables) {
             if (table.data && table.data.length > 0) {
                 // DELTA FILTERING: Only records updated after last sync
@@ -420,6 +421,7 @@ export class SupabaseService {
                                 'users'
                             );
                             if (res !== null) successCount++;
+                            else allTablesSuccess = false;
                         }
                         results['users'] = `Incremental (${successCount}/${recordsToSync.length})`;
                         continue;
@@ -430,18 +432,20 @@ export class SupabaseService {
 
                     if (!success) {
                         results[table.name] = `Error: Falló tras reintentos o lotes excesivos`;
+                        allTablesSuccess = false;
                     } else {
                         results[table.name] = 'OK';
                     }
                 } catch (tableError: any) {
                     console.error(`❌ Fallo crítico en ${table.name}:`, tableError);
                     results[table.name] = `Fallo: ${tableError.message}`;
+                    allTablesSuccess = false;
                 }
             }
         }
 
         // Settings is a special case (single row)
-        if (data.settings) {
+        if (data.settings && allTablesSuccess) {
             const cloudColumns = [
                 'id', 'name', 'rtn', 'address', 'phone', 'email', 'cai',
                 'billingRangeStart', 'billingRangeEnd', 'billingDeadline',

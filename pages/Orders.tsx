@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Sale, Customer, FulfillmentStatus, ShippingDetails, CompanySettings, PaymentDetails, Category } from '../types';
-import { Card, Button, Input, Badge, Modal, showToast } from '../components/UIComponents';
+import { Card, Button, Input, Badge, Modal, showToast, ImagePreviewModal } from '../components/UIComponents';
 import { db } from '../services/storageService';
 import { BoxfulService } from '../services/boxfulService';
 import { OrderCard } from '../components/Orders/OrderCard';
@@ -48,6 +48,7 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
 
     // Admin Password Modal State
     const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
+    const [previewImage, setPreviewImage] = useState<string | null>(null);
     const [adminPassword, setAdminPassword] = useState('');
     const [pendingRollback, setPendingRollback] = useState<{
         order: Sale,
@@ -179,19 +180,6 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
 
                 setProcessingOrderIds(prev => [...prev, order.id]);
                 await db.updateSaleStatus(order.id, newStatus);
-
-                // BACKGROUND SYNC: Push to cloud (don't await - let it happen in background)
-                (async () => {
-                    try {
-                        if (settings?.supabaseUrl && settings?.supabaseKey) {
-                            const { SupabaseService } = await import('../services/supabaseService');
-                            await SupabaseService.syncAll();
-                            console.log("🔄 Background cloud sync completed");
-                        }
-                    } catch (err) {
-                        console.warn("⚠️ Background sync failed:", err);
-                    }
-                })();
 
                 showToast(`${order.folio}: ${newStatus}`, 'success');
             } finally {
@@ -367,28 +355,9 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
             // Close modal optimistically
             setIsEditModalOpen(false);
 
-            // Try RPC first for atomic update (prevents race conditions)
-            let rpcSuccess = false;
-            try {
-                const { updateOrderStatusViaRPC } = await import('../services/realtimeService');
-                const result = await updateOrderStatusViaRPC(selectedOrder.id, editForm.status, details);
-
-                if (result.success) {
-                    console.log(`✅ [RPC] Estado actualizado atómicamente: ${selectedOrder.folio}`);
-                    rpcSuccess = true;
-                    showToast(`Pedido actualizado: ${editForm.status}`, 'success');
-                } else {
-                    console.warn(`⚠️ [RPC] Fallback a local: ${result.message}`);
-                }
-            } catch (rpcError) {
-                console.warn('⚠️ [RPC] No disponible, usando actualización local:', rpcError);
-            }
-
-            // Fallback: Use local update if RPC failed
-            if (!rpcSuccess) {
-                await db.updateSaleStatus(selectedOrder.id, editForm.status, details);
-                showToast(`Pedido actualizado: ${editForm.status}`, 'success');
-            }
+            // Perform update (this will automatically enqueue for cloud sync)
+            await db.updateSaleStatus(selectedOrder.id, editForm.status, details);
+            showToast(`Pedido actualizado: ${editForm.status}`, 'success');
 
             if (onUpdate) onUpdate(); // Refresh global state
 
@@ -545,634 +514,522 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                 lastCloudPush={settings?.lastCloudPush}
                 processingOrderIds={processingOrderIds}
             />
-            <button
-                onClick={(e) => { e.stopPropagation(); handleQuickStatusUpdate(order, 'prev'); }}
-                disabled={col.id === 'pending'}
-                className="w-6 h-6 rounded-full bg-white/80 text-gray-400 shadow-sm hover:text-primary disabled:opacity-20 flex items-center justify-center"
-            >
-                <i className="fas fa-chevron-left text-[10px]"></i>
-            </button>
-            <button
-                onClick={(e) => { e.stopPropagation(); handleQuickStatusUpdate(order, 'next'); }}
-                disabled={col.id === 'delivered' || processingOrderIds.includes(order.id)}
-                className="w-6 h-6 rounded-full bg-primary text-white shadow-md hover:scale-110 active:scale-95 transition-all disabled:opacity-20 flex items-center justify-center"
-            >
-                {processingOrderIds.includes(order.id) ? (
-                    <i className="fas fa-spinner fa-spin text-[8px]"></i>
-                ) : (
-                    <i className="fas fa-chevron-right text-[10px]"></i>
-                )}
-            </button>
-        </div>
-                                                    </div >
-                                                </div >
-                                            );
-                                        })}
-{
-    colOrders.length === 0 && (
-        <div className="text-center py-10 text-gray-300 border-2 border-dashed border-gray-100 rounded-xl">
-            <p className="text-xs">Sin pedidos</p>
-        </div>
-    )
-}
-                                    </div >
-                                </div >
-                            );
-                        })}
-                    </div >
-                </div >
-            )}
 
-{
-    viewMode === 'list' && (
-        <div className="flex-1 overflow-y-auto">
-            <div className="grid grid-cols-1 gap-3">
-                {filteredOrders.map(order => {
-                    // Get unique categories for this order
-                    const orderCategories = [...new Set((order.items || []).map(item => item.categoryId))];
-                    const orderCatDetails = orderCategories.map(catId => categories.find(c => c.id === catId)).filter(Boolean);
+            {/* Modals are kept below */}
 
-                    return (
-                        <Card key={order.id} className="hover:shadow-md transition-shadow" noPadding>
-                            <div className="p-4 flex flex-col md:flex-row items-start md:items-center gap-4">
-                                <div className="flex-1">
-                                    {/* Category badges */}
-                                    {orderCatDetails.length > 0 && (
-                                        <div className="flex gap-1.5 mb-2 flex-wrap">
-                                            {orderCatDetails.map((cat: any) => (
-                                                <span
-                                                    key={cat.id}
-                                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold text-white shadow-sm"
-                                                    style={{ backgroundColor: cat.color }}
-                                                >
-                                                    <i className={`fas fa-${cat.icon || 'tag'}`}></i>
-                                                    {cat.name}
-                                                </span>
-                                            ))}
-                                        </div>
-                                    )}
-                                    <div className="flex items-center gap-3 mb-1">
-                                        <span className="font-mono font-bold text-gray-700">{order.folio}</span>
-                                        {getStatusBadge(order.fulfillmentStatus)}
-                                        <span className="text-xs text-gray-400">{new Date(order.date).toLocaleString()}</span>
-                                    </div>
-                                    <div className="font-bold text-lg text-gray-900 flex items-center gap-3">
-                                        {getCustomerName(order)}
-                                        {customers.find(c => c.id === order.customerId)?.phone && (
-                                            <span className="text-xs font-bold text-gray-400 flex items-center gap-1 bg-gray-50 px-2 py-0.5 rounded-full">
-                                                <i className="fab fa-whatsapp text-green-500"></i>
-                                                {customers.find(c => c.id === order.customerId)?.phone}
-                                            </span>
-                                        )}
-                                    </div>
-                                    <div className="text-sm text-gray-500 mt-1">{(order.items || []).map(i => `${i.quantity}x ${i.name}`).join(', ')}</div>
-                                </div>
 
-                                {order.shippingDetails?.trackingNumber && (
-                                    <div className="text-right px-4 border-l border-gray-100 hidden md:block">
-                                        <p className="text-[10px] text-gray-400 uppercase font-bold">Tracking</p>
-                                        <p className="font-mono font-bold text-purple-600">{order.shippingDetails.company}</p>
-                                        <p className="text-xs bg-gray-100 px-1 rounded">{order.shippingDetails.trackingNumber}</p>
-                                    </div>
-                                )}
+            {/* Modals begin here */}
 
-                                <div className="flex gap-2 items-center w-full md:w-auto mt-2 md:mt-0">
-                                    {/* Quick Deliver Checkbox */}
-                                    <label className={`flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-all ${order.fulfillmentStatus === 'delivered' ? 'bg-green-100 text-green-700' : 'bg-gray-100 hover:bg-gray-200 text-gray-600'}`}>
-                                        <input
-                                            type="checkbox"
-                                            checked={order.fulfillmentStatus === 'delivered'}
-                                            onChange={async () => {
-                                                const newStatus = order.fulfillmentStatus === 'delivered' ? 'shipped' : 'delivered';
-
-                                                if (order.fulfillmentStatus === 'delivered') {
-                                                    // Require password to un-check delivered
-                                                    setPendingRollback({ order, newStatus });
-                                                    setAdminPassword('');
-                                                    setIsAdminModalOpen(true);
-                                                    return;
-                                                }
-
-                                                try {
-                                                    await db.updateSaleStatus(order.id, newStatus);
-                                                    if (onUpdate) onUpdate();
-                                                } catch (e: any) {
-                                                    showToast(e.message || 'Error al actualizar estado', 'error');
-                                                    if (onUpdate) onUpdate();
-                                                }
-                                            }}
-                                            className="w-4 h-4 accent-green-600"
-                                        />
-                                        <span className="text-xs font-bold">Entregado</span>
-                                    </label>
-                                    <Button size="sm" variant="secondary" className="flex-1 md:flex-none" onClick={() => handleEditOrder(order)}>Gestionar</Button>
-                                </div>
-                            </div>
-                        </Card>
-                    );
-                })}
-                {filteredOrders.length === 0 && (
-                    <div className="text-center py-12 text-gray-400">
-                        <i className="fas fa-box-open text-4xl mb-3 opacity-50"></i>
-                        <p>No se encontraron pedidos.</p>
-                    </div>
-                )}
-            </div>
-        </div>
-    )
-}
-
-<Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title={`Gestionar Pedido ${selectedOrder?.folio}`}>
-    <div className="space-y-5">
-        <div className="bg-gray-50 p-4 rounded-xl text-sm border border-gray-100 flex flex-col md:flex-row justify-between gap-4">
-            <div className="flex-1">
-                <div className="flex items-center justify-between mb-2">
-                    <p className="text-gray-500 flex items-center gap-1"><i className="fas fa-shopping-basket text-[10px]"></i> Items:</p>
-                    {customers.find(c => c.id === selectedOrder?.customerId)?.phone && (
-                        <a
-                            href={`https://wa.me/${(customers.find(c => c.id === selectedOrder?.customerId)?.phone || '').replace(/\D/g, '')}`}
-                            target="_blank"
-                            className="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded-lg flex items-center gap-1 hover:bg-green-100 transition-colors"
-                        >
-                            <i className="fab fa-whatsapp"></i>
-                            {customers.find(c => c.id === selectedOrder?.customerId)?.phone}
-                        </a>
-                    )}
-                </div>
-                <ul className="list-disc pl-4 font-medium text-gray-800 space-y-1">
-                    {(selectedOrder?.items || []).map((item, idx) => (
-                        <li key={idx} className="leading-tight">{item.quantity} x {item.name} {item.notes && <span className="text-gray-500 italic">({item.notes})</span>}</li>
-                    ))}
-                </ul>
-            </div>
-            <div className="md:border-l md:pl-4 border-gray-200 min-w-[140px]">
-                <p className="text-gray-500 mb-1 flex items-center gap-1"><i className="far fa-calendar-alt text-[10px]"></i> Creado:</p>
-                <p className="font-bold text-gray-800 leading-tight">
-                    {selectedOrder?.createdAt ? new Date(selectedOrder.createdAt).toLocaleString() : new Date(selectedOrder?.date || '').toLocaleString()}
-                </p>
-                <div className="mt-2 inline-block px-2 py-0.5 bg-primary/10 text-primary rounded-full text-[10px] font-black uppercase tracking-wider">
-                    {timeAgo(selectedOrder?.date || '')} de antigüedad
-                </div>
-            </div>
-        </div>
-
-        <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">Estado del Proceso</label>
-            <div className="grid grid-cols-1 gap-2">
-                <select
-                    className="w-full p-3 rounded-xl border border-gray-300 bg-white font-bold outline-none focus:ring-2 focus:ring-primary/50"
-                    value={editForm.status}
-                    onChange={(e) => setEditForm({ ...editForm, status: e.target.value as any })}
-                >
-                    <option value="pending">🟡 Pendiente (En Cola)</option>
-                    <option value="design">🎨 Diseño / Personalización</option>
-                    <option value="printing">🖨️ Impresión / DTF</option>
-                    <option value="qc">🔍 Control de Calidad</option>
-                    <option value="production">🛠️ En Producción / Taller</option>
-                    <option value="ready">📦 Listo / Empaquetado</option>
-                    <option value="shipped">🚚 Enviado (En Ruta)</option>
-                    <option value="delivered">🏁 Entregado (Finalizado)</option>
-                </select>
-            </div>
-        </div>
-
-        {/* NUEVO: Historial de Estados */}
-        <div className="px-1">
-            <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-2">
-                <i className="fas fa-history"></i> Línea de Tiempo del Pedido
-            </h4>
-            <div className="space-y-2 relative before:content-[''] before:absolute before:left-[7px] before:top-2 before:bottom-2 before:w-[2px] before:bg-gray-100">
-                {selectedOrder?.fulfillmentHistory && selectedOrder.fulfillmentHistory.length > 0 ? (
-                    selectedOrder.fulfillmentHistory.slice().reverse().map((entry, idx) => (
-                        <div key={idx} className="relative pl-6 flex justify-between items-center group">
-                            <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 border-white shadow-sm flex items-center justify-center z-10 transition-colors ${entry.status === 'delivered' ? 'bg-green-500' :
-                                entry.status === 'shipped' ? 'bg-purple-500' :
-                                    entry.status === 'ready' ? 'bg-green-400' :
-                                        entry.status === 'production' ? 'bg-blue-500' : 'bg-yellow-500'
-                                }`}>
-                                <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
-                            </div>
-                            <div className="flex-1">
-                                <span className="text-xs font-bold text-gray-700 capitalize">{entry.status.replace('_', ' ')}</span>
-                                <span className="text-[9px] text-gray-400 ml-2">{new Date(entry.date).toLocaleString()}</span>
-                            </div>
-                            {idx === 0 && <Badge variant="default" className="text-[8px] py-0 h-4">Actual</Badge>}
-                        </div>
-                    ))
-                ) : (
-                    <div className="relative pl-6 flex justify-between items-center group">
-                        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 border-white shadow-sm flex items-center justify-center z-10 bg-yellow-500">
-                            <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
-                        </div>
+            <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title={`Gestionar Pedido ${selectedOrder?.folio}`}>
+                <div className="space-y-5">
+                    <div className="bg-gray-50 p-4 rounded-xl text-sm border border-gray-100 flex flex-col md:flex-row justify-between gap-4">
                         <div className="flex-1">
-                            <span className="text-xs font-bold text-gray-700 capitalize">Creado (Estado Inicial)</span>
-                            <span className="text-[9px] text-gray-400 ml-2">{new Date(selectedOrder?.date || '').toLocaleString()}</span>
-                        </div>
-                        <Badge variant="default" className="text-[8px] py-0 h-4">Origen</Badge>
-                    </div>
-                )}
-            </div>
-        </div>
-
-        <div className="bg-purple-50 p-4 rounded-xl border border-purple-100 space-y-3">
-            <div className="flex justify-between items-center mb-1">
-                <h4 className="font-bold text-purple-900 text-sm uppercase flex items-center gap-2">
-                    <i className="fas fa-truck"></i> Datos de Envío
-                </h4>
-                {settings?.boxfulApiKey && (
-                    <button
-                        onClick={handleGenerateBoxful}
-                        disabled={isGeneratingBoxful || editForm.isLocalDelivery}
-                        className="text-[10px] font-black bg-purple-600 text-white px-2 py-1 rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-all flex items-center gap-1 shadow-sm"
-                    >
-                        <i className={`fas fa-${isGeneratingBoxful ? 'spinner fa-spin' : 'magic'}`}></i>
-                        Generar Boxful
-                    </button>
-                )}
-            </div>
-            <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                    <Input label="Empresa de Envío" placeholder="Ej: Cargo Expreso" value={editForm.shippingCompany} onChange={e => setEditForm({ ...editForm, shippingCompany: e.target.value })} style={{ background: 'white' }} disabled={editForm.isLocalDelivery} />
-                    <Input label="No. de Guía / Tracking" placeholder="Ej: 12345678" value={editForm.tracking} onChange={e => setEditForm({ ...editForm, tracking: e.target.value })} style={{ background: 'white' }} disabled={editForm.isLocalDelivery} />
-                </div>
-                <div className="space-y-1">
-                    <label className="block text-[10px] font-bold text-purple-400 uppercase">Dirección de Entrega</label>
-                    <textarea
-                        className="w-full p-2 text-xs rounded-xl border border-gray-200 bg-white outline-none focus:border-purple-300 min-h-[60px]"
-                        placeholder="Ingrese la dirección completa..."
-                        value={editForm.address}
-                        onChange={e => setEditForm({ ...editForm, address: e.target.value })}
-                        disabled={editForm.isLocalDelivery}
-                    ></textarea>
-                </div>
-            </div>
-
-            {/* Toggle Entrega Local */}
-            <div className={`flex items-center justify-between p-3 rounded-xl border-2 transition-all ${editForm.isLocalDelivery ? 'bg-green-100 border-green-400' : 'bg-white border-gray-200'}`}>
-                <div className="flex items-center gap-3">
-                    <i className={`fas fa-${editForm.isLocalDelivery ? 'store' : 'shipping-fast'} text-xl ${editForm.isLocalDelivery ? 'text-green-600' : 'text-gray-400'}`}></i>
-                    <div>
-                        <p className={`font-bold text-sm ${editForm.isLocalDelivery ? 'text-green-800' : 'text-gray-700'}`}>Entrega Local</p>
-                        <p className="text-[10px] text-gray-500">El cliente recoge en tienda (no requiere guía)</p>
-                    </div>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                        type="checkbox"
-                        className="sr-only peer"
-                        checked={editForm.isLocalDelivery}
-                        onChange={e => setEditForm({ ...editForm, isLocalDelivery: e.target.checked })}
-                    />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
-                </label>
-            </div>
-        </div>
-
-        {/* Sección de Guía de Envío (PDF o Imagen) */}
-        {['ready', 'shipped', 'delivered'].includes(editForm.status) && (
-            <div className="bg-sky-50 p-4 rounded-xl border border-sky-100 space-y-3">
-                <h4 className="font-bold text-sky-900 text-sm uppercase flex items-center gap-2">
-                    <i className="fas fa-file-alt"></i> Guía de Envío
-                </h4>
-
-                {/* WhatsApp Share Action - shows when there's a guide file OR tracking number */}
-                {(editForm.guideFile || editForm.tracking) && (
-                    <div className="flex flex-col gap-2 bg-white p-3 rounded-xl border border-sky-200 shadow-sm">
-                        <div className="flex items-center justify-between">
-                            <div className="flex-1">
-                                <p className="text-[10px] font-bold text-sky-600 uppercase">Compartir con Cliente</p>
-                                <p className="text-xs text-gray-500">Enviar guía por WhatsApp</p>
+                            <div className="flex items-center justify-between mb-2">
+                                <p className="text-gray-500 flex items-center gap-1"><i className="fas fa-shopping-basket text-[10px]"></i> Items:</p>
+                                {customers.find(c => c.id === selectedOrder?.customerId)?.phone && (
+                                    <a
+                                        href={`https://wa.me/${(customers.find(c => c.id === selectedOrder?.customerId)?.phone || '').replace(/\D/g, '')}`}
+                                        target="_blank"
+                                        className="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded-lg flex items-center gap-1 hover:bg-green-100 transition-colors"
+                                    >
+                                        <i className="fab fa-whatsapp"></i>
+                                        {customers.find(c => c.id === selectedOrder?.customerId)?.phone}
+                                    </a>
+                                )}
                             </div>
-                            <Input
-                                placeholder="Teléfono"
-                                value={editForm.sharePhone}
-                                className="!py-1 !text-xs w-28"
-                                onChange={(e) => setEditForm({ ...editForm, sharePhone: e.target.value })}
-                            />
+                            <ul className="list-disc pl-4 font-medium text-gray-800 space-y-1">
+                                {(selectedOrder?.items || []).map((item, idx) => (
+                                    <li key={idx} className="leading-tight">{item.quantity} x {item.name} {item.notes && <span className="text-gray-500 italic">({item.notes})</span>}</li>
+                                ))}
+                            </ul>
                         </div>
-                        <div className="flex gap-2">
-                            <Button
-                                size="sm"
-                                variant="success"
-                                icon="whatsapp"
-                                className="flex-1"
-                                onClick={() => {
-                                    let cleanPhone = editForm.sharePhone.replace(/\D/g, '');
-                                    if (cleanPhone.length === 8) cleanPhone = '504' + cleanPhone;
+                        <div className="md:border-l md:pl-4 border-gray-200 min-w-[140px]">
+                            <p className="text-gray-500 mb-1 flex items-center gap-1"><i className="far fa-calendar-alt text-[10px]"></i> Creado:</p>
+                            <p className="font-bold text-gray-800 leading-tight">
+                                {selectedOrder?.createdAt ? new Date(selectedOrder.createdAt).toLocaleString() : new Date(selectedOrder?.date || '').toLocaleString()}
+                            </p>
+                            <div className="mt-2 inline-block px-2 py-0.5 bg-primary/10 text-primary rounded-full text-[10px] font-black uppercase tracking-wider">
+                                {timeAgo(selectedOrder?.date || '')} de antigüedad
+                            </div>
+                        </div>
+                    </div>
 
-                                    // Build message with thank you and order info
-                                    let message = `👋 Hola *${selectedOrder?.customerName}*,\n\n`;
-                                    message += `¡Tu pedido *${selectedOrder?.folio}* está listo!\n\n`;
-
-                                    if (editForm.shippingCompany || editForm.tracking) {
-                                        message += `📦 *Datos de Envío:*\n`;
-                                        if (editForm.shippingCompany) message += `• Empresa: ${editForm.shippingCompany}\n`;
-                                        if (editForm.tracking) message += `• Guía/Tracking: ${editForm.tracking}\n`;
-                                        if (editForm.address) message += `• Dirección: ${editForm.address}\n`;
-                                        message += `\n`;
-                                    }
-
-                                    if (editForm.guideFile && editForm.guideFile.startsWith('http')) {
-                                        message += `🔗 *Ver Guía:* ${editForm.guideFile}\n\n`;
-                                    }
-
-                                    message += `_¡Gracias por tu compra! Es un placer atenderte. Si tienes alguna duda, no dudes en escribirnos._\n\n`;
-                                    message += `✨ *${settings?.name || 'Tu tienda favorita'}*`;
-
-                                    window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
-                                }}
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-2">Estado del Proceso</label>
+                        <div className="grid grid-cols-1 gap-2">
+                            <select
+                                className="w-full p-3 rounded-xl border border-gray-300 bg-white font-bold outline-none focus:ring-2 focus:ring-primary/50"
+                                value={editForm.status}
+                                onChange={(e) => setEditForm({ ...editForm, status: e.target.value as any })}
                             >
-                                Enviar Texto
-                            </Button>
+                                <option value="pending">🟡 Pendiente (En Cola)</option>
+                                <option value="design">🎨 Diseño / Personalización</option>
+                                <option value="printing">🖨️ Impresión / DTF</option>
+                                <option value="qc">🔍 Control de Calidad</option>
+                                <option value="production">🛠️ En Producción / Taller</option>
+                                <option value="ready">📦 Listo / Empaquetado</option>
+                                <option value="shipped">🚚 Enviado (En Ruta)</option>
+                                <option value="delivered">🏁 Entregado (Finalizado)</option>
+                            </select>
+                        </div>
+                    </div>
 
-                            {editForm.guideFile && (
-                                <Button
-                                    size="sm"
-                                    variant="primary"
-                                    icon="share-alt"
-                                    className="flex-1"
-                                    onClick={async () => {
-                                        try {
-                                            // Copy customer name to clipboard for WhatsApp search
-                                            if (selectedOrder?.customerName) {
-                                                await navigator.clipboard.writeText(selectedOrder.customerName);
-                                                showToast(`Nombre '${selectedOrder.customerName}' copiado. Pégalo en el buscador de WhatsApp.`, "info");
-                                            }
-
-                                            const response = await fetch(editForm.guideFile);
-                                            const blob = await response.blob();
-                                            const extension = editForm.guideFileType === 'pdf' ? 'pdf' : 'jpg';
-
-                                            // Create message for file sharing
-                                            const fileMessage = `📦 Guía de envío - Pedido ${selectedOrder?.folio}\n\n¡Hola ${selectedOrder?.customerName}! Aquí está tu guía de envío.\n\n¡Gracias por tu compra! ✨ ${settings?.name || ''}`;
-
-                                            const file = new File([blob], `guia-${selectedOrder?.folio}.${extension}`, { type: blob.type });
-
-                                            if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-                                                await navigator.share({
-                                                    files: [file],
-                                                    title: `Guía de envío - ${selectedOrder?.folio}`,
-                                                    text: fileMessage
-                                                });
-                                                showToast("Menú de compartir abierto", "success");
-                                            } else {
-                                                // Fallback: Download
-                                                const link = document.createElement('a');
-                                                link.href = editForm.guideFile;
-                                                link.download = `guia-${selectedOrder?.folio}.${extension}`;
-                                                link.click();
-                                                showToast("El navegador no soporta compartir archivos. Se ha descargado el archivo.", "warning");
-                                            }
-                                        } catch (err) {
-                                            console.error("Error sharing file:", err);
-                                            showToast("Error al intentar compartir el archivo", "error");
-                                        }
-                                    }}
-                                >
-                                    Compartir Archivo
-                                </Button>
+                    {/* NUEVO: Historial de Estados */}
+                    <div className="px-1">
+                        <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                            <i className="fas fa-history"></i> Línea de Tiempo del Pedido
+                        </h4>
+                        <div className="space-y-2 relative before:content-[''] before:absolute before:left-[7px] before:top-2 before:bottom-2 before:w-[2px] before:bg-gray-100">
+                            {selectedOrder?.fulfillmentHistory && selectedOrder.fulfillmentHistory.length > 0 ? (
+                                selectedOrder.fulfillmentHistory.slice().reverse().map((entry, idx) => (
+                                    <div key={idx} className="relative pl-6 flex justify-between items-center group">
+                                        <div className={`absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 border-white shadow-sm flex items-center justify-center z-10 transition-colors ${entry.status === 'delivered' ? 'bg-green-500' :
+                                            entry.status === 'shipped' ? 'bg-purple-500' :
+                                                entry.status === 'ready' ? 'bg-green-400' :
+                                                    entry.status === 'production' ? 'bg-blue-500' : 'bg-yellow-500'
+                                            }`}>
+                                            <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
+                                        </div>
+                                        <div className="flex-1">
+                                            <span className="text-xs font-bold text-gray-700 capitalize">{entry.status.replace('_', ' ')}</span>
+                                            <span className="text-[9px] text-gray-400 ml-2">{new Date(entry.date).toLocaleString()}</span>
+                                        </div>
+                                        {idx === 0 && <Badge variant="default" className="text-[8px] py-0 h-4">Actual</Badge>}
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="relative pl-6 flex justify-between items-center group">
+                                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 border-white shadow-sm flex items-center justify-center z-10 bg-yellow-500">
+                                        <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
+                                    </div>
+                                    <div className="flex-1">
+                                        <span className="text-xs font-bold text-gray-700 capitalize">Creado (Estado Inicial)</span>
+                                        <span className="text-[9px] text-gray-400 ml-2">{new Date(selectedOrder?.date || '').toLocaleString()}</span>
+                                    </div>
+                                    <Badge variant="default" className="text-[8px] py-0 h-4">Origen</Badge>
+                                </div>
                             )}
                         </div>
                     </div>
-                )}
 
-
-                {editForm.guideFile ? (
-                    <div className="space-y-2">
-                        <div className="flex items-center justify-between bg-white p-2 rounded-lg border border-sky-200">
-                            <div className="flex items-center gap-2">
-                                <i className={`fas fa-${editForm.guideFileType === 'pdf' ? 'file-pdf text-red-500' : 'image text-blue-500'} text-xl`}></i>
-                                <span className="text-sm font-medium text-gray-700 truncate max-w-[200px]">{editForm.guideFileName || 'Guía cargada'}</span>
-                            </div>
-                            <div className="flex gap-2">
-                                {editForm.guideFileType === 'pdf' ? (
-                                    <a
-                                        href={editForm.guideFile}
-                                        download={editForm.guideFileName || 'guia.pdf'}
-                                        className="text-xs bg-sky-100 text-sky-700 px-2 py-1 rounded font-bold hover:bg-sky-200 transition-colors"
-                                    >
-                                        <i className="fas fa-download mr-1"></i>Descargar
-                                    </a>
-                                ) : (
-                                    <button
-                                        onClick={() => window.open(editForm.guideFile, '_blank')}
-                                        className="text-xs bg-sky-100 text-sky-700 px-2 py-1 rounded font-bold hover:bg-sky-200 transition-colors"
-                                    >
-                                        <i className="fas fa-eye mr-1"></i>Ver
-                                    </button>
-                                )}
+                    <div className="bg-purple-50 p-4 rounded-xl border border-purple-100 space-y-3">
+                        <div className="flex justify-between items-center mb-1">
+                            <h4 className="font-bold text-purple-900 text-sm uppercase flex items-center gap-2">
+                                <i className="fas fa-truck"></i> Datos de Envío
+                            </h4>
+                            {settings?.boxfulApiKey && (
                                 <button
-                                    onClick={() => setEditForm({ ...editForm, guideFile: '', guideFileType: '', guideFileName: '' })}
-                                    className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded font-bold hover:bg-red-200 transition-colors"
+                                    onClick={handleGenerateBoxful}
+                                    disabled={isGeneratingBoxful || editForm.isLocalDelivery}
+                                    className="text-[10px] font-black bg-purple-600 text-white px-2 py-1 rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-all flex items-center gap-1 shadow-sm"
                                 >
-                                    <i className="fas fa-trash"></i>
+                                    <i className={`fas fa-${isGeneratingBoxful ? 'spinner fa-spin' : 'magic'}`}></i>
+                                    Generar Boxful
                                 </button>
+                            )}
+                        </div>
+                        <div className="space-y-3">
+                            <div className="grid grid-cols-2 gap-3">
+                                <Input label="Empresa de Envío" placeholder="Ej: Cargo Expreso" value={editForm.shippingCompany} onChange={e => setEditForm({ ...editForm, shippingCompany: e.target.value })} style={{ background: 'white' }} disabled={editForm.isLocalDelivery} />
+                                <Input label="No. de Guía / Tracking" placeholder="Ej: 12345678" value={editForm.tracking} onChange={e => setEditForm({ ...editForm, tracking: e.target.value })} style={{ background: 'white' }} disabled={editForm.isLocalDelivery} selectOnFocus={true} />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="block text-[10px] font-bold text-purple-400 uppercase">Dirección de Entrega</label>
+                                <textarea
+                                    className="w-full p-2 text-xs rounded-xl border border-gray-200 bg-white outline-none focus:border-purple-300 min-h-[60px]"
+                                    placeholder="Ingrese la dirección completa..."
+                                    value={editForm.address}
+                                    onChange={e => setEditForm({ ...editForm, address: e.target.value })}
+                                    disabled={editForm.isLocalDelivery}
+                                ></textarea>
                             </div>
                         </div>
-                        {editForm.guideFileType === 'image' && (
-                            <img src={editForm.guideFile} alt="Guía" className="w-full max-h-48 object-contain rounded-lg border border-sky-200" />
-                        )}
+
+                        {/* Toggle Entrega Local */}
+                        <div className={`flex items-center justify-between p-3 rounded-xl border-2 transition-all ${editForm.isLocalDelivery ? 'bg-green-100 border-green-400' : 'bg-white border-gray-200'}`}>
+                            <div className="flex items-center gap-3">
+                                <i className={`fas fa-${editForm.isLocalDelivery ? 'store' : 'shipping-fast'} text-xl ${editForm.isLocalDelivery ? 'text-green-600' : 'text-gray-400'}`}></i>
+                                <div>
+                                    <p className={`font-bold text-sm ${editForm.isLocalDelivery ? 'text-green-800' : 'text-gray-700'}`}>Entrega Local</p>
+                                    <p className="text-[10px] text-gray-500">El cliente recoge en tienda (no requiere guía)</p>
+                                </div>
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    className="sr-only peer"
+                                    checked={editForm.isLocalDelivery}
+                                    onChange={e => setEditForm({ ...editForm, isLocalDelivery: e.target.checked })}
+                                />
+                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
+                            </label>
+                        </div>
                     </div>
-                ) : (
-                    <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-sky-300 rounded-xl cursor-pointer hover:bg-sky-100 transition-colors">
-                        <i className="fas fa-cloud-upload-alt text-2xl text-sky-400 mb-2"></i>
-                        <span className="text-sm text-sky-700 font-medium">Click para subir guía</span>
-                        <span className="text-[10px] text-sky-500">PDF o Imagen (JPG, PNG) • Máx 5MB</span>
-                        <input
-                            type="file"
-                            className="hidden"
-                            accept=".pdf,image/*"
-                            onChange={handleGuideUpload}
-                        />
-                    </label>
-                )}
-            </div>
-        )}
 
-        {/* Sección de Imágenes de Producción */}
-        <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 space-y-3">
-            <h4 className="font-bold text-amber-900 text-sm uppercase flex items-center gap-2">
-                <i className="fas fa-images"></i> Imágenes de Producción
-                <span className="text-[10px] font-normal text-amber-600 ml-auto">{editForm.productionImages.length}/3</span>
-            </h4>
+                    {/* Sección de Guía de Envío (PDF o Imagen) */}
+                    {['ready', 'shipped', 'delivered'].includes(editForm.status) && (
+                        <div className="bg-sky-50 p-4 rounded-xl border border-sky-100 space-y-3">
+                            <h4 className="font-bold text-sky-900 text-sm uppercase flex items-center gap-2">
+                                <i className="fas fa-file-alt"></i> Guía de Envío
+                            </h4>
 
-            <div className="grid grid-cols-3 gap-2">
-                {editForm.productionImages.map((img, idx) => (
-                    <div key={idx} className="relative group">
-                        <img src={img} alt={`Producción ${idx + 1}`} className="w-full h-20 object-cover rounded-lg border border-amber-200" />
-                        <button
-                            onClick={() => removeProductionImage(idx)}
-                            className="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white rounded-full text-[10px] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-                        >
-                            <i className="fas fa-times"></i>
-                        </button>
+                            {/* WhatsApp Share Action - shows when there's a guide file OR tracking number */}
+                            {(editForm.guideFile || editForm.tracking) && (
+                                <div className="flex flex-col gap-2 bg-white p-3 rounded-xl border border-sky-200 shadow-sm">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex-1">
+                                            <p className="text-[10px] font-bold text-sky-600 uppercase">Compartir con Cliente</p>
+                                            <p className="text-xs text-gray-500">Enviar guía por WhatsApp</p>
+                                        </div>
+                                        <Input
+                                            placeholder="Teléfono"
+                                            value={editForm.sharePhone}
+                                            className="!py-1 !text-xs w-28"
+                                            onChange={(e) => setEditForm({ ...editForm, sharePhone: e.target.value })}
+                                            selectOnFocus={true}
+                                        />
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <Button
+                                            size="sm"
+                                            variant="success"
+                                            icon="whatsapp"
+                                            className="flex-1"
+                                            onClick={() => {
+                                                let cleanPhone = editForm.sharePhone.replace(/\D/g, '');
+                                                if (cleanPhone.length === 8) cleanPhone = '504' + cleanPhone;
+
+                                                // Build message with thank you and order info
+                                                let message = `👋 Hola *${selectedOrder?.customerName}*,\n\n`;
+                                                message += `¡Tu pedido *${selectedOrder?.folio}* está listo!\n\n`;
+
+                                                if (editForm.shippingCompany || editForm.tracking) {
+                                                    message += `📦 *Datos de Envío:*\n`;
+                                                    if (editForm.shippingCompany) message += `• Empresa: ${editForm.shippingCompany}\n`;
+                                                    if (editForm.tracking) message += `• Guía/Tracking: ${editForm.tracking}\n`;
+                                                    if (editForm.address) message += `• Dirección: ${editForm.address}\n`;
+                                                    message += `\n`;
+                                                }
+
+                                                if (editForm.guideFile && editForm.guideFile.startsWith('http')) {
+                                                    message += `🔗 *Ver Guía:* ${editForm.guideFile}\n\n`;
+                                                }
+
+                                                message += `_¡Gracias por tu compra! Es un placer atenderte. Si tienes alguna duda, no dudes en escribirnos._\n\n`;
+                                                message += `✨ *${settings?.name || 'Tu tienda favorita'}*`;
+
+                                                window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
+                                            }}
+                                        >
+                                            Enviar Texto
+                                        </Button>
+
+                                        {editForm.guideFile && (
+                                            <Button
+                                                size="sm"
+                                                variant="primary"
+                                                icon="share-alt"
+                                                className="flex-1"
+                                                onClick={async () => {
+                                                    try {
+                                                        // Copy customer name to clipboard for WhatsApp search
+                                                        if (selectedOrder?.customerName) {
+                                                            await navigator.clipboard.writeText(selectedOrder.customerName);
+                                                            showToast(`Nombre '${selectedOrder.customerName}' copiado. Pégalo en el buscador de WhatsApp.`, "info");
+                                                        }
+
+                                                        const response = await fetch(editForm.guideFile);
+                                                        const blob = await response.blob();
+                                                        const extension = editForm.guideFileType === 'pdf' ? 'pdf' : 'jpg';
+
+                                                        // Create message for file sharing
+                                                        const fileMessage = `📦 Guía de envío - Pedido ${selectedOrder?.folio}\n\n¡Hola ${selectedOrder?.customerName}! Aquí está tu guía de envío.\n\n¡Gracias por tu compra! ✨ ${settings?.name || ''}`;
+
+                                                        const file = new File([blob], `guia-${selectedOrder?.folio}.${extension}`, { type: blob.type });
+
+                                                        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+                                                            await navigator.share({
+                                                                files: [file],
+                                                                title: `Guía de envío - ${selectedOrder?.folio}`,
+                                                                text: fileMessage
+                                                            });
+                                                            showToast("Menú de compartir abierto", "success");
+                                                        } else {
+                                                            // Fallback: Download
+                                                            const link = document.createElement('a');
+                                                            link.href = editForm.guideFile;
+                                                            link.download = `guia-${selectedOrder?.folio}.${extension}`;
+                                                            link.click();
+                                                            showToast("El navegador no soporta compartir archivos. Se ha descargado el archivo.", "warning");
+                                                        }
+                                                    } catch (err) {
+                                                        console.error("Error sharing file:", err);
+                                                        showToast("Error al intentar compartir el archivo", "error");
+                                                    }
+                                                }}
+                                            >
+                                                Compartir Archivo
+                                            </Button>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+
+                            {editForm.guideFile ? (
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between bg-white p-2 rounded-lg border border-sky-200">
+                                        <div className="flex items-center gap-2">
+                                            <i className={`fas fa-${editForm.guideFileType === 'pdf' ? 'file-pdf text-red-500' : 'image text-blue-500'} text-xl`}></i>
+                                            <span className="text-sm font-medium text-gray-700 truncate max-w-[200px]">{editForm.guideFileName || 'Guía cargada'}</span>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            {editForm.guideFileType === 'pdf' ? (
+                                                <a
+                                                    href={editForm.guideFile}
+                                                    download={editForm.guideFileName || 'guia.pdf'}
+                                                    className="text-xs bg-sky-100 text-sky-700 px-2 py-1 rounded font-bold hover:bg-sky-200 transition-colors"
+                                                >
+                                                    <i className="fas fa-download mr-1"></i>Descargar
+                                                </a>
+                                            ) : (
+                                                <button
+                                                    onClick={() => window.open(editForm.guideFile, '_blank')}
+                                                    className="text-xs bg-sky-100 text-sky-700 px-2 py-1 rounded font-bold hover:bg-sky-200 transition-colors"
+                                                >
+                                                    <i className="fas fa-eye mr-1"></i>Ver
+                                                </button>
+                                            )}
+                                            <button
+                                                onClick={() => setEditForm({ ...editForm, guideFile: '', guideFileType: '', guideFileName: '' })}
+                                                className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded font-bold hover:bg-red-200 transition-colors"
+                                            >
+                                                <i className="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    {editForm.guideFileType === 'image' && (
+                                        <img
+                                            src={editForm.guideFile}
+                                            alt="Guía"
+                                            className="w-full max-h-48 object-contain rounded-lg border border-sky-200 cursor-zoom-in hover:opacity-90 transition-opacity"
+                                            onClick={() => setPreviewImage(editForm.guideFile)}
+                                        />
+                                    )}
+                                </div>
+                            ) : (
+                                <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-sky-300 rounded-xl cursor-pointer hover:bg-sky-100 transition-colors">
+                                    <i className="fas fa-cloud-upload-alt text-2xl text-sky-400 mb-2"></i>
+                                    <span className="text-sm text-sky-700 font-medium">Click para subir guía</span>
+                                    <span className="text-[10px] text-sky-500">PDF o Imagen (JPG, PNG) • Máx 5MB</span>
+                                    <input
+                                        type="file"
+                                        className="hidden"
+                                        accept=".pdf,image/*"
+                                        onChange={handleGuideUpload}
+                                    />
+                                </label>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Sección de Imágenes de Producción */}
+                    <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 space-y-3">
+                        <h4 className="font-bold text-amber-900 text-sm uppercase flex items-center gap-2">
+                            <i className="fas fa-images"></i> Imágenes de Producción
+                            <span className="text-[10px] font-normal text-amber-600 ml-auto">{editForm.productionImages.length}/3</span>
+                        </h4>
+
+                        <div className="grid grid-cols-3 gap-2">
+                            {editForm.productionImages.map((img, idx) => (
+                                <div key={idx} className="relative group">
+                                    <img
+                                        src={img}
+                                        alt={`Producción ${idx + 1}`}
+                                        className="w-full h-20 object-cover rounded-lg border border-amber-200 cursor-zoom-in hover:brightness-110 shadow-sm"
+                                        onClick={() => setPreviewImage(img)}
+                                    />
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); removeProductionImage(idx); }}
+                                        className="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white rounded-full text-[10px] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center shadow-md z-10"
+                                    >
+                                        <i className="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            ))}
+
+                            {editForm.productionImages.length < 3 && (
+                                <label className="flex flex-col items-center justify-center h-20 border-2 border-dashed border-amber-300 rounded-lg cursor-pointer hover:bg-amber-100 transition-colors">
+                                    <i className="fas fa-plus text-amber-400"></i>
+                                    <span className="text-[9px] text-amber-600 mt-1">Agregar</span>
+                                    <input
+                                        type="file"
+                                        className="hidden"
+                                        accept="image/*"
+                                        multiple
+                                        onChange={handleProductionImageUpload}
+                                    />
+                                </label>
+                            )}
+                        </div>
+                        <p className="text-[10px] text-amber-600">Sube imágenes de referencia para producción (bocetos, inspiración, etc.)</p>
                     </div>
-                ))}
 
-                {editForm.productionImages.length < 3 && (
-                    <label className="flex flex-col items-center justify-center h-20 border-2 border-dashed border-amber-300 rounded-lg cursor-pointer hover:bg-amber-100 transition-colors">
-                        <i className="fas fa-plus text-amber-400"></i>
-                        <span className="text-[9px] text-amber-600 mt-1">Agregar</span>
-                        <input
-                            type="file"
-                            className="hidden"
-                            accept="image/*"
-                            multiple
-                            onChange={handleProductionImageUpload}
-                        />
-                    </label>
-                )}
-            </div>
-            <p className="text-[10px] text-amber-600">Sube imágenes de referencia para producción (bocetos, inspiración, etc.)</p>
-        </div>
-
-        <div>
-            <label className="block text-sm font-bold text-gray-700 mb-1">Notas Internas / Producción</label>
-            <textarea
-                className="w-full p-3 rounded-xl border border-gray-300 bg-white h-24 text-sm outline-none focus:border-primary font-medium"
-                placeholder="Ej: Cliente solicitó envoltorio azul, entregar después de las 5pm..."
-                value={editForm.notes}
-                onChange={e => setEditForm({ ...editForm, notes: e.target.value })}
-            ></textarea>
-        </div>
-
-        {/* Payment Status Section */}
-        {selectedOrder && (
-            <div className={`p-4 rounded-xl border ${selectedOrder.balance && selectedOrder.balance > 0 ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'}`}>
-                <h4 className={`font-bold text-sm mb-3 flex items-center gap-2 ${selectedOrder.balance && selectedOrder.balance > 0 ? 'text-amber-800' : 'text-green-800'}`}>
-                    <i className={`fas fa-${selectedOrder.balance && selectedOrder.balance > 0 ? 'exclamation-circle' : 'check-circle'}`}></i>
-                    Estado de Cuenta
-                </h4>
-
-                <div className="grid grid-cols-3 gap-2 mb-4">
-                    <div className="bg-white/60 p-2 rounded-lg">
-                        <p className="text-[10px] uppercase font-bold text-gray-500">Total</p>
-                        <p className="font-bold text-gray-800">L {selectedOrder.total.toFixed(2)}</p>
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-1">Notas Internas / Producción</label>
+                        <textarea
+                            className="w-full p-3 rounded-xl border border-gray-300 bg-white h-24 text-sm outline-none focus:border-primary font-medium"
+                            placeholder="Ej: Cliente solicitó envoltorio azul, entregar después de las 5pm..."
+                            value={editForm.notes}
+                            onChange={e => setEditForm({ ...editForm, notes: e.target.value })}
+                        ></textarea>
                     </div>
-                    <div className="bg-white/60 p-2 rounded-lg">
-                        <p className="text-[10px] uppercase font-bold text-gray-500">Pagado</p>
-                        <p className="font-bold text-gray-800">L {(selectedOrder.deposit || (selectedOrder.total - (selectedOrder.balance || 0))).toFixed(2)}</p>
-                    </div>
-                    <div className="bg-white/60 p-2 rounded-lg">
-                        <p className="text-[10px] uppercase font-bold text-gray-500">Pendiente</p>
-                        <p className={`font-black ${selectedOrder.balance && selectedOrder.balance > 0 ? 'text-red-500' : 'text-green-600'}`}>
-                            L {(selectedOrder.balance || 0).toFixed(2)}
-                        </p>
+
+                    {/* Payment Status Section */}
+                    {selectedOrder && (
+                        <div className={`p-4 rounded-xl border ${selectedOrder.balance && selectedOrder.balance > 0 ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'}`}>
+                            <h4 className={`font-bold text-sm mb-3 flex items-center gap-2 ${selectedOrder.balance && selectedOrder.balance > 0 ? 'text-amber-800' : 'text-green-800'}`}>
+                                <i className={`fas fa-${selectedOrder.balance && selectedOrder.balance > 0 ? 'exclamation-circle' : 'check-circle'}`}></i>
+                                Estado de Cuenta
+                            </h4>
+
+                            <div className="grid grid-cols-3 gap-2 mb-4">
+                                <div className="bg-white/60 p-2 rounded-lg">
+                                    <p className="text-[10px] uppercase font-bold text-gray-500">Total</p>
+                                    <p className="font-bold text-gray-800">L {selectedOrder.total.toFixed(2)}</p>
+                                </div>
+                                <div className="bg-white/60 p-2 rounded-lg">
+                                    <p className="text-[10px] uppercase font-bold text-gray-500">Pagado</p>
+                                    <p className="font-bold text-gray-800">L {(selectedOrder.deposit || (selectedOrder.total - (selectedOrder.balance || 0))).toFixed(2)}</p>
+                                </div>
+                                <div className="bg-white/60 p-2 rounded-lg">
+                                    <p className="text-[10px] uppercase font-bold text-gray-500">Pendiente</p>
+                                    <p className={`font-black ${selectedOrder.balance && selectedOrder.balance > 0 ? 'text-red-500' : 'text-green-600'}`}>
+                                        L {(selectedOrder.balance || 0).toFixed(2)}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {selectedOrder.balance && selectedOrder.balance > 0 ? (
+                                <Button
+                                    className="w-full"
+                                    variant="primary"
+                                    onClick={() => setIsPayModalOpen(true)}
+                                >
+                                    <i className="fas fa-cash-register mr-2"></i> Pagar Saldo y Facturar
+                                </Button>
+                            ) : (
+                                selectedOrder.documentType !== 'FACTURA' && (
+                                    <div className="text-center text-xs text-green-700 font-bold">
+                                        Venta completada (Ticket {selectedOrder.folio})
+                                    </div>
+                                )
+                            )}
+                        </div>
+                    )}
+
+                    {selectedOrder && selectedOrder.documentType === 'FACTURA' && (
+                        <div className="bg-green-50 p-3 rounded-xl border border-green-200 flex items-center gap-2">
+                            <i className="fas fa-check-circle text-green-600"></i>
+                            <span className="font-bold text-green-800 text-sm">Pedido Facturado - {selectedOrder.folio}</span>
+                        </div>
+                    )}
+
+                    <div className="flex justify-end pt-2 gap-2">
+                        <Button onClick={handleSaveUpdate} variant="primary" size="lg" icon="save" className="w-full sm:w-auto">Guardar Cambios</Button>
                     </div>
                 </div>
+            </Modal>
 
-                {selectedOrder.balance && selectedOrder.balance > 0 ? (
-                    <Button
-                        className="w-full"
-                        variant="primary"
-                        onClick={() => setIsPayModalOpen(true)}
-                    >
-                        <i className="fas fa-cash-register mr-2"></i> Pagar Saldo y Facturar
-                    </Button>
-                ) : (
-                    selectedOrder.documentType !== 'FACTURA' && (
-                        <div className="text-center text-xs text-green-700 font-bold">
-                            Venta completada (Ticket {selectedOrder.folio})
+            {/* Admin Password Modal for Rollback */}
+            <Modal isOpen={isAdminModalOpen} onClose={() => { setIsAdminModalOpen(false); setPendingRollback(null); }} title="Autorización Requerida" size="sm">
+                <div className="space-y-4">
+                    <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 text-center">
+                        <i className="fas fa-lock text-3xl text-amber-600 mb-2"></i>
+                        <p className="text-sm text-amber-800 font-bold">
+                            Retroceder el estado del pedido requiere autorización de un administrador.
+                        </p>
+                    </div>
+
+                    <Input
+                        label="Contraseña Maestra"
+                        type="password"
+                        placeholder="Ingrese contraseña de admin"
+                        value={adminPassword}
+                        onChange={e => setAdminPassword(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') confirmRollback(); }}
+                    />
+
+                    <div className="flex gap-2 pt-2">
+                        <Button variant="secondary" onClick={() => { setIsAdminModalOpen(false); setPendingRollback(null); }} className="flex-1">
+                            Cancelar
+                        </Button>
+                        <Button onClick={confirmRollback} className="flex-1" icon="unlock">
+                            Autorizar
+                        </Button>
+                    </div>
+                </div>
+            </Modal>
+
+            {/* PAYMENT MODAL */}
+            <Modal isOpen={isPayModalOpen} onClose={() => setIsPayModalOpen(false)} title="Completar Pago Saldo">
+                <div className="space-y-4">
+                    <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 text-center">
+                        <p className="text-sm text-blue-800">Saldo Pendiente a Pagar</p>
+                        <p className="text-3xl font-black text-blue-600">L {selectedOrder?.balance?.toFixed(2)}</p>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Método de Pago</label>
+                        <div className="grid grid-cols-3 gap-2">
+                            {['Efectivo', 'Tarjeta', 'Transferencia'].map(m => (
+                                <button
+                                    key={m}
+                                    onClick={() => setPayMethod(m as any)}
+                                    className={`py-3 px-2 rounded-xl text-xs font-bold border-2 transition-all ${payMethod === m ? 'border-primary bg-primary/5 text-primary' : 'border-gray-100 text-gray-500'}`}
+                                >
+                                    {m}
+                                </button>
+                            ))}
                         </div>
-                    )
-                )}
-            </div>
-        )}
+                    </div>
 
-        {selectedOrder && selectedOrder.documentType === 'FACTURA' && (
-            <div className="bg-green-50 p-3 rounded-xl border border-green-200 flex items-center gap-2">
-                <i className="fas fa-check-circle text-green-600"></i>
-                <span className="font-bold text-green-800 text-sm">Pedido Facturado - {selectedOrder.folio}</span>
-            </div>
-        )}
+                    {payMethod === 'Tarjeta' && (
+                        <Input label="Referencia / Voucher" placeholder="Calculado automáticamente" value={payDetails.cardRef || ''} onChange={e => setPayDetails({ ...payDetails, cardRef: e.target.value })} />
+                    )}
+                    {payMethod === 'Transferencia' && (
+                        <div className="grid grid-cols-2 gap-2">
+                            <Input label="Banco" value={payDetails.bank || ''} onChange={e => setPayDetails({ ...payDetails, bank: e.target.value })} />
+                            <Input label="Referencia" value={payDetails.transferRef || ''} onChange={e => setPayDetails({ ...payDetails, transferRef: e.target.value })} />
+                        </div>
+                    )}
 
-        <div className="flex justify-end pt-2 gap-2">
-            <Button onClick={handleSaveUpdate} variant="primary" size="lg" icon="save" className="w-full sm:w-auto">Guardar Cambios</Button>
-        </div>
-    </div>
-</Modal>
+                    <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                        <input
+                            type="checkbox"
+                            checked={generateInvoice}
+                            onChange={e => setGenerateInvoice(e.target.checked)}
+                            className="w-5 h-5 accent-primary"
+                        />
+                        <div>
+                            <p className="font-bold text-sm text-gray-800">Generar Factura CAI</p>
+                            <p className="text-xs text-gray-500">Convierte el documento a Factura válida</p>
+                        </div>
+                    </div>
 
-{/* Admin Password Modal for Rollback */ }
-<Modal isOpen={isAdminModalOpen} onClose={() => { setIsAdminModalOpen(false); setPendingRollback(null); }} title="Autorización Requerida" size="sm">
-    <div className="space-y-4">
-        <div className="bg-amber-50 p-4 rounded-xl border border-amber-200 text-center">
-            <i className="fas fa-lock text-3xl text-amber-600 mb-2"></i>
-            <p className="text-sm text-amber-800 font-bold">
-                Retroceder el estado del pedido requiere autorización de un administrador.
-            </p>
-        </div>
+                    <Button onClick={handleCompletePayment} className="w-full h-12" disabled={isProcessingPayment}>
+                        {isProcessingPayment ? <i className="fas fa-spinner fa-spin"></i> : 'Confirmar Pago y Finalizar'}
+                    </Button>
+                </div>
+            </Modal>
 
-        <Input
-            label="Contraseña Maestra"
-            type="password"
-            placeholder="Ingrese contraseña de admin"
-            value={adminPassword}
-            onChange={e => setAdminPassword(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') confirmRollback(); }}
-        />
-
-        <div className="flex gap-2 pt-2">
-            <Button variant="secondary" onClick={() => { setIsAdminModalOpen(false); setPendingRollback(null); }} className="flex-1">
-                Cancelar
-            </Button>
-            <Button onClick={confirmRollback} className="flex-1" icon="unlock">
-                Autorizar
-            </Button>
-        </div>
-    </div>
-</Modal>
-
-{/* PAYMENT MODAL */ }
-<Modal isOpen={isPayModalOpen} onClose={() => setIsPayModalOpen(false)} title="Completar Pago Saldo">
-    <div className="space-y-4">
-        <div className="bg-blue-50 p-4 rounded-xl border border-blue-200 text-center">
-            <p className="text-sm text-blue-800">Saldo Pendiente a Pagar</p>
-            <p className="text-3xl font-black text-blue-600">L {selectedOrder?.balance?.toFixed(2)}</p>
-        </div>
-
-        <div>
-            <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Método de Pago</label>
-            <div className="grid grid-cols-3 gap-2">
-                {['Efectivo', 'Tarjeta', 'Transferencia'].map(m => (
-                    <button
-                        key={m}
-                        onClick={() => setPayMethod(m as any)}
-                        className={`py-3 px-2 rounded-xl text-xs font-bold border-2 transition-all ${payMethod === m ? 'border-primary bg-primary/5 text-primary' : 'border-gray-100 text-gray-500'}`}
-                    >
-                        {m}
-                    </button>
-                ))}
-            </div>
-        </div>
-
-        {payMethod === 'Tarjeta' && (
-            <Input label="Referencia / Voucher" placeholder="Calculado automáticamente" value={payDetails.cardRef || ''} onChange={e => setPayDetails({ ...payDetails, cardRef: e.target.value })} />
-        )}
-        {payMethod === 'Transferencia' && (
-            <div className="grid grid-cols-2 gap-2">
-                <Input label="Banco" value={payDetails.bank || ''} onChange={e => setPayDetails({ ...payDetails, bank: e.target.value })} />
-                <Input label="Referencia" value={payDetails.transferRef || ''} onChange={e => setPayDetails({ ...payDetails, transferRef: e.target.value })} />
-            </div>
-        )}
-
-        <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-lg border border-gray-200">
-            <input
-                type="checkbox"
-                checked={generateInvoice}
-                onChange={e => setGenerateInvoice(e.target.checked)}
-                className="w-5 h-5 accent-primary"
+            {/* Global Image Preview */}
+            <ImagePreviewModal
+                isOpen={!!previewImage}
+                onClose={() => setPreviewImage(null)}
+                src={previewImage || ''}
+                title={selectedOrder ? `Previsualización - ${selectedOrder.folio}` : 'Previsualización'}
             />
-            <div>
-                <p className="font-bold text-sm text-gray-800">Generar Factura CAI</p>
-                <p className="text-xs text-gray-500">Convierte el documento a Factura válida</p>
-            </div>
-        </div>
-
-        <Button onClick={handleCompletePayment} className="w-full h-12" disabled={isProcessingPayment}>
-            {isProcessingPayment ? <i className="fas fa-spinner fa-spin"></i> : 'Confirmar Pago y Finalizar'}
-        </Button>
-    </div>
-</Modal>
         </div >
     );
 };

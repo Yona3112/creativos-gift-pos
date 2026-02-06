@@ -28,10 +28,19 @@ class AppDatabase extends Dexie {
   inventoryHistory!: Table<InventoryMovement>;
   priceHistory!: Table<PriceHistoryEntry>;
   auditLogs!: Table<AuditLog>;
+  syncQueue!: Table<{
+    id?: number;
+    tableName: string;
+    action: 'INSERT' | 'UPDATE' | 'DELETE';
+    payload: any;
+    timestamp: string;
+    attempts: number;
+    lastError?: string;
+  }>;
 
   constructor() {
     super('CreativosGiftDB');
-    (this as any).version(2).stores({
+    (this as any).version(3).stores({
       products: 'id, code, name, categoryId, active',
       categories: 'id, name',
       customers: 'id, name, phone, rtn, active',
@@ -49,7 +58,8 @@ class AppDatabase extends Dexie {
       expenses: 'id, date, categoryId',
       inventoryHistory: '++id, productId, date, type',
       priceHistory: '++id, productId, date',
-      auditLogs: 'id, date, userId, module, action'
+      auditLogs: 'id, date, userId, module, action',
+      syncQueue: '++id, tableName, timestamp'
     });
   }
 }
@@ -218,8 +228,7 @@ export class StorageService {
       };
 
       await db_engine.auditLogs.put(log);
-      // Redundant immediate push removed to favor centralized sync
-      // this.pushToCloud('audit_logs', log);
+      this.pushToCloud('audit_logs', log, 'INSERT');
     } catch (e) {
       console.warn("Could not save audit log", e);
     }
@@ -318,12 +327,12 @@ export class StorageService {
     return unsynced;
   }
 
-  private async pushToCloud(tableName: string, record: any) {
+  private async pushToCloud(tableName: string, record: any, action: 'INSERT' | 'UPDATE' | 'DELETE' = 'UPDATE') {
     try {
-      const { SupabaseService } = await import('./supabaseService');
-      await SupabaseService.pushRecord(tableName, record);
+      const { SyncQueueService } = await import('./syncQueueService');
+      await SyncQueueService.enqueue(tableName, action, record);
     } catch (e) {
-      console.warn(`⚠️ [CloudPush] Fallo al sincronizar ${tableName}:`, e);
+      console.warn(`⚠️ [SyncQueue] Error al encolar en ${tableName}:`, e);
     }
   }
 
@@ -461,8 +470,7 @@ export class StorageService {
     product.updatedAt = this.getLocalNowISO(); // Update timestamp
     await db_engine.products.put(product);
 
-    const { SupabaseService } = await import('./supabaseService');
-    SupabaseService.pushRecord('products', product);
+    this.pushToCloud('products', product);
   }
 
   async deleteProduct(id: string) {
@@ -551,8 +559,7 @@ export class StorageService {
     if (cat.active === undefined) cat.active = true;
     cat.updatedAt = this.getLocalNowISO();
     await db_engine.categories.put(cat);
-    // Redundant immediate push removed
-    // this.pushToCloud('categories', cat);
+    this.pushToCloud('categories', cat);
   }
 
   async deleteCategory(id: string) {
@@ -577,8 +584,7 @@ export class StorageService {
     }
     c.updatedAt = this.getLocalNowISO();
     await db_engine.customers.put(c);
-    // Redundant immediate push removed
-    // this.pushToCloud('customers', c);
+    this.pushToCloud('customers', c);
   }
   async deleteCustomer(id: string) {
     const c = await db_engine.customers.get(id);
@@ -739,7 +745,7 @@ export class StorageService {
       }
       */
 
-      // this.pushToCloud('sales', newSale);
+      this.pushToCloud('sales', newSale, 'INSERT');
       return newSale;
     });
   }
@@ -923,8 +929,7 @@ export class StorageService {
     e.date = e.date.substring(0, 10);
     e.updatedAt = this.getLocalNowISO();
     await db_engine.expenses.put(e);
-    // Redundant immediate push removed
-    // this.pushToCloud('expenses', e);
+    this.pushToCloud('expenses', e);
     return e.id;
   }
 
@@ -951,8 +956,7 @@ export class StorageService {
       if (c.paidAmount >= c.totalAmount - 0.1) c.status = 'paid';
       c.updatedAt = this.getLocalNowISO();
       await db_engine.credits.put(c);
-      // Redundant immediate push removed
-      // this.pushToCloud('credits', c);
+      this.pushToCloud('credits', c);
     }
   }
 
@@ -1607,8 +1611,8 @@ export class StorageService {
     sale.updatedAt = this.getLocalNowISO();
 
     await db_engine.sales.put(sale);
-    // Redundant immediate push removed
-    // this.pushToCloud('sales', sale);
+    this.pushToCloud('sales', sale);
+    return sale;
   }
 
   async deleteBranch(id: string) {

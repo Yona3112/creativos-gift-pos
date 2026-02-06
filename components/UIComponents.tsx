@@ -84,14 +84,25 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   uppercase?: boolean;
 }
 
-// INPUT DE ALTO CONTRASTE (CAJA GRIS, TEXTO NEGRO) - CON MAYÚSCULAS AUTOMÁTICAS
-export const Input: React.FC<InputProps> = ({ label, error, icon, className = '', style, uppercase = true, onChange, type, ...props }) => {
-  // Convertir a mayúsculas automáticamente para campos de texto
+// INPUT PROFESIONAL (MEJORADO PARA MÓVIL)
+export const Input: React.FC<InputProps> = ({
+  label, error, icon, className = '', style,
+  uppercase = true, selectOnFocus = false,
+  onChange, type, onFocus, ...props
+}) => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (uppercase && type !== 'email' && type !== 'password' && type !== 'number' && type !== 'date' && type !== 'tel') {
-      e.target.value = e.target.value.toUpperCase();
-    }
+    // No forzamos mayúsculas mediante e.target.value = ... 
+    // porque rompe la autocorrección y composición de caracteres en móviles.
+    // Simplemente pasamos el evento y confiamos en el CSS uppercase y 
+    // la normalización posterior si es necesaria.
     onChange?.(e);
+  };
+
+  const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    if (selectOnFocus) {
+      e.target.select();
+    }
+    onFocus?.(e);
   };
 
   return (
@@ -112,7 +123,7 @@ export const Input: React.FC<InputProps> = ({ label, error, icon, className = ''
             border: error ? '2px solid #EF4444' : '1px solid #9CA3AF',
             ...style
           }}
-          onFocus={(e) => e.target.select()}
+          onFocus={handleFocus}
           onChange={handleChange}
           {...props}
         />
@@ -199,6 +210,52 @@ export const Modal: React.FC<{ isOpen: boolean; onClose: () => void; title: stri
         </div>
         <div className="p-6 overflow-y-auto text-gray-900">
           {children}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- IMAGE PREVIEW MODAL (LIGHTBOX) ---
+export const ImagePreviewModal: React.FC<{ isOpen: boolean; onClose: () => void; src: string; title?: string }> = ({ isOpen, onClose, src, title }) => {
+  if (!isOpen || !src) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/90 backdrop-blur-md" onClick={onClose}></div>
+      <div className="relative z-10 max-w-full max-h-full flex flex-col items-center justify-center animate-pop-in">
+        {/* Header con botón cerrar */}
+        <div className="absolute top-0 right-0 p-4">
+          <button
+            onClick={onClose}
+            className="w-12 h-12 rounded-full bg-white/20 hover:bg-white/40 text-white flex items-center justify-center backdrop-blur-md transition-all border border-white/30"
+          >
+            <i className="fas fa-times text-2xl"></i>
+          </button>
+        </div>
+
+        {title && (
+          <div className="absolute top-0 left-0 p-6">
+            <h3 className="text-white font-black text-xl drop-shadow-lg uppercase tracking-widest">{title}</h3>
+          </div>
+        )}
+
+        <img
+          src={src}
+          className="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-2xl border-4 border-white/10"
+          alt="Preview"
+          onClick={(e) => e.stopPropagation()}
+        />
+
+        <div className="mt-6 flex gap-4">
+          <Button variant="secondary" onClick={onClose} icon="times">Cerrar</Button>
+          <a
+            href={src}
+            download="imagen-produccion.jpg"
+            className="px-5 py-3 rounded-xl font-bold text-sm bg-white/20 hover:bg-white/30 text-white border border-white/40 flex items-center gap-2 transition-all"
+          >
+            <i className="fas fa-download"></i> Descargar
+          </a>
         </div>
       </div>
     </div>

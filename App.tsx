@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { db } from './services/storageService';
+import { SyncQueueService } from './services/syncQueueService';
 import { User, Product, Category, Customer, Sale, Branch, CreditAccount, Promotion, CompanySettings, Quote, Consumable, Expense } from './types';
 import { Layout } from './components/Layout';
 import { Dashboard } from './pages/Dashboard';
@@ -120,27 +121,23 @@ function App() {
     setExpenses(exp);
   };
 
-  // Centralized Background Sync (Pulse)
+  // Centralized Background Sync (Outbox Processor)
   useEffect(() => {
     if (!user) return;
 
-    let timeoutId: any;
+    // 1. Process queue on startup
+    SyncQueueService.processQueue();
 
-    const runBackgroundSync = async () => {
-      const sett = await db.getSettings();
-      if (sett.supabaseUrl && sett.supabaseKey && sett.autoSync) {
-        console.log("📡 [BackgroundSync] Iniciando pulso de sincronización...");
-        await refreshData(true);
-      }
-      // Schedule next run in 60 seconds
-      timeoutId = setTimeout(runBackgroundSync, 60000);
+    // 2. Process queue whenever network comes back online
+    const handleOnline = () => {
+      console.log("🌐 [App] Red detectada, procesando cola de sincronización...");
+      SyncQueueService.processQueue();
     };
 
-    // Initial delay before starting background sync to avoid competing with startup sync
-    timeoutId = setTimeout(runBackgroundSync, 30000);
+    window.addEventListener('online', handleOnline);
 
     return () => {
-      if (timeoutId) clearTimeout(timeoutId);
+      window.removeEventListener('online', handleOnline);
     };
   }, [user?.id]);
 
@@ -280,7 +277,7 @@ function App() {
 
             // Update lastBackupDate on successful sync
             const freshNow = new Date().toISOString();
-            await db.saveSettings({ ...sett, lastBackupDate: freshNow, lastCloudSync: freshNow, lastCloudPush: freshNow });
+            await db.saveSettings({ ...sett, lastBackupDate: freshNow });
 
             // Fix folios and reload
             await db.fixDuplicateFolios();

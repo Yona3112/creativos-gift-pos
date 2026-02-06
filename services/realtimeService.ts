@@ -4,6 +4,7 @@
  */
 
 import { db, db_engine } from './storageService';
+import { SyncQueueService } from './syncQueueService';
 import { Sale, FulfillmentStatus, ShippingDetails } from '../types';
 
 // Type for Realtime payload
@@ -72,10 +73,17 @@ export async function subscribeToRealtime(
                             remoteSale.items = [];
                         }
 
-                        // SINGLE SOURCE OF TRUTH: Remote Wins
-                        // We always update local with remote data to ensure consistency
-                        // Conflict resolution is removed in favor of "Supabase is Truth"
+                        // SINGLE SOURCE OF TRUTH: Remote Wins (UNLESS local has pending changes)
+                        // We always update local with remote data, but we check if we have 
+                        // local "intent" that hasn't reached the cloud yet.
                         try {
+                            // SMART MERGE: Don't overwrite if local changes are pending for this ID
+                            const hasPendingLocal = await SyncQueueService.hasPendingChanges('sales', remoteSale.id);
+                            if (hasPendingLocal) {
+                                console.log(`🚧 [Realtime:Sales] Ignorando cambio de nube para ${remoteSale.folio}: Hay cambios locales pendientes.`);
+                                return;
+                            }
+
                             // Check for local differences for logging only
                             const localSale = await db_engine.sales.get(remoteSale.id);
 
