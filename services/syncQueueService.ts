@@ -156,6 +156,10 @@ export class SyncQueueService {
      */
     static async auditAndEnqueueUnsynced() {
         console.log('🔍 [SyncQueue] Ejecutando auditoría de autocuración...');
+
+        // 0. Reconcile Sales & Credits BEFORE auditing
+        await this.reconcileCreditsAndSales();
+
         const tables = [
             'sales', 'expenses', 'customers', 'products', 'categories',
             'credits', 'creditNotes', 'inventoryHistory'
@@ -177,6 +181,43 @@ export class SyncQueueService {
             } catch (err) {
                 console.warn(`⚠️ [SyncQueue] Fallo al auditar tabla ${tableName}:`, err);
             }
+        }
+    }
+
+    /**
+     * RECONCILIATION: Ensures Sale.balance matches CreditAccount.paidAmount
+     * This fixes visual discrepancies where an order shows balance but is already paid.
+     */
+    private static async reconcileCreditsAndSales() {
+        try {
+            const credits = await db_engine.credits.toArray();
+            for (const credit of credits) {
+                if (!credit.saleId) continue;
+
+                // Find the associated sale by folio
+                const sale = await db_engine.sales.where('folio').equals(credit.saleId).first();
+                if (sale) {
+                    const actualBalance = Math.max(0, credit.totalAmount - credit.paidAmount);
+
+                    // If balance is out of sync, fix the sale record
+                    // Using small epsilon for floating point comparison
+                    if (Math.abs((sale.balance || 0) - actualBalance) > 0.01) {
+                        console.log(`⚖️ [Reconciliation] Corrigiendo balance de pedido ${sale.folio}: ${sale.balance} -> ${actualBalance}`);
+                        sale.balance = actualBalance;
+
+                        // If fully paid, optionally update fulfillment if it was stuck
+                        if (actualBalance === 0 && sale.fulfillmentStatus === 'pending') {
+                            sale.fulfillmentStatus = 'delivered';
+                        }
+
+                        sale.updatedAt = new Date().toISOString();
+                        sale._synced = false; // Mark for upload
+                        await db_engine.sales.put(sale);
+                    }
+                }
+            }
+        } catch (err) {
+            console.warn('⚠️ [Reconciliation] Falló la reconciliación:', err);
         }
     }
 }

@@ -1710,18 +1710,19 @@ export class StorageService {
     }
 
     // Actualizar venta
-    const balancePaid = sale.balance || 0;  // Save amount before clearing
-    sale.deposit = (sale.deposit || 0) + balancePaid;
+    const balancePaidAmount = sale.balance || 0;  // Save amount before clearing
+    sale.deposit = (sale.deposit || 0) + balancePaidAmount;
     sale.balance = 0;
     sale.isOrder = false; // Ya no está pendiente de pago
     sale.folio = newFolio;
     sale.documentType = newDocType;
     sale.cai = newCAI;
     sale.updatedAt = this.getLocalNowISO(); // CRITICAL: Update for multi-device sync
+    sale._synced = false;
 
     // CASH FLOW TRACKING: Record payment date, method, and amount for today's cash flow
     sale.balancePaymentDate = this.getLocalNowISO(); // Payment received TODAY
-    sale.balancePaid = balancePaid; // Store exact amount for cash cut calculation
+    sale.balancePaid = balancePaidAmount; // Store exact amount for cash cut calculation
     // Determine payment method from paymentDetails
     if (paymentDetails.cash && paymentDetails.cash > 0) {
       sale.balancePaymentMethod = 'Efectivo';
@@ -1729,6 +1730,32 @@ export class StorageService {
       sale.balancePaymentMethod = 'Tarjeta';
     } else if (paymentDetails.transfer && paymentDetails.transfer > 0) {
       sale.balancePaymentMethod = 'Transferencia';
+    }
+
+    await db_engine.sales.put(sale);
+    this.pushToCloud('sales', sale);
+
+    // ALSO SYNC WITH CREDIT ACCOUNT IF EXISTS
+    try {
+      const credit = await db_engine.credits.where('saleId').equals(sale.folio).first();
+      if (credit && credit.status !== 'paid') {
+        credit.paidAmount = credit.totalAmount;
+        credit.status = 'paid';
+        credit.updatedAt = this.getLocalNowISO();
+        credit._synced = false;
+        if (!Array.isArray(credit.payments)) credit.payments = [];
+        credit.payments.push({
+          id: `pay-complete-${Date.now()}`,
+          date: this.getLocalNowISO(),
+          amount: balancePaidAmount,
+          method: sale.balancePaymentMethod || 'Efectivo',
+          note: 'Liquidación automática desde Pedidos'
+        });
+        await db_engine.credits.put(credit);
+        this.pushToCloud('credits', credit);
+      }
+    } catch (e) {
+      console.warn("⚠️ Error liquidando crédito asociado:", e);
     }
 
     // Actualizar detalles de pago (append note or merge)
