@@ -711,6 +711,24 @@ export class StorageService {
         });
       }
 
+      // IMMEDIATE PUSH: Subir venta a Supabase inmediatamente para Realtime
+      // Esto permite que otros dispositivos la reciban al instante
+      try {
+        const { SupabaseService } = await import('./supabaseService');
+        const client = await SupabaseService.getClient();
+        if (client) {
+          console.log(`📤 Subiendo venta ${newSale.folio} a la nube inmediatamente...`);
+          const { error } = await client.from('sales').upsert(newSale);
+          if (error) {
+            console.error('❌ Error al subir venta:', error.message);
+          } else {
+            console.log(`✅ Venta ${newSale.folio} subida a la nube`);
+          }
+        }
+      } catch (pushErr) {
+        console.warn('⚠️ Push inmediato falló (usará autoSync):', pushErr);
+      }
+
       if (settings.autoSync) this.triggerAutoSync();
       return newSale;
     });
