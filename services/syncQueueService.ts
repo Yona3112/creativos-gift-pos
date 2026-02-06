@@ -156,14 +156,16 @@ export class SyncQueueService {
      */
     static async auditAndEnqueueUnsynced() {
         console.log('🔍 [SyncQueue] Ejecutando auditoría de autocuración...');
-        const tables = ['sales', 'expenses', 'customers', 'products', 'categories', 'credits'];
+        const tables = [
+            'sales', 'expenses', 'customers', 'products', 'categories',
+            'credits', 'creditNotes', 'inventoryHistory'
+        ];
 
         for (const tableName of tables) {
             try {
-                // Find records where _synced is false or undefined
-                // (Note: we use a filter because not all items might have the flag yet)
+                // Find records where _synced is NOT true (catches false and undefined/old records)
                 const unsynced = await (db_engine as any)[tableName]
-                    .filter((item: any) => item._synced === false)
+                    .filter((item: any) => item._synced !== true)
                     .toArray();
 
                 if (unsynced.length > 0) {

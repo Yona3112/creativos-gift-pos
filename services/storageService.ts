@@ -969,6 +969,18 @@ export class StorageService {
       c._synced = false;
       await db_engine.credits.put(c);
       this.pushToCloud('credits', c);
+
+      // ALSO UPDATE THE SALE BALANCE
+      if (c.saleId) {
+        const sale = await db_engine.sales.get(c.saleId);
+        if (sale) {
+          sale.balance = Math.max(0, (sale.balance || 0) - payment.amount);
+          sale.updatedAt = this.getLocalNowISO();
+          sale._synced = false;
+          await db_engine.sales.put(sale);
+          this.pushToCloud('sales', sale);
+        }
+      }
     }
   }
 
@@ -1420,17 +1432,29 @@ export class StorageService {
       c.paidAmount += details.finalAmount;
       c.status = 'paid';
       c.updatedAt = this.getLocalNowISO();
+      c._synced = false;
       if (!Array.isArray(c.payments)) c.payments = [];
       c.payments.push({
-        id: Date.now().toString(),
+        id: `pay-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
         date: this.getLocalNowISO(),
         amount: details.finalAmount,
         method: 'Efectivo',
         note: `Liquidación anticipada. Ahorro: L ${details.savings.toFixed(2)}`
       });
-      c.updatedAt = this.getLocalNowISO();
       await db_engine.credits.put(c);
       this.pushToCloud('credits', c);
+
+      // ALSO UPDATE THE SALE BALANCE
+      if (c.saleId) {
+        const sale = await db_engine.sales.get(c.saleId);
+        if (sale) {
+          sale.balance = 0; // Final liquidation
+          sale.updatedAt = this.getLocalNowISO();
+          sale._synced = false;
+          await db_engine.sales.put(sale);
+          this.pushToCloud('sales', sale);
+        }
+      }
     }
   }
 
