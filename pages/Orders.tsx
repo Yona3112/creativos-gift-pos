@@ -28,6 +28,7 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
     // Edit Modal State
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [selectedOrder, setSelectedOrder] = useState<Sale | null>(null);
+    const [processingOrderIds, setProcessingOrderIds] = useState<string[]>([]);
     const [editForm, setEditForm] = useState<{
         status: FulfillmentStatus;
         shippingCompany: string;
@@ -180,6 +181,7 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                 // OPTIMISTIC UI REMOVED: Now relying on database -> onUpdate -> Re-render cycle
                 // updateOrderInState(order.id, newStatus);
 
+                setProcessingOrderIds(prev => [...prev, order.id]);
                 await db.updateSaleStatus(order.id, newStatus);
 
                 // BACKGROUND SYNC: Push to cloud (don't await - let it happen in background)
@@ -196,11 +198,8 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                 })();
 
                 showToast(`${order.folio}: ${newStatus}`, 'success');
-                if (onUpdate) onUpdate();
-            } catch (e: any) {
-                // Revert optimistic update on error
-                if (onUpdate) onUpdate();
-                showToast(e.message || 'Error al actualizar estado', 'error');
+            } finally {
+                setProcessingOrderIds(prev => prev.filter(id => id !== order.id));
             }
         }
     };
@@ -328,6 +327,7 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
 
     const handleSaveUpdate = async () => {
         if (!selectedOrder) return;
+        setProcessingOrderIds(prev => [...prev, selectedOrder.id]);
 
         try {
             const isShipping = !!(editForm.shippingCompany || editForm.tracking) && !editForm.isLocalDelivery;
@@ -400,6 +400,8 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
             console.error('❌ Error guardando pedido:', e);
             if (onUpdate) onUpdate(); // Forced revert to global state
             showToast(e.message || 'Error al actualizar pedido', 'error');
+        } finally {
+            setProcessingOrderIds(prev => prev.filter(id => id !== selectedOrder?.id));
         }
     };
 
@@ -812,10 +814,14 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                                                             </button>
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); handleQuickStatusUpdate(order, 'next'); }}
-                                                                disabled={col.id === 'delivered'}
+                                                                disabled={col.id === 'delivered' || processingOrderIds.includes(order.id)}
                                                                 className="w-6 h-6 rounded-full bg-primary text-white shadow-md hover:scale-110 active:scale-95 transition-all disabled:opacity-20 flex items-center justify-center"
                                                             >
-                                                                <i className="fas fa-chevron-right text-[10px]"></i>
+                                                                {processingOrderIds.includes(order.id) ? (
+                                                                    <i className="fas fa-spinner fa-spin text-[8px]"></i>
+                                                                ) : (
+                                                                    <i className="fas fa-chevron-right text-[10px]"></i>
+                                                                )}
                                                             </button>
                                                         </div>
                                                     </div>

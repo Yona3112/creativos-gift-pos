@@ -69,7 +69,12 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
     if (file) {
       try {
         const compressedLogo = await db.compressImage(file);
-        setSettings(prev => prev ? ({ ...prev, logo: compressedLogo }) : null);
+        // Add versioning to bust cache if it's a URL or just refresh the state
+        const versionedLogo = compressedLogo.startsWith('data:')
+          ? compressedLogo
+          : `${compressedLogo}${compressedLogo.includes('?') ? '&' : '?'}v=${Date.now()}`;
+
+        setSettings(prev => prev ? ({ ...prev, logo: versionedLogo }) : null);
       } catch (err) {
         showToast("Error al procesar el logo.", "error");
       }
@@ -498,13 +503,10 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
             <div className="p-6 space-y-4">
               <div className="flex items-center justify-between p-3 bg-sky-50 rounded-xl border border-sky-100">
                 <div className="flex items-center gap-2">
-                  <div className={`w-3 h-3 rounded-full ${settings.autoSync ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`}></div>
-                  <span className="text-sm font-bold text-sky-900">Auto-Backup</span>
+                  <div className="w-3 h-3 rounded-full bg-green-500 animate-pulse"></div>
+                  <span className="text-sm font-bold text-sky-900">Cloud Realtime Sync Activo</span>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" className="sr-only peer" checked={settings.autoSync || false} onChange={e => setSettings(s => s ? ({ ...s, autoSync: e.target.checked }) : null)} />
-                  <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-sky-500"></div>
-                </label>
+                <Badge variant="success" className="text-[10px]">SIEMPRE ACTIVO</Badge>
               </div>
 
               <Input label="Supabase URL" name="supabaseUrl" value={settings.supabaseUrl || ''} onChange={handleChange} className="text-xs" />

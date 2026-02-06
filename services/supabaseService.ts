@@ -234,6 +234,32 @@ export class SupabaseService {
         return null;
     }
 
+    /**
+     * Push a single record to Supabase immediately
+     */
+    static async pushRecord(tableName: string, record: any): Promise<boolean> {
+        try {
+            const client = await this.getClient();
+            if (!client) return false;
+
+            const sanitized = this.sanitizeRecord(tableName, record);
+            const { error } = await client
+                .from(tableName)
+                .upsert(sanitized);
+
+            if (error) {
+                console.error(`❌ [Push] Error enviando a ${tableName}:`, error.message);
+                return false;
+            }
+
+            console.log(`📡 [Push] ${tableName} synced: ${record.id || record.folio || 'Record'}`);
+            return true;
+        } catch (err) {
+            console.warn(`⚠️ [Push] Fallo crítico en ${tableName}:`, err);
+            return false;
+        }
+    }
+
     static async testConnection() {
         const client = await this.getClient();
         if (!client) throw new Error("Supabase no está configurado (URL o Key faltante).");

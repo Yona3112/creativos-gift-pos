@@ -126,11 +126,6 @@ function App() {
         // El pull se maneja en initSync cuando user cambia
         await refreshData(false);
 
-        // Setup background check for 3-hour backup
-        backupIntervalId = setInterval(() => {
-          db.checkAndAutoSync();
-        }, 15 * 60 * 1000); // Check every 15 minutes
-
         // Auto-sync DESACTIVADO: El push automático cada 30s puede subir datos viejos
         // El push ahora solo ocurre cuando el usuario hace un cambio real (guardar producto, venta, etc.)
         // Esto se maneja en storageService.triggerAutoSync() que se llama después de cada operación
@@ -279,71 +274,11 @@ function App() {
     initSync();
   }, [user?.id]);
 
-  // Global Unified Cloud Polling (EFFICIENT MODE - Realtime is primary)
-  // Polling is just a safety net, Realtime handles instant updates
-  useEffect(() => {
-    let pollInterval: any = null;
-    let lastSyncTime = Date.now();
 
-    const fastSync = async (force = false) => {
-      // 1. Guard: Solo si hay usuario logueado
-      if (!user) return;
-
-      // 2. Guard: Solo si la pestaña está visible
-      if (document.visibilityState !== 'visible') return;
-
-      // 3. Guard: Evitar syncs muy frecuentes (mínimo 3 minutos entre syncs, excepto si forzado)
-      const timeSinceLastSync = Date.now() - lastSyncTime;
-      if (!force && timeSinceLastSync < 180000) return; // 3 minutos
-
-      try {
-        const sett = await db.getSettings();
-        if (!sett?.supabaseUrl || !sett?.supabaseKey) return;
-
-        const { SupabaseService } = await import('./services/supabaseService');
-        const changed = await SupabaseService.pullDelta();
-        lastSyncTime = Date.now();
-
-        // Update icon timestamp
-        const now = new Date().toISOString();
-        await db.saveSettings({ ...sett, lastBackupDate: now });
-
-        if (changed && changed > 0) {
-          console.log(`🔄 Polling: ${changed} cambios aplicados desde la nube`);
-          await db.fixDuplicateFolios();
-          await refreshData(false);
-        }
-      } catch (e) {
-        console.warn("⚠️ Polling failure:", e);
-      }
-    };
-
-    // Visibility change handler - sync only if more than 3 minutes since last sync
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        const timeSinceLastSync = Date.now() - lastSyncTime;
-        if (timeSinceLastSync > 180000) { // 3 minutos
-          console.log("👁️ Pestaña visible después de 3+ min - sincronizando...");
-          fastSync(true);
-        }
-      }
-    };
-
-    // EFFICIENT: Poll every 5 minutes as backup (Realtime is primary)
-    pollInterval = setInterval(() => fastSync(true), 300000); // 5 minutos
-
-    // Listen for visibility changes
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      if (pollInterval) clearInterval(pollInterval);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [user?.id]);
 
   // =========== SUPABASE REALTIME SUBSCRIPTION ===========
-  // This provides instant updates when another device changes an order
-  // Falls back to polling if Realtime is unavailable
+  // This provides instant updates for both sales and settings
+  // Supabase is the Single Source of Truth
   useEffect(() => {
     let unsubscribe: (() => void) | null = null;
 
@@ -353,43 +288,46 @@ function App() {
       try {
         const sett = await db.getSettings();
         if (!sett?.supabaseUrl || !sett?.supabaseKey) {
-          console.log('📡 [Realtime] Supabase no configurado, usando solo polling');
+          console.log('📡 [Realtime] Supabase no configurado');
           return;
         }
 
-        const { subscribeToSales } = await import('./services/realtimeService');
+        const { subscribeToRealtime } = await import('./services/realtimeService');
 
-        // Subscribe to real-time sales changes
-        unsubscribe = await subscribeToSales((sale, eventType) => {
-          console.log(`📡 [Realtime] UI Update: ${sale.folio} (${eventType})`);
-          // Update sales state with the new/updated sale
-          setSales(prevSales => {
-            const existingIndex = prevSales.findIndex(s => s.id === sale.id);
-            if (existingIndex >= 0) {
-              // Update existing sale
-              const updated = [...prevSales];
-              updated[existingIndex] = sale;
-              return updated;
-            } else {
-              // Add new sale
-              return [...prevSales, sale];
-            }
-          });
-        });
+        // Subscribe to real-time sales and settings changes
+        unsubscribe = await subscribeToRealtime(
+          (sale, eventType) => {
+            console.log(`📡 [Realtime:Sales] Update: ${sale.folio} (${eventType})`);
+            // Update sales state with total remote priority
+            setSales(prevSales => {
+              const existingIndex = prevSales.findIndex(s => s.id === sale.id);
+              if (existingIndex >= 0) {
+                const updated = [...prevSales];
+                updated[existingIndex] = sale;
+                return updated;
+              } else {
+                return [...prevSales, sale];
+              }
+            });
+          },
+          (newSettings) => {
+            console.log('📡 [Realtime:Settings] UI Update');
+            setSettings(newSettings);
+          }
+        );
 
-        console.log('📡 [Realtime] Suscripción global iniciada');
+        console.log('📡 [Realtime] Suscripción global iniciada (Sales + Settings)');
       } catch (error) {
-        console.warn('⚠️ [Realtime] Error al configurar, usando polling:', error);
+        console.warn('⚠️ [Realtime] Error al configurar:', error);
       }
     };
 
     setupRealtime();
 
-    // CRITICAL: Cleanup subscription when user logs out or component unmounts
     return () => {
       if (unsubscribe) {
         unsubscribe();
-        console.log('📡 [Realtime] Suscripción limpiada');
+        console.log('📡 [Realtime] Suscripción terminada');
       }
     };
   }, [user?.id]);

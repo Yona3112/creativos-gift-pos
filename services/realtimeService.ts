@@ -13,22 +13,27 @@ interface RealtimePayload {
     old: any;
 }
 
-// Subscription reference for cleanup
+// Subscription references for cleanup
 let salesSubscription: any = null;
+let settingsSubscription: any = null;
 let isSubscribed = false;
 
-// Callback type for UI updates
+// Callback types
 type SalesChangeCallback = (sale: Sale, eventType: 'INSERT' | 'UPDATE') => void;
+type SettingsChangeCallback = (settings: any) => void;
 
 /**
- * Subscribe to real-time changes on the sales table
+ * Subscribe to real-time changes on the sales and settings tables
  * Should be called once globally (in App.tsx) to avoid connection pool exhaustion
  */
-export async function subscribeToSales(onSaleChange: SalesChangeCallback): Promise<() => void> {
+export async function subscribeToRealtime(
+    onSaleChange: SalesChangeCallback,
+    onSettingsChange: SettingsChangeCallback
+): Promise<() => void> {
     // Avoid duplicate subscriptions
-    if (isSubscribed && salesSubscription) {
+    if (isSubscribed && (salesSubscription || settingsSubscription)) {
         console.log('📡 [Realtime] Ya existe una suscripción activa');
-        return () => unsubscribeFromSales();
+        return () => unsubscribeFromRealtime();
     }
 
     try {
@@ -40,8 +45,8 @@ export async function subscribeToSales(onSaleChange: SalesChangeCallback): Promi
             return () => { };
         }
 
-        // Create channel for sales table
-        const channel = client
+        // --- SALES SUBSCRIPTION ---
+        salesSubscription = client
             .channel('sales-realtime')
             .on(
                 'postgres_changes',
@@ -51,116 +56,90 @@ export async function subscribeToSales(onSaleChange: SalesChangeCallback): Promi
                     table: 'sales'
                 },
                 async (payload: RealtimePayload) => {
-                    console.log(`📡 [Realtime] Evento recibido: ${payload.eventType}`);
+                    console.log(`📡 [Realtime:Sales] Evento recibido: ${payload.eventType}`);
 
                     if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
                         const remoteSale = payload.new as Sale;
 
                         // CRITICAL: Validate remote sale has required fields
                         if (!remoteSale || !remoteSale.id) {
-                            console.warn('⚠️ [Realtime] Datos de venta inválidos, ignorando');
+                            console.warn('⚠️ [Realtime:Sales] Datos de venta inválidos, ignorando');
                             return;
                         }
 
-                        // Ensure items is always an array (Supabase may return null)
+                        // Ensure items is always an array
                         if (!Array.isArray(remoteSale.items)) {
                             remoteSale.items = [];
                         }
 
-                        // Conflict resolution with tolerance and workflow priority
-                        const localSale = await db_engine.sales.get(remoteSale.id);
+                        // SINGLE SOURCE OF TRUTH: Remote Wins
+                        // We always update local with remote data to ensure consistency
+                        // Conflict resolution is removed in favor of "Supabase is Truth"
+                        try {
+                            // Check for local differences for logging only
+                            const localSale = await db_engine.sales.get(remoteSale.id);
 
-                        if (localSale) {
-                            const remoteTime = remoteSale.updatedAt ? new Date(remoteSale.updatedAt).getTime() : 0;
-                            const localTime = localSale.updatedAt ? new Date(localSale.updatedAt).getTime() : 0;
-                            const timeDiff = remoteTime - localTime;
-                            const TOLERANCE_MS = 5000; // 5 seconds tolerance
-
-                            // Workflow order for priority comparison
-                            const workflow: FulfillmentStatus[] = ['pending', 'design', 'printing', 'qc', 'production', 'ready', 'shipped', 'delivered'];
-                            const remoteIndex = workflow.indexOf(remoteSale.fulfillmentStatus || 'pending');
-                            const localIndex = workflow.indexOf(localSale.fulfillmentStatus || 'pending');
-
-                            // Decision logic with tolerance and workflow priority
-                            let shouldUpdate = false;
-                            let reason = '';
-
-                            if (timeDiff > TOLERANCE_MS) {
-                                // Remote is clearly newer
-                                shouldUpdate = true;
-                                reason = 'remote claramente más nuevo';
-                            } else if (timeDiff < -TOLERANCE_MS) {
-                                // Local is clearly newer
-                                shouldUpdate = false;
-                                reason = 'local claramente más nuevo';
-                            } else {
-                                // Timestamps are very close - use workflow priority
-                                // Prefer the MORE ADVANCED status to prevent rollback
-                                if (remoteIndex > localIndex) {
-                                    shouldUpdate = true;
-                                    reason = 'remote tiene estado más avanzado';
-                                } else {
-                                    shouldUpdate = false;
-                                    reason = 'local tiene estado igual o más avanzado';
-                                }
-                            }
-
-                            if (shouldUpdate) {
-                                // CRITICAL: Preserve local shippingDetails data (productionImages, etc.)
-                                // and payment data if local has been paid more recently
-                                const localPaidMore = (localSale.balance || 0) < (remoteSale.balance || 0);
-
-                                const mergedSale = {
-                                    ...remoteSale,
-                                    shippingDetails: {
-                                        ...localSale.shippingDetails,
-                                        ...remoteSale.shippingDetails,
-                                        // Explicitly preserve productionImages if remote doesn't have them
-                                        productionImages: remoteSale.shippingDetails?.productionImages || localSale.shippingDetails?.productionImages
-                                    },
-                                    // CRITICAL: Preserve payment data if local has lower balance (payment was made)
-                                    ...(localPaidMore ? {
-                                        balance: localSale.balance,
-                                        deposit: localSale.deposit,
-                                        balancePaymentDate: localSale.balancePaymentDate,
-                                        balancePaid: localSale.balancePaid,
-                                        balancePaymentMethod: localSale.balancePaymentMethod,
-                                        paymentDetails: localSale.paymentDetails,
-                                        isOrder: localSale.isOrder
-                                    } : {})
-                                };
-                                await db_engine.sales.put(mergedSale);
-                                console.log(`✅ [Realtime] Actualizado: ${remoteSale.folio} → ${remoteSale.fulfillmentStatus} (${reason})${localPaidMore ? ' [pago local preservado]' : ''}`);
-                                onSaleChange(mergedSale, payload.eventType);
-                            } else {
-                                console.log(`⏭️ [Realtime] Ignorado: ${remoteSale.folio} (${reason})`);
-                            }
-                        } else {
-                            // New record, insert directly
+                            // Process update
                             await db_engine.sales.put(remoteSale);
-                            console.log(`🆕 [Realtime] Nuevo pedido: ${remoteSale.folio}`);
+
+                            if (localSale) {
+                                console.log(`✅ [Realtime:Sales] Actualizado: ${remoteSale.folio} (Sync desde nube)`);
+                            } else {
+                                console.log(`🆕 [Realtime:Sales] Nuevo pedido: ${remoteSale.folio}`);
+                            }
+
                             onSaleChange(remoteSale, payload.eventType);
+                        } catch (err) {
+                            console.error('❌ [Realtime:Sales] Error al guardar en IndexDB:', err);
+                        }
+                    } else if (payload.eventType === 'DELETE') {
+                        const oldId = payload.old?.id;
+                        if (oldId) {
+                            await db_engine.sales.delete(oldId);
+                            console.log(`🗑️ [Realtime:Sales] Pedido eliminado: ${oldId}`);
                         }
                     }
                 }
             )
             .subscribe((status: string) => {
                 if (status === 'SUBSCRIBED') {
-                    console.log('📡 [Realtime] Suscripción activa - Escuchando cambios en tiempo real');
+                    console.log('📡 [Realtime:Sales] Suscripción activa');
                     isSubscribed = true;
-                } else if (status === 'CHANNEL_ERROR') {
-                    console.error('❌ [Realtime] Error en el canal');
-                    isSubscribed = false;
-                } else if (status === 'TIMED_OUT') {
-                    console.warn('⚠️ [Realtime] Timeout en suscripción');
-                    isSubscribed = false;
                 }
             });
 
-        salesSubscription = channel;
+        // --- SETTINGS SUBSCRIPTION ---
+        settingsSubscription = client
+            .channel('settings-realtime')
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'settings'
+                },
+                async (payload: RealtimePayload) => {
+                    console.log(`📡 [Realtime:Settings] Cambios detectados: ${payload.eventType}`);
+
+                    if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+                        const remoteSettings = payload.new;
+                        if (remoteSettings) {
+                            // Update local settings immediately
+                            await db.saveSettings(remoteSettings);
+                            console.log('✅ [Realtime:Settings] Configuraciones actualizadas desde la nube');
+                            onSettingsChange(remoteSettings);
+                        }
+                    }
+                }
+            )
+            .subscribe((status: string) => {
+                if (status === 'SUBSCRIBED') {
+                    console.log('📡 [Realtime:Settings] Suscripción activa');
+                }
+            });
 
         // Return cleanup function
-        return () => unsubscribeFromSales();
+        return () => unsubscribeFromRealtime();
 
     } catch (error) {
         console.error('❌ [Realtime] Error al suscribirse:', error);
@@ -169,25 +148,30 @@ export async function subscribeToSales(onSaleChange: SalesChangeCallback): Promi
 }
 
 /**
- * Unsubscribe from sales channel
- * CRITICAL: Must be called when component unmounts to free connection pool
+ * Unsubscribe from all realtime channels
  */
-export async function unsubscribeFromSales(): Promise<void> {
-    if (salesSubscription) {
-        try {
-            const { SupabaseService } = await import('./supabaseService');
-            const client = await SupabaseService.getClient();
+export async function unsubscribeFromRealtime(): Promise<void> {
+    try {
+        const { SupabaseService } = await import('./supabaseService');
+        const client = await SupabaseService.getClient();
 
-            if (client) {
+        if (client) {
+            if (salesSubscription) {
                 await client.removeChannel(salesSubscription);
-                console.log('📡 [Realtime] Suscripción eliminada - Conexión liberada');
+                console.log('📡 [Realtime:Sales] Canal eliminado');
             }
-
-            salesSubscription = null;
-            isSubscribed = false;
-        } catch (error) {
-            console.warn('⚠️ [Realtime] Error al eliminar suscripción:', error);
+            if (settingsSubscription) {
+                await client.removeChannel(settingsSubscription);
+                console.log('📡 [Realtime:Settings] Canal eliminado');
+            }
         }
+
+        salesSubscription = null;
+        settingsSubscription = null;
+        isSubscribed = false;
+    } catch (error) {
+        console.warn('⚠️ [Realtime] Error al eliminar suscripciones:', error);
+        isSubscribed = false;
     }
 }
 

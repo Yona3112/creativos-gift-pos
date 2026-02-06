@@ -218,7 +218,7 @@ export class StorageService {
       };
 
       await db_engine.auditLogs.put(log);
-      this.triggerAutoSync(); // Always sync logs
+      this.pushToCloud('audit_logs', log);
     } catch (e) {
       console.warn("Could not save audit log", e);
     }
@@ -283,50 +283,25 @@ export class StorageService {
     return { ...defaults, ...saved };
   }
 
+  /**
+   * Helper to push a record to Supabase immediately
+   */
+  private async pushToCloud(tableName: string, record: any) {
+    try {
+      const { SupabaseService } = await import('./supabaseService');
+      await SupabaseService.pushRecord(tableName, record);
+    } catch (e) {
+      console.warn(`⚠️ [CloudPush] Fallo al sincronizar ${tableName}:`, e);
+    }
+  }
+
   async saveSettings(settings: CompanySettings) {
     settings.updatedAt = this.getLocalNowISO();
     await db_engine.settings.put({ id: 'main', ...settings });
-    if (settings.autoSync) this.triggerAutoSync();
+    this.pushToCloud('settings', settings);
   }
 
-  // --- AUTO SYNC HELPER ---
-  private syncTimeout: any = null;
-  triggerAutoSync() {
-    if (this.syncTimeout) clearTimeout(this.syncTimeout);
-    this.syncTimeout = setTimeout(async () => {
-      const s = await this.getSettings();
-      if (s.autoSync && s.supabaseUrl && s.supabaseKey) {
-        try {
-          const { SupabaseService } = await import('./supabaseService');
-          await SupabaseService.syncAll();
-          // Update last backup date
-        } catch (e) {
-          console.error("❌ Error en auto-sync:", e);
-        }
-      }
-    }, 2000); // Wait 2s (reduced from 5s) after last change before syncing
-  }
 
-  async checkAndAutoSync() {
-    const s = await this.getSettings();
-    if (!s.autoSync || !s.supabaseUrl || !s.supabaseKey) return;
-
-    const lastSync = s.lastBackupDate ? new Date(s.lastBackupDate).getTime() : 0;
-    const now = new Date().getTime();
-    const threeHours = 3 * 60 * 60 * 1000;
-
-    if (now - lastSync > threeHours) {
-      console.log("🕒 Han pasado más de 3 horas. Iniciando backup automático...");
-      try {
-        const { SupabaseService } = await import('./supabaseService');
-        await SupabaseService.syncAll();
-        s.lastBackupDate = new Date().toISOString();
-        await this.saveSettings(s);
-      } catch (e) {
-        console.error("❌ Error en backup automático programado:", e);
-      }
-    }
-  }
 
   // --- SEQUENTIAL CODE GENERATORS WITH RECALCULATION ---
 
@@ -452,8 +427,9 @@ export class StorageService {
 
     product.updatedAt = this.getLocalNowISO(); // Update timestamp
     await db_engine.products.put(product);
-    const settings = await this.getSettings();
-    if (settings.autoSync) this.triggerAutoSync();
+
+    const { SupabaseService } = await import('./supabaseService');
+    SupabaseService.pushRecord('products', product);
   }
 
   async deleteProduct(id: string) {
@@ -463,8 +439,7 @@ export class StorageService {
       p.updatedAt = this.getLocalNowISO();
       await db_engine.products.put(p);
       await this.saveLog('inventory', 'DELETE_PRODUCT', `Producto "${p.name}" (${p.code}) eliminado.`);
-      const settings = await this.getSettings();
-      if (settings.autoSync) this.triggerAutoSync();
+      this.pushToCloud('products', p);
     }
   }
 
@@ -503,8 +478,7 @@ export class StorageService {
   // Método público para guardar movimientos de inventario (usado por auditorías)
   async saveInventoryMovement(movement: InventoryMovement) {
     await db_engine.inventoryHistory.add(movement);
-    const settings = await this.getSettings();
-    if (settings.autoSync) this.triggerAutoSync();
+    this.pushToCloud('inventory_history', movement);
   }
 
   async getInventoryHistory(productId?: string): Promise<InventoryMovement[]> {
@@ -542,8 +516,7 @@ export class StorageService {
     if (cat.active === undefined) cat.active = true;
     cat.updatedAt = this.getLocalNowISO();
     await db_engine.categories.put(cat);
-    const settings = await this.getSettings();
-    if (settings.autoSync) this.triggerAutoSync();
+    this.pushToCloud('categories', cat);
   }
 
   async deleteCategory(id: string) {
@@ -552,8 +525,7 @@ export class StorageService {
       cat.active = false;
       cat.updatedAt = this.getLocalNowISO();
       await db_engine.categories.put(cat);
-      const settings = await this.getSettings();
-      if (settings.autoSync) this.triggerAutoSync();
+      this.pushToCloud('categories', cat);
     }
   }
 
@@ -569,8 +541,7 @@ export class StorageService {
     }
     c.updatedAt = this.getLocalNowISO();
     await db_engine.customers.put(c);
-    const settings = await this.getSettings();
-    if (settings.autoSync) this.triggerAutoSync();
+    this.pushToCloud('customers', c);
   }
   async deleteCustomer(id: string) {
     const c = await db_engine.customers.get(id);
@@ -578,8 +549,7 @@ export class StorageService {
       c.active = false;
       c.updatedAt = this.getLocalNowISO();
       await db_engine.customers.put(c);
-      const settings = await this.getSettings();
-      if (settings.autoSync) this.triggerAutoSync();
+      this.pushToCloud('customers', c);
     }
   }
 
@@ -729,7 +699,7 @@ export class StorageService {
         console.warn('⚠️ Push inmediato falló (usará autoSync):', pushErr);
       }
 
-      if (settings.autoSync) this.triggerAutoSync();
+      this.pushToCloud('sales', newSale);
       return newSale;
     });
   }
@@ -893,7 +863,10 @@ export class StorageService {
           }
         }
 
-        if (settings.autoSync) this.triggerAutoSync();
+        if (sale) {
+          await db_engine.sales.put(sale);
+          this.pushToCloud('sales', sale);
+        }
       }
     });
   }
@@ -909,8 +882,7 @@ export class StorageService {
     e.date = e.date.substring(0, 10);
     e.updatedAt = this.getLocalNowISO();
     await db_engine.expenses.put(e);
-    const settings = await this.getSettings();
-    if (settings.autoSync) this.triggerAutoSync();
+    this.pushToCloud('expenses', e);
     return e.id;
   }
 
@@ -937,8 +909,7 @@ export class StorageService {
       if (c.paidAmount >= c.totalAmount - 0.1) c.status = 'paid';
       c.updatedAt = this.getLocalNowISO();
       await db_engine.credits.put(c);
-      const settings = await this.getSettings();
-      if (settings.autoSync) this.triggerAutoSync();
+      this.pushToCloud('credits', c);
     }
   }
 
@@ -975,8 +946,7 @@ export class StorageService {
     if (s.active === undefined) s.active = true;
     s.updatedAt = this.getLocalNowISO();
     await db_engine.suppliers.put(s);
-    const settings = await this.getSettings();
-    if (settings.autoSync) this.triggerAutoSync();
+    this.pushToCloud('suppliers', s);
   }
   async deleteSupplier(id: string) {
     const s = await db_engine.suppliers.get(id);
@@ -984,8 +954,7 @@ export class StorageService {
       s.active = false;
       s.updatedAt = this.getLocalNowISO();
       await db_engine.suppliers.put(s);
-      const settings = await this.getSettings();
-      if (settings.autoSync) this.triggerAutoSync();
+      this.pushToCloud('suppliers', s);
     }
   }
   async getConsumables() {
@@ -997,8 +966,7 @@ export class StorageService {
     if (c.active === undefined) c.active = true;
     c.updatedAt = this.getLocalNowISO();
     await db_engine.consumables.put(c);
-    const settings = await this.getSettings();
-    if (settings.autoSync) this.triggerAutoSync();
+    this.pushToCloud('consumables', c);
   }
   async deleteConsumable(id: string) {
     const c = await db_engine.consumables.get(id);
@@ -1006,8 +974,7 @@ export class StorageService {
       c.active = false;
       c.updatedAt = this.getLocalNowISO();
       await db_engine.consumables.put(c);
-      const settings = await this.getSettings();
-      if (settings.autoSync) this.triggerAutoSync();
+      this.pushToCloud('consumables', c);
     }
   }
   async getPromotions() { return await db_engine.promotions.toArray(); }
@@ -1015,8 +982,7 @@ export class StorageService {
     if (!p.id) p.id = Date.now().toString();
     p.updatedAt = this.getLocalNowISO();
     await db_engine.promotions.put(p);
-    const settings = await this.getSettings();
-    if (settings.autoSync) this.triggerAutoSync();
+    this.pushToCloud('promotions', p);
   }
   async deletePromotion(id: string) {
     const p = await db_engine.promotions.get(id);
@@ -1024,8 +990,7 @@ export class StorageService {
       p.active = false;
       p.updatedAt = this.getLocalNowISO();
       await db_engine.promotions.put(p);
-      const settings = await this.getSettings();
-      if (settings.autoSync) this.triggerAutoSync();
+      this.pushToCloud('promotions', p);
     }
   }
   async getUsers() {
@@ -1044,8 +1009,7 @@ export class StorageService {
     }
     u.updatedAt = this.getLocalNowISO();
     await db_engine.users.put(u);
-    const settings = await this.getSettings();
-    if (settings.autoSync) this.triggerAutoSync();
+    this.pushToCloud('users', u);
   }
   async deleteUser(id: string) {
     const u = await db_engine.users.get(id);
@@ -1053,8 +1017,7 @@ export class StorageService {
       u.active = false;
       u.updatedAt = this.getLocalNowISO();
       await db_engine.users.put(u);
-      const settings = await this.getSettings();
-      if (settings.autoSync) this.triggerAutoSync();
+      this.pushToCloud('users', u);
     }
   }
   async getBranches() {
@@ -1065,8 +1028,7 @@ export class StorageService {
     if (!b.id) b.id = Date.now().toString();
     b.updatedAt = this.getLocalNowISO();
     await db_engine.branches.put(b);
-    const settings = await this.getSettings();
-    if (settings.autoSync) this.triggerAutoSync();
+    this.pushToCloud('branches', b);
   }
   async getQuotes() {
     const quotes = await db_engine.quotes.toArray();
@@ -1077,8 +1039,7 @@ export class StorageService {
     if (!q.id) q.id = Date.now().toString();
     q.updatedAt = this.getLocalNowISO();
     await db_engine.quotes.put(q);
-    const settings = await this.getSettings();
-    if (settings.autoSync) this.triggerAutoSync();
+    this.pushToCloud('quotes', q);
   }
   async getCreditNotes() { return await db_engine.creditNotes.toArray(); }
 
@@ -1135,8 +1096,7 @@ export class StorageService {
     if (quote) {
       quote.status = 'deleted';
       await db_engine.quotes.put(quote);
-      const settings = await this.getSettings();
-      if (settings.autoSync) this.triggerAutoSync();
+      this.pushToCloud('quotes', quote);
     }
   }
 
@@ -1400,9 +1360,9 @@ export class StorageService {
         method: 'Efectivo',
         note: `Liquidación anticipada. Ahorro: L ${details.savings.toFixed(2)}`
       });
+      c.updatedAt = this.getLocalNowISO();
       await db_engine.credits.put(c);
-      const settings = await this.getSettings();
-      if (settings.autoSync) this.triggerAutoSync();
+      this.pushToCloud('credits', c);
     }
   }
 
@@ -1427,7 +1387,8 @@ export class StorageService {
     cut.updatedAt = this.getLocalNowISO();
     await db_engine.cashCuts.put(cut);
     const settings = await this.getSettings();
-    if (settings.autoSync) this.triggerAutoSync();
+    await db_engine.cashCuts.put(cut);
+    this.pushToCloud('cash_cuts', cut);
   }
 
   async getCashCuts(): Promise<CashCut[]> {
@@ -1437,12 +1398,6 @@ export class StorageService {
   async deleteCashCut(id: string): Promise<void> {
     await db_engine.cashCuts.delete(id);
     const settings = await this.getSettings();
-    if (settings.autoSync) {
-      import('./supabaseService').then(({ SupabaseService }) => {
-        SupabaseService.deleteFromTable('cash_cuts', id);
-      });
-      this.triggerAutoSync();
-    }
   }
 
   async getLastCashCut(): Promise<CashCut | null> {
@@ -1603,14 +1558,7 @@ export class StorageService {
     sale.updatedAt = this.getLocalNowISO();
 
     await db_engine.sales.put(sale);
-    const settings = await this.getSettings();
-    if (settings.autoSync) {
-      this.triggerAutoSync();
-      // Also try an IMMEDIATE push for critical state changes
-      import('./supabaseService').then(({ SupabaseService }) => {
-        SupabaseService.syncAll().catch(e => console.warn("Falla en push inmediato:", e));
-      });
-    }
+    this.pushToCloud('sales', sale);
   }
 
   async deleteBranch(id: string) {
@@ -1620,7 +1568,7 @@ export class StorageService {
       b.updatedAt = this.getLocalNowISO();
       await db_engine.branches.put(b);
       const settings = await this.getSettings();
-      if (settings.autoSync) this.triggerAutoSync();
+      this.pushToCloud('branches', b);
     }
   }
 
@@ -1696,14 +1644,7 @@ export class StorageService {
     sale.updatedAt = this.getLocalNowISO();
 
     await db_engine.sales.put(sale);
-    const settings = await this.getSettings();
-    if (settings.autoSync) {
-      this.triggerAutoSync();
-      // CRITICAL: Immediate push for payment changes to prevent realtime overwrite
-      import('./supabaseService').then(({ SupabaseService }) => {
-        SupabaseService.syncAll().catch(e => console.warn("Falla en push inmediato de pago:", e));
-      });
-    }
+    this.pushToCloud('sales', sale);
 
     return sale;
   }
@@ -1764,7 +1705,7 @@ export class StorageService {
       exp.date = date;
       await db_engine.expenses.put(exp);
       const settings = await this.getSettings();
-      if (settings.autoSync) this.triggerAutoSync();
+      this.pushToCloud('expenses', exp);
     }
   }
 
@@ -2088,7 +2029,7 @@ export class StorageService {
 
       // Trigger sync after reconciliation
       const settings = await this.getSettings();
-      if (settings.autoSync) this.triggerAutoSync();
+      // Note: Full sync can be triggered manually from settings if needed
 
       console.log(`✅ Reconciliación completada: ${fixed} productos corregidos`);
       return { fixed, details };
