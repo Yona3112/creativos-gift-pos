@@ -217,9 +217,8 @@ function App() {
     setPage('dashboard');
   };
 
-  // Sync on Entry: Solo PULL al ingresar
-  // IMPORTANTE: NO hacer push automático al inicio porque puede subir datos viejos del dispositivo
-  // El push solo debe ocurrir cuando el usuario hace cambios reales (al guardar productos, ventas, etc.)
+  // Sync on Entry: FULL PULL al ingresar para garantizar datos frescos
+  // ESTRATEGIA MULTI-DISPOSITIVO: Siempre priorizar datos de la nube sobre los locales
   useEffect(() => {
     const initSync = async () => {
       if (user) {
@@ -229,7 +228,7 @@ function App() {
           return;
         }
 
-        console.log("🚀 Usuario ingresó al sistema. Descargando datos de la nube...");
+        console.log("🚀 Usuario ingresó al sistema. Descargando TODOS los datos de la nube...");
         const sett = await db.getSettings();
 
         // Solo sincronizar si Supabase está configurado
@@ -238,24 +237,28 @@ function App() {
             // Mark as pulled BEFORE the actual pull to prevent race conditions
             hasPulledFromCloud.current = true;
 
-            // SOLO PULL - Descargar datos de la nube
-            // NO hacer push para evitar que datos viejos locales sobrescriban la nube
-            console.log("⬇️ Descargando datos de la nube...");
             const { SupabaseService } = await import('./services/supabaseService');
 
-            // CRITICAL FIX: Actually download data from cloud!
-            await SupabaseService.pullDelta();
+            // CRITICAL FIX: Use pullAll() to get ALL fresh data from cloud
+            // This ensures multi-device sync works correctly - cloud is always source of truth
+            console.log("⬇️ Descargando TODOS los datos de la nube (pullAll)...");
+            const cloudData = await SupabaseService.pullAll();
 
-            // CRITICAL: Update lastBackupDate on successful pull to keep icon green
-            const now = new Date().toISOString();
-            await db.saveSettings({ ...sett, lastBackupDate: now });
+            if (cloudData) {
+              console.log("✅ Datos completos descargados de la nube");
 
-            console.log("✅ Datos descargados de la nube");
+              // Update lastBackupDate on successful pull
+              const freshSettings = await db.getSettings();
+              const now = new Date().toISOString();
+              await db.saveSettings({ ...freshSettings, lastBackupDate: now });
 
-            // Fix any duplicate folios after pulling data from cloud
-            const fixResult = await db.fixDuplicateFolios();
-            if (fixResult.fixed > 0) {
-              console.log(`🔧 Corregidos ${fixResult.fixed} folios duplicados`);
+              // Fix any duplicate folios after pulling data from cloud
+              const fixResult = await db.fixDuplicateFolios();
+              if (fixResult.fixed > 0) {
+                console.log(`🔧 Corregidos ${fixResult.fixed} folios duplicados`);
+              }
+            } else {
+              console.log("☁️ No hay datos en la nube o error de conexión");
             }
 
             // Recargar datos locales después del pull
@@ -274,11 +277,13 @@ function App() {
     initSync();
   }, [user?.id]);
 
-  // Global Unified Cloud Polling (Fast Sync)
+  // Global Unified Cloud Polling (Fast Sync) - AGGRESSIVE MODE
   useEffect(() => {
     let pollInterval: any = null;
+    let aggressiveInterval: any = null;
+    let syncCount = 0;
 
-    const fastSync = async () => {
+    const fastSync = async (isInitial = false) => {
       // 1. Guard: Solo si hay usuario logueado
       if (!user) return;
 
@@ -292,27 +297,50 @@ function App() {
         const { SupabaseService } = await import('./services/supabaseService');
         // Pull changes
         const changed = await SupabaseService.pullDelta();
+        syncCount++;
 
         // Update icon timestamp regardless of changes (to show we "checked" the cloud)
         const now = new Date().toISOString();
         await db.saveSettings({ ...sett, lastBackupDate: now });
 
         if (changed && changed > 0) {
-          console.log(`🔄 FastSync: ${changed} cambios aplicados desde la nube`);
+          console.log(`🔄 FastSync #${syncCount}: ${changed} cambios aplicados desde la nube`);
           await db.fixDuplicateFolios();
           await refreshData(false);
+        } else if (isInitial) {
+          console.log(`🔄 FastSync #${syncCount}: Sin cambios (verificación)`);
         }
       } catch (e) {
         console.warn("⚠️ FastSync failure:", e);
       }
     };
 
-    // Inicializar polling cada 60 segundos (Relajado para evitar 504/Timeout)
-    // Con Realtime activo, el polling solo sirve como respaldo
-    pollInterval = setInterval(fastSync, 60000);
+    // Visibility change handler - sync immediately when tab becomes visible
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log("👁️ Pestaña visible - sincronizando inmediatamente...");
+        fastSync(true);
+      }
+    };
+
+    // AGGRESSIVE: Run immediately, then every 15 seconds for first 2 minutes
+    fastSync(true);
+    aggressiveInterval = setInterval(() => fastSync(true), 15000);
+
+    // After 2 minutes, switch to relaxed polling (every 30 seconds)
+    setTimeout(() => {
+      if (aggressiveInterval) clearInterval(aggressiveInterval);
+      console.log("⏱️ Cambiando a polling relajado (cada 30 segundos)");
+      pollInterval = setInterval(fastSync, 30000);
+    }, 120000);
+
+    // Listen for visibility changes
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       if (pollInterval) clearInterval(pollInterval);
+      if (aggressiveInterval) clearInterval(aggressiveInterval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [user?.id]);
 
