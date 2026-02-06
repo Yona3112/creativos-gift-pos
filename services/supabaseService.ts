@@ -531,9 +531,18 @@ export class SupabaseService {
         const client = await this.getClient();
         if (!client) return null;
         const settings = await db.getSettings();
-        const lastSync = settings.lastCloudSync;
-        if (!lastSync) return this.pullAll();
-        console.log(`📥 PullDelta: Usando marca de tiempo PULL dedicada: ${lastSync}`);
+        let lastSync = settings.lastCloudSync;
+
+        // If no lastSync, use 7 days ago instead of pulling ALL data
+        // This prevents timeout on first sync while still getting recent data
+        if (!lastSync) {
+            const sevenDaysAgo = new Date();
+            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+            lastSync = sevenDaysAgo.toISOString();
+            console.log(`📥 PullDelta: Primera sincronización - usando últimos 7 días`);
+        } else {
+            console.log(`📥 PullDelta: Usando marca de tiempo: ${lastSync}`);
+        }
 
         // CLOCK DRIFT PROTECTION: Aumentado a 60 min (1 hora) para máxima robustez.
         // Esto previene que pedidos se queden "perdidos" por desincronización de reloj.

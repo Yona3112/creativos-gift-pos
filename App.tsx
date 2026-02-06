@@ -239,26 +239,28 @@ function App() {
 
             const { SupabaseService } = await import('./services/supabaseService');
 
-            // CRITICAL FIX: Use pullAll() to get ALL fresh data from cloud
-            // This ensures multi-device sync works correctly - cloud is always source of truth
-            console.log("⬇️ Descargando TODOS los datos de la nube (pullAll)...");
-            const cloudData = await SupabaseService.pullAll();
+            // Use pullDelta instead of pullAll to avoid Supabase timeouts
+            // pullDelta only fetches changes since last sync (lightweight)
+            console.log("⬇️ Descargando cambios desde la nube (pullDelta)...");
+            const changed = await SupabaseService.pullDelta();
 
-            if (cloudData) {
-              console.log("✅ Datos completos descargados de la nube");
-
-              // Update lastBackupDate on successful pull
-              const freshSettings = await db.getSettings();
-              const now = new Date().toISOString();
-              await db.saveSettings({ ...freshSettings, lastBackupDate: now });
-
-              // Fix any duplicate folios after pulling data from cloud
-              const fixResult = await db.fixDuplicateFolios();
-              if (fixResult.fixed > 0) {
-                console.log(`🔧 Corregidos ${fixResult.fixed} folios duplicados`);
-              }
+            if (changed && changed > 0) {
+              console.log(`✅ ${changed} cambios descargados de la nube`);
+            } else if (changed === 0) {
+              console.log("✅ Sin cambios nuevos en la nube");
             } else {
-              console.log("☁️ No hay datos en la nube o error de conexión");
+              console.log("☁️ Error de conexión o sin datos");
+            }
+
+            // Update lastBackupDate on successful pull
+            const freshSettings = await db.getSettings();
+            const now = new Date().toISOString();
+            await db.saveSettings({ ...freshSettings, lastBackupDate: now });
+
+            // Fix any duplicate folios after pulling data from cloud
+            const fixResult = await db.fixDuplicateFolios();
+            if (fixResult.fixed > 0) {
+              console.log(`🔧 Corregidos ${fixResult.fixed} folios duplicados`);
             }
 
             // Recargar datos locales después del pull
