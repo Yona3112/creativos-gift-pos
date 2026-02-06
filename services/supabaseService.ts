@@ -703,17 +703,20 @@ export class SupabaseService {
                     // Special case: Settings (Isolate device-local metadata)
                     if (map.dexie === 'settings') {
                         const local = await table.get('main');
+                        const cloudData = JSON.parse(JSON.stringify(item));
+                        cloudData.id = 'main'; // FORCE ID main for app consistency
+
                         if (local) {
                             // Only update non-sync fields from cloud
-                            const cloudData = JSON.parse(JSON.stringify(item));
                             delete cloudData.lastCloudSync;
                             delete cloudData.lastCloudPush;
                             delete cloudData.deviceId;
-                            delete cloudData.id; // IMPORTANT: Never update primary key 'main'
 
                             await table.update('main', cloudData);
+                            console.log("⚙️ [Settings] Ajustes actualizados desde nube (vía mergeDelta)");
                         } else {
-                            await table.put(item);
+                            await table.put(cloudData);
+                            console.log("⚙️ [Settings] Ajustes inicializados desde nube (vía mergeDelta)");
                         }
                         continue;
                     }

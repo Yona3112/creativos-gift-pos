@@ -191,29 +191,48 @@ export class SyncQueueService {
     private static async reconcileCreditsAndSales() {
         try {
             const credits = await db_engine.credits.toArray();
+            if (credits.length === 0) {
+                console.log('⚖️ [Reconciliation] No hay créditos registrados para reconciliar.');
+                return;
+            }
+
+            console.log(`⚖️ [Reconciliation] Analizando ${credits.length} cuentas de crédito...`);
+
             for (const credit of credits) {
-                if (!credit.saleId) continue;
+                if (!credit.saleId) {
+                    console.log(`⚖️ [Reconciliation] Crédito ${credit.id} sin saleId (Folio). Saltando.`);
+                    continue;
+                }
 
                 // Find the associated sale by folio
                 const sale = await db_engine.sales.where('folio').equals(credit.saleId).first();
                 if (sale) {
-                    const actualBalance = Math.max(0, credit.totalAmount - credit.paidAmount);
+                    const actualBalance = Math.max(0, (credit.totalAmount || 0) - (credit.paidAmount || 0));
+                    const currentSaleBalance = sale.balance || 0;
 
                     // If balance is out of sync, fix the sale record
-                    // Using small epsilon for floating point comparison
-                    if (Math.abs((sale.balance || 0) - actualBalance) > 0.01) {
-                        console.log(`⚖️ [Reconciliation] Corrigiendo balance de pedido ${sale.folio}: ${sale.balance} -> ${actualBalance}`);
+                    if (Math.abs(currentSaleBalance - actualBalance) > 0.01) {
+                        console.log(`⚖️ [Reconciliation] ¡DISCREPANCIA DETECTADA! Pedido ${sale.folio}:`);
+                        console.log(`   - Saldo en Venta: L ${currentSaleBalance}`);
+                        console.log(`   - Saldo Real (en Créditos): L ${actualBalance}`);
+                        console.log(`   - Corrigiendo...`);
+
                         sale.balance = actualBalance;
 
                         // If fully paid, optionally update fulfillment if it was stuck
                         if (actualBalance === 0 && sale.fulfillmentStatus === 'pending') {
+                            console.log(`   - Marcando pedido como entregado (Totalmente pagado).`);
                             sale.fulfillmentStatus = 'delivered';
                         }
 
                         sale.updatedAt = new Date().toISOString();
                         sale._synced = false; // Mark for upload
                         await db_engine.sales.put(sale);
+                        console.log(`✅ [Reconciliation] Pedido ${sale.folio} actualizado con éxito.`);
                     }
+                } else {
+                    // This happens if the sale hasn't been downloaded yet or folio mismatch
+                    // console.log(`⚖️ [Reconciliation] No se encontró la venta para el folio ${credit.saleId}`);
                 }
             }
         } catch (err) {
