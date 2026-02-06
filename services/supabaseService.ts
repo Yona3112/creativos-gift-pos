@@ -730,12 +730,14 @@ export class SupabaseService {
                         const localU = existing.updatedAt ? new Date(existing.updatedAt).getTime() : 0;
 
                         if (remoteU > localU) {
+                            sanitizedItem._synced = true;
                             await table.update(id, sanitizedItem);
                             if (map.dexie === 'sales') {
                                 console.log(`✅ [sales] Actualizado: ${sanitizedItem.folio || sanitizedItem.id} → ${sanitizedItem.fulfillmentStatus || 'N/A'}`);
                             }
                         }
                     } else {
+                        sanitizedItem._synced = true;
                         await table.put(sanitizedItem);
                         if (map.dexie === 'sales') {
                             console.log(`🆕 [sales] Nuevo desde nube: ${sanitizedItem.folio || sanitizedItem.id} → ${sanitizedItem.fulfillmentStatus || 'N/A'}`);

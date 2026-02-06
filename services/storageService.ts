@@ -329,8 +329,12 @@ export class StorageService {
 
   private async pushToCloud(tableName: string, record: any, action: 'INSERT' | 'UPDATE' | 'DELETE' = 'UPDATE') {
     try {
+      // Clean internal flags before pushing to cloud
+      const cleanRecord = { ...record };
+      delete cleanRecord._synced;
+
       const { SyncQueueService } = await import('./syncQueueService');
-      await SyncQueueService.enqueue(tableName, action, record);
+      await SyncQueueService.enqueue(tableName, action, cleanRecord);
     } catch (e) {
       console.warn(`⚠️ [SyncQueue] Error al encolar en ${tableName}:`, e);
     }
@@ -468,6 +472,7 @@ export class StorageService {
     }
 
     product.updatedAt = this.getLocalNowISO(); // Update timestamp
+    product._synced = false;
     await db_engine.products.put(product);
 
     this.pushToCloud('products', product);
@@ -558,6 +563,7 @@ export class StorageService {
     if (!cat.id) cat.id = Date.now().toString();
     if (cat.active === undefined) cat.active = true;
     cat.updatedAt = this.getLocalNowISO();
+    cat._synced = false;
     await db_engine.categories.put(cat);
     this.pushToCloud('categories', cat);
   }
@@ -583,6 +589,7 @@ export class StorageService {
       c.id = Date.now().toString() + Math.random().toString(36).substring(2, 7);
     }
     c.updatedAt = this.getLocalNowISO();
+    c._synced = false;
     await db_engine.customers.put(c);
     this.pushToCloud('customers', c);
   }
@@ -744,7 +751,10 @@ export class StorageService {
         console.warn('⚠️ Push inmediato falló (usará autoSync):', pushErr);
       }
       */
+      newSale.updatedAt = this.getLocalNowISO();
+      newSale._synced = false;
 
+      await db_engine.sales.put(newSale);
       this.pushToCloud('sales', newSale, 'INSERT');
       return newSale;
     });
@@ -928,6 +938,7 @@ export class StorageService {
     // Normalize date to YYYY-MM-DD format
     e.date = e.date.substring(0, 10);
     e.updatedAt = this.getLocalNowISO();
+    e._synced = false;
     await db_engine.expenses.put(e);
     this.pushToCloud('expenses', e);
     return e.id;
@@ -955,6 +966,7 @@ export class StorageService {
       c.paidAmount += payment.amount;
       if (c.paidAmount >= c.totalAmount - 0.1) c.status = 'paid';
       c.updatedAt = this.getLocalNowISO();
+      c._synced = false;
       await db_engine.credits.put(c);
       this.pushToCloud('credits', c);
     }
@@ -1206,6 +1218,7 @@ export class StorageService {
               continue;
             }
           }
+          remoteItem._synced = true;
           await table.put(remoteItem);
         } else {
           // Item exists locally - compare by date if available
@@ -1215,10 +1228,12 @@ export class StorageService {
           if (remoteDate && localDate) {
             // Keep the most recent version
             if (new Date(remoteDate) > new Date(localDate)) {
+              remoteItem._synced = true;
               await table.put(remoteItem);
             }
           } else {
             // If no dates available, remote data wins (user chose to restore/download)
+            remoteItem._synced = true;
             await table.put(remoteItem);
           }
         }
@@ -1609,6 +1624,7 @@ export class StorageService {
 
     // CRITICAL: Update timestamp for sync
     sale.updatedAt = this.getLocalNowISO();
+    sale._synced = false;
 
     await db_engine.sales.put(sale);
     this.pushToCloud('sales', sale);

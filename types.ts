@@ -41,6 +41,7 @@ export interface Product {
   providerId?: string;
   active?: boolean;
   updatedAt?: string;  // Timestamp for sync tracking (updated on stock changes)
+  _synced?: boolean;
 }
 
 export interface PriceHistoryEntry {
@@ -64,6 +65,7 @@ export interface Expense {
   paymentMethod: 'Efectivo' | 'Tarjeta' | 'Transferencia';
   userId: string;
   updatedAt?: string;
+  _synced?: boolean;
 }
 
 // FixedExpense removed - feature was not used and caused sync issues
@@ -93,6 +95,7 @@ export interface Category {
   defaultMinStock?: number;
   active?: boolean;
   updatedAt?: string;
+  _synced?: boolean;
 }
 
 export enum LoyaltyLevel {
@@ -118,6 +121,7 @@ export interface Customer {
   totalSpent: number;
   active?: boolean;
   updatedAt?: string;
+  _synced?: boolean;
 }
 
 export interface CartItem extends Product {
@@ -194,6 +198,7 @@ export interface Sale {
   fulfillmentHistory?: StatusHistoryEntry[]; // History of status changes
   updatedAt?: string; // Timestamp for sync tracking
   createdAt?: string; // Precise creation timestamp
+  _synced?: boolean;
 }
 
 export interface CreditNote {
@@ -303,6 +308,7 @@ export interface CashCut {
   cashExpenses?: number;
   cashRefunds?: number;
   updatedAt?: string;
+  _synced?: boolean;
 }
 
 export interface Supplier {
@@ -315,6 +321,7 @@ export interface Supplier {
   address?: string;
   active?: boolean;
   updatedAt?: string;
+  _synced?: boolean;
 }
 
 export interface Consumable {
@@ -327,6 +334,7 @@ export interface Consumable {
   unit: string;
   active?: boolean;
   updatedAt?: string;
+  _synced?: boolean;
 }
 
 export interface Promotion {
@@ -340,6 +348,7 @@ export interface Promotion {
   productIds?: string[];
   categoryIds?: string[];
   updatedAt?: string;
+  _synced?: boolean;
 }
 
 export interface CreditAccount {
@@ -357,6 +366,7 @@ export interface CreditAccount {
   termMonths?: number;
   monthlyPayment?: number;
   updatedAt?: string;
+  _synced?: boolean;
 }
 
 export interface CreditPayment {
@@ -406,4 +416,5 @@ export interface AuditLog {
   module: string; // e.g. 'inventory', 'sales', 'settings'
   branchId: string;
   updatedAt?: string;
+  _synced?: boolean;
 }

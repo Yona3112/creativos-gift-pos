@@ -125,19 +125,26 @@ function App() {
   useEffect(() => {
     if (!user) return;
 
-    // 1. Process queue on startup
-    SyncQueueService.processQueue();
+    // 1. Process queue and audit on startup
+    const startupSync = async () => {
+      await SyncQueueService.auditAndEnqueueUnsynced();
+      await SyncQueueService.processQueue();
+    };
+    startupSync();
 
-    // 2. Process queue whenever network comes back online
-    const handleOnline = () => {
-      console.log("🌐 [App] Red detectada, procesando cola de sincronización...");
+    // 2. Process queue whenever network comes back online or app becomes visible
+    const handleSyncTrigger = () => {
+      console.log("🌐 [App] Disparador de sincronización (Online/Focus), procesando cola...");
+      SyncQueueService.auditAndEnqueueUnsynced();
       SyncQueueService.processQueue();
     };
 
-    window.addEventListener('online', handleOnline);
+    window.addEventListener('online', handleSyncTrigger);
+    window.addEventListener('visibilitychange', handleSyncTrigger);
 
     return () => {
-      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('online', handleSyncTrigger);
+      window.removeEventListener('visibilitychange', handleSyncTrigger);
     };
   }, [user?.id]);
 

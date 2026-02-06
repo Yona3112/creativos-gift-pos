@@ -122,7 +122,16 @@ export class SyncQueueService {
                 return true;
             } else {
                 // INSERT or UPDATE are handled by pushRecord (which uses upsert)
-                return await SupabaseService.pushRecord(task.tableName, task.payload);
+                const success = await SupabaseService.pushRecord(task.tableName, task.payload);
+                if (success && task.payload.id) {
+                    // Mark as synced in local DB
+                    try {
+                        await (db_engine as any)[task.tableName].update(task.payload.id, { _synced: true });
+                    } catch (dbErr) {
+                        console.warn(`⚠️ [SyncQueue] No se pudo marcar _synced en ${task.tableName}:`, dbErr);
+                    }
+                }
+                return success;
             }
         } catch (error) {
             console.warn(`⚠️ [SyncQueue] Fallo al ejecutar tarea para ${task.tableName}:`, error);
@@ -139,5 +148,33 @@ export class SyncQueueService {
             .filter(t => t.tableName === tableName && t.payload.id === recordId)
             .count();
         return count > 0;
+    }
+
+    /**
+     * Scan critical tables for items that may have been missed by incremental sync
+     * and enqueue them for processing.
+     */
+    static async auditAndEnqueueUnsynced() {
+        console.log('🔍 [SyncQueue] Ejecutando auditoría de autocuración...');
+        const tables = ['sales', 'expenses', 'customers', 'products', 'categories', 'credits'];
+
+        for (const tableName of tables) {
+            try {
+                // Find records where _synced is false or undefined
+                // (Note: we use a filter because not all items might have the flag yet)
+                const unsynced = await (db_engine as any)[tableName]
+                    .filter((item: any) => item._synced === false)
+                    .toArray();
+
+                if (unsynced.length > 0) {
+                    console.log(`🩹 [SyncQueue] Autocuración: Encolando ${unsynced.length} registros huérfanos de ${tableName}`);
+                    for (const record of unsynced) {
+                        await this.enqueue(tableName, 'UPDATE', record);
+                    }
+                }
+            } catch (err) {
+                console.warn(`⚠️ [SyncQueue] Fallo al auditar tabla ${tableName}:`, err);
+            }
+        }
     }
 }
