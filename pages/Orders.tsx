@@ -17,16 +17,32 @@ interface OrdersProps {
 }
 
 export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, categories, settings, onUpdate }) => {
+    // Load initial state from localStorage or default
     const [searchTerm, setSearchTerm] = useState('');
-    const [viewMode, setViewMode] = useState<'board' | 'list'>('board');
-    const [statusFilter, setStatusFilter] = useState<FulfillmentStatus | 'all'>('all');
+    const [viewMode, setViewMode] = useState<'board' | 'list'>(() =>
+        (localStorage.getItem('order_viewMode') as 'board' | 'list') || 'board'
+    );
+    const [statusFilter, setStatusFilter] = useState<FulfillmentStatus | 'all'>(() =>
+        (localStorage.getItem('order_statusFilter') as FulfillmentStatus | 'all') || 'all'
+    );
+    const [datePreset, setDatePreset] = useState<'all' | 'today' | 'yesterday' | 'week' | 'month'>(() =>
+        (localStorage.getItem('order_datePreset') as 'all' | 'today' | 'yesterday' | 'week' | 'month') || 'all'
+    );
     const [dateFilter, setDateFilter] = useState<string>('');
     const [isSyncing, setIsSyncing] = useState(false);
-    const [categoryFilter, setCategoryFilter] = useState<string>('all');
-    const [showDelivered, setShowDelivered] = useState(false);
+    const [categoryFilter, setCategoryFilter] = useState<string>(() =>
+        localStorage.getItem('order_categoryFilter') || 'all'
+    );
+    const [showDelivered, setShowDelivered] = useState(() =>
+        localStorage.getItem('order_showDelivered') === 'true'
+    );
 
-    // Filter states
-    const [datePreset, setDatePreset] = useState<'all' | 'today' | 'yesterday' | 'week' | 'month'>('all');
+    // Persist settings to localStorage
+    useEffect(() => { localStorage.setItem('order_viewMode', viewMode); }, [viewMode]);
+    useEffect(() => { localStorage.setItem('order_statusFilter', statusFilter); }, [statusFilter]);
+    useEffect(() => { localStorage.setItem('order_datePreset', datePreset); }, [datePreset]);
+    useEffect(() => { localStorage.setItem('order_categoryFilter', categoryFilter); }, [categoryFilter]);
+    useEffect(() => { localStorage.setItem('order_showDelivered', String(showDelivered)); }, [showDelivered]);
 
     // Edit Modal State
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -180,6 +196,9 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
 
                 setProcessingOrderIds(prev => [...prev, order.id]);
                 await db.updateSaleStatus(order.id, newStatus);
+
+                // FORCE UI REFRESH
+                if (onUpdate) onUpdate();
 
                 showToast(`${order.folio}: ${newStatus}`, 'success');
             } finally {
@@ -511,7 +530,6 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                 categories={categories}
                 customers={customers}
                 onEditOrder={handleEditOrder}
-                lastCloudPush={settings?.lastCloudPush}
                 processingOrderIds={processingOrderIds}
             />
 

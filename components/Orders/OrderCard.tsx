@@ -7,7 +7,7 @@ interface OrderCardProps {
     categories: Category[];
     customers: Customer[];
     onEdit: (order: Sale) => void;
-    lastCloudPush?: string | null;
+
     isProcessing?: boolean;
 }
 
@@ -16,7 +16,7 @@ export const OrderCard: React.FC<OrderCardProps> = ({
     categories,
     customers,
     onEdit,
-    lastCloudPush,
+
     isProcessing
 }) => {
     const [previewImage, setPreviewImage] = React.useState<string | null>(null);
@@ -69,8 +69,11 @@ export const OrderCard: React.FC<OrderCardProps> = ({
         }
     };
 
-    // Check sync status
-    const isSynced = !order.updatedAt || !lastCloudPush || new Date(order.updatedAt).getTime() <= new Date(lastCloudPush).getTime();
+    // Check sync status using the authoritative flag
+    // If _synced is undefined, we assume it's NOT synced (safe default)
+    // If _synced is true, it came from cloud or was successfully pushed
+    // If _synced is false, it's a local change waiting to push
+    const isSynced = order._synced === true;
 
     return (
         <div

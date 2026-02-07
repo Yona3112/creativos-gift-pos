@@ -7,7 +7,7 @@ interface OrdersBoardProps {
     categories: Category[];
     customers: Customer[];
     onEditOrder: (order: Sale) => void;
-    lastCloudPush?: string | null;
+
     processingOrderIds: string[];
 }
 
@@ -16,7 +16,7 @@ export const OrdersBoard: React.FC<OrdersBoardProps> = ({
     categories,
     customers,
     onEditOrder,
-    lastCloudPush,
+
     processingOrderIds
 }) => {
     const columns: { id: FulfillmentStatus; label: string; color: string; icon: string }[] = [
@@ -71,7 +71,7 @@ export const OrdersBoard: React.FC<OrdersBoardProps> = ({
                                             categories={categories}
                                             customers={customers}
                                             onEdit={onEditOrder}
-                                            lastCloudPush={lastCloudPush}
+
                                             isProcessing={processingOrderIds.includes(order.id)}
                                         />
                                     ))
