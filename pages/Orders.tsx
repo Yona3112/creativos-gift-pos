@@ -42,7 +42,7 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
     useEffect(() => { localStorage.setItem('order_statusFilter', statusFilter); }, [statusFilter]);
     useEffect(() => { localStorage.setItem('order_datePreset', datePreset); }, [datePreset]);
     useEffect(() => { localStorage.setItem('order_categoryFilter', categoryFilter); }, [categoryFilter]);
-    useEffect(() => { localStorage.setItem('order_showDelivered', String(showDelivered)); }, [showDelivered]);
+    useEffect(() => { localStorage.setItem('order_categoryFilter', categoryFilter); }, [categoryFilter]);
 
     // Edit Modal State
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -520,8 +520,6 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                 isSyncing={isSyncing}
                 onManualSync={handleManualSync}
                 onDeepRefresh={handleDeepRefresh}
-                showDelivered={showDelivered}
-                onToggleDelivered={() => setShowDelivered(!showDelivered)}
                 orderCountPerCategory={orderCountPerCategory}
             />
 

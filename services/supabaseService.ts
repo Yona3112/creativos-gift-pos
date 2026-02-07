@@ -732,12 +732,21 @@ export class SupabaseService {
                         const remoteU = sanitizedItem.updatedAt ? new Date(sanitizedItem.updatedAt).getTime() : 0;
                         const localU = existing.updatedAt ? new Date(existing.updatedAt).getTime() : 0;
 
-                        if (remoteU > localU) {
+                        // Conflict Resolution Strategy:
+                        // 1. If local is "clean" (already synced), ALWAYS accept cloud update (it's the new truth).
+                        // 2. If local is "dirty" (unsynced changes), only accept if cloud is strictly newer.
+                        const isLocalClean = existing._synced !== false;
+
+                        if (isLocalClean || remoteU > localU) {
                             sanitizedItem._synced = true;
-                            await table.update(id, sanitizedItem);
+                            // Use put() to ensure we fully match the cloud state (replacing local structure)
+                            await table.put(sanitizedItem);
+
                             if (map.dexie === 'sales') {
-                                console.log(`✅ [sales] Actualizado: ${sanitizedItem.folio || sanitizedItem.id} → ${sanitizedItem.fulfillmentStatus || 'N/A'}`);
+                                console.log(`✅ [sales] Actualizado desde nube: ${sanitizedItem.folio || sanitizedItem.id} (${sanitizedItem.fulfillmentStatus})`);
                             }
+                        } else {
+                            console.log(`🔒 [${map.dexie}] Conflicto: Se conserva cambio local (unsynced) de ${existing.id}`);
                         }
                     } else {
                         sanitizedItem._synced = true;

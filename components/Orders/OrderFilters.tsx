@@ -15,8 +15,6 @@ interface OrderFiltersProps {
     isSyncing: boolean;
     onManualSync: () => void;
     onDeepRefresh: () => void;
-    showDelivered: boolean;
-    onToggleDelivered: () => void;
     orderCountPerCategory: Record<string, number>;
 }
 
@@ -33,8 +31,7 @@ export const OrderFilters: React.FC<OrderFiltersProps> = ({
     isSyncing,
     onManualSync,
     onDeepRefresh,
-    showDelivered,
-    onToggleDelivered,
+
     orderCountPerCategory
 }) => {
     return (
@@ -88,13 +85,6 @@ export const OrderFilters: React.FC<OrderFiltersProps> = ({
                         </button>
                     </div>
 
-                    <button
-                        onClick={onToggleDelivered}
-                        className={`p-2 px-3 rounded-xl text-xs font-black transition-all flex items-center gap-2 ${showDelivered ? 'bg-green-600 text-white shadow-md shadow-green-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
-                    >
-                        <i className={`fas fa-${showDelivered ? 'eye-slash' : 'archive'}`}></i>
-                        {showDelivered ? 'Ocultar Entregados' : 'Ver Entregados'}
-                    </button>
                 </div>
             </div>
 
