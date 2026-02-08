@@ -3,6 +3,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Product, Category, InventoryMovement, User, UserRole, CompanySettings } from '../types';
 import { Card, Button, Input, Modal, showToast, PasswordConfirmDialog } from '../components/UIComponents';
 import { db } from '../services/storageService';
+import { onRealtimeChange } from '../services/realtimeService';
 
 interface InventoryAuditProps {
     products: Product[];
@@ -29,6 +30,49 @@ export const InventoryAudit: React.FC<InventoryAuditProps> = ({ products, catego
     const [searchTerm, setSearchTerm] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [showSummaryModal, setShowSummaryModal] = useState(false);
+
+    // Monitoring for remote changes
+    useEffect(() => {
+        if (!isAuditing) return;
+
+        const unsubscribe = onRealtimeChange('products', (payload) => {
+            const { action, data } = payload;
+            if (action === 'DELETE') return;
+
+            const changedProduct = data as Product;
+
+            // Check if the changed product is in our current audit list
+            setAuditItems(prevItems => {
+                const itemIndex = prevItems.findIndex(i => i.product.id === changedProduct.id);
+                if (itemIndex >= 0) {
+                    const item = prevItems[itemIndex];
+
+                    // Trigger alert if stock changed remotely
+                    if (item.product.stock !== changedProduct.stock) {
+                        showToast(`⚠️ Stock modificado remotamente para: ${changedProduct.name}. Verifique.`, 'warning', 5000);
+
+                        // Update the product reference in the audit item ONLY if we haven't counted it yet 
+                        // or maybe we should always update reference but keep physical count?
+                        // Let's update the 'System Stock' (item.product) but keep 'Physical Count'.
+
+                        const updatedItems = [...prevItems];
+                        const newDiff = (item.physicalCount !== null) ? item.physicalCount - changedProduct.stock : 0;
+
+                        updatedItems[itemIndex] = {
+                            ...item,
+                            product: changedProduct,
+                            difference: newDiff
+                        };
+                        return updatedItems;
+                    }
+                }
+                return prevItems;
+            });
+        });
+
+        return () => unsubscribe();
+    }, [isAuditing]);
+
 
     // Estados para protección por contraseña
     const [resetItem, setResetItem] = useState<AuditItem | null>(null);

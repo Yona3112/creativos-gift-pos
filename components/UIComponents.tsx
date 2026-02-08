@@ -87,7 +87,7 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
 // INPUT PROFESIONAL (MEJORADO PARA MÓVIL)
 export const Input: React.FC<InputProps> = ({
   label, error, icon, className = '', style,
-  uppercase = true, selectOnFocus = false,
+  uppercase = false, selectOnFocus = false,
   onChange, type, onFocus, ...props
 }) => {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {

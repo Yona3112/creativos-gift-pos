@@ -12,9 +12,6 @@ interface OrderFiltersProps {
     categories: Category[];
     datePreset: 'all' | 'today' | 'yesterday' | 'week' | 'month';
     onDatePresetChange: (preset: 'all' | 'today' | 'yesterday' | 'week' | 'month') => void;
-    isSyncing: boolean;
-    onManualSync: () => void;
-    onDeepRefresh: () => void;
     orderCountPerCategory: Record<string, number>;
 }
 
@@ -28,9 +25,7 @@ export const OrderFilters: React.FC<OrderFiltersProps> = ({
     categories,
     datePreset,
     onDatePresetChange,
-    isSyncing,
-    onManualSync,
-    onDeepRefresh,
+
 
     orderCountPerCategory
 }) => {
@@ -40,12 +35,7 @@ export const OrderFilters: React.FC<OrderFiltersProps> = ({
             <div className="flex flex-col lg:flex-row justify-between items-center gap-3 bg-white p-3 rounded-2xl border border-gray-100 shadow-sm">
                 <div className="flex items-center gap-3 w-full lg:w-auto">
                     <h1 className="text-xl font-black text-gray-800 tracking-tight">Gestión de Pedidos</h1>
-                    {isSyncing && (
-                        <div className="flex items-center gap-2 bg-primary/10 text-primary px-2 py-1 rounded-lg text-[10px] font-black animate-pulse">
-                            <i className="fas fa-sync-alt animate-spin-slow"></i>
-                            Sincronizando
-                        </div>
-                    )}
+
                 </div>
 
                 <div className="flex flex-wrap gap-2 w-full lg:w-auto items-center justify-end">
@@ -66,24 +56,7 @@ export const OrderFilters: React.FC<OrderFiltersProps> = ({
                         className="!py-1.5 text-xs w-auto"
                     />
 
-                    <div className="flex gap-1 bg-gray-100 p-1 rounded-xl">
-                        <button
-                            onClick={onManualSync}
-                            disabled={isSyncing}
-                            className={`p-2 rounded-lg text-xs font-bold transition-all ${isSyncing ? 'text-primary' : 'hover:bg-white hover:shadow-sm text-gray-500'}`}
-                            title="Sincronización rápida"
-                        >
-                            <i className={`fas fa-${isSyncing ? 'sync-alt' : 'cloud-download-alt'}`}></i>
-                        </button>
-                        <button
-                            onClick={onDeepRefresh}
-                            disabled={isSyncing}
-                            className={`p-2 rounded-lg text-xs font-bold transition-all ${isSyncing ? 'text-primary' : 'hover:bg-blue-50 hover:text-blue-600 hover:shadow-sm text-gray-500'}`}
-                            title="Descarga profunda"
-                        >
-                            <i className="fas fa-database"></i>
-                        </button>
-                    </div>
+                    {/* Botones de sincronización manual eliminados para evitar confusión con Realtime */}
 
                 </div>
             </div>

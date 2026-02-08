@@ -443,16 +443,16 @@ export const CashCut: React.FC = () => {
                 </div>
               )}
               <div className="grid grid-cols-2 gap-x-3 gap-y-2 mb-4">
-                <Input label="L 500" type="number" min="0" value={denominations.bill500} onChange={e => setDenominations({ ...denominations, bill500: parseInt(e.target.value) || 0 })} className="!py-1 text-xs" />
-                <Input label="L 200" type="number" min="0" value={denominations.bill200} onChange={e => setDenominations({ ...denominations, bill200: parseInt(e.target.value) || 0 })} className="!py-1 text-xs" />
-                <Input label="L 100" type="number" min="0" value={denominations.bill100} onChange={e => setDenominations({ ...denominations, bill100: parseInt(e.target.value) || 0 })} className="!py-1 text-xs" />
-                <Input label="L 50" type="number" min="0" value={denominations.bill50} onChange={e => setDenominations({ ...denominations, bill50: parseInt(e.target.value) || 0 })} className="!py-1 text-xs" />
-                <Input label="L 20" type="number" min="0" value={denominations.bill20} onChange={e => setDenominations({ ...denominations, bill20: parseInt(e.target.value) || 0 })} className="!py-1 text-xs" />
-                <Input label="L 10" type="number" min="0" value={denominations.bill10} onChange={e => setDenominations({ ...denominations, bill10: parseInt(e.target.value) || 0 })} className="!py-1 text-xs" />
-                <Input label="L 5" type="number" min="0" value={denominations.bill5} onChange={e => setDenominations({ ...denominations, bill5: parseInt(e.target.value) || 0 })} className="!py-1 text-xs" />
-                <Input label="L 2" type="number" min="0" value={denominations.bill2} onChange={e => setDenominations({ ...denominations, bill2: parseInt(e.target.value) || 0 })} className="!py-1 text-xs" />
-                <Input label="L 1" type="number" min="0" value={denominations.bill1} onChange={e => setDenominations({ ...denominations, bill1: parseInt(e.target.value) || 0 })} className="!py-1 text-xs" />
-                <Input label="Monedas" type="number" min="0" step="0.01" value={denominations.coins} onChange={e => setDenominations({ ...denominations, coins: parseFloat(e.target.value) || 0 })} className="!py-1 text-xs" />
+                <Input label="L 500" type="number" min="0" value={denominations.bill500 || ''} onChange={e => setDenominations({ ...denominations, bill500: parseInt(e.target.value) || 0 })} className="!py-1 text-xs" />
+                <Input label="L 200" type="number" min="0" value={denominations.bill200 || ''} onChange={e => setDenominations({ ...denominations, bill200: parseInt(e.target.value) || 0 })} className="!py-1 text-xs" />
+                <Input label="L 100" type="number" min="0" value={denominations.bill100 || ''} onChange={e => setDenominations({ ...denominations, bill100: parseInt(e.target.value) || 0 })} className="!py-1 text-xs" />
+                <Input label="L 50" type="number" min="0" value={denominations.bill50 || ''} onChange={e => setDenominations({ ...denominations, bill50: parseInt(e.target.value) || 0 })} className="!py-1 text-xs" />
+                <Input label="L 20" type="number" min="0" value={denominations.bill20 || ''} onChange={e => setDenominations({ ...denominations, bill20: parseInt(e.target.value) || 0 })} className="!py-1 text-xs" />
+                <Input label="L 10" type="number" min="0" value={denominations.bill10 || ''} onChange={e => setDenominations({ ...denominations, bill10: parseInt(e.target.value) || 0 })} className="!py-1 text-xs" />
+                <Input label="L 5" type="number" min="0" value={denominations.bill5 || ''} onChange={e => setDenominations({ ...denominations, bill5: parseInt(e.target.value) || 0 })} className="!py-1 text-xs" />
+                <Input label="L 2" type="number" min="0" value={denominations.bill2 || ''} onChange={e => setDenominations({ ...denominations, bill2: parseInt(e.target.value) || 0 })} className="!py-1 text-xs" />
+                <Input label="L 1" type="number" min="0" value={denominations.bill1 || ''} onChange={e => setDenominations({ ...denominations, bill1: parseInt(e.target.value) || 0 })} className="!py-1 text-xs" />
+                <Input label="Monedas" type="number" min="0" step="0.01" value={denominations.coins || ''} onChange={e => setDenominations({ ...denominations, coins: parseFloat(e.target.value) || 0 })} className="!py-1 text-xs" />
               </div>
 
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 space-y-2">

@@ -35,121 +35,8 @@ const MENU_ITEMS = [
   { id: 'settings', label: 'Ajustes', icon: 'cog' },
 ];
 
-const BackupReminderBell: React.FC<{
-  settings: CompanySettings;
-  onNavigate: (page: string) => void;
-  onManualUpload: () => void;
-  onManualDownload: () => void;
-  userRole?: string;
-  isSyncing?: boolean;
-}> = ({ settings, onNavigate, onManualUpload, onManualDownload, userRole, isSyncing }) => {
-  const [showDropdown, setShowDropdown] = useState(false);
+// BackupReminderBell removed
 
-  const getBackupStatus = () => {
-    if (!settings.lastBackupDate) return { color: 'text-red-600 animate-pulse', bg: 'bg-red-100', status: 'Nunca subido', urgency: '¡URGENTE!', badge: '!', icon: 'fa-cloud-upload-alt' };
-
-    const lastBackup = new Date(settings.lastBackupDate);
-    const now = new Date();
-    const diffMs = now.getTime() - lastBackup.getTime();
-    const diffHours = diffMs / (1000 * 60 * 60);
-
-    if (diffHours < 4) {
-      return { color: 'text-green-500', bg: 'bg-green-100', status: 'Nube al día', urgency: 'Respaldo Automático OK', badge: null, icon: 'fa-cloud' };
-    } else if (diffHours < 24) {
-      return { color: 'text-yellow-500', bg: 'bg-yellow-100', status: 'Hace unas horas', urgency: '', badge: 'H', icon: 'fa-cloud' };
-    } else if (diffHours < 72) {
-      const days = Math.floor(diffHours / 24);
-      return { color: 'text-orange-500', bg: 'bg-orange-100', status: `Hace ${days} día${days > 1 ? 's' : ''}`, urgency: 'Se recomienda subir', badge: days.toString(), icon: 'fa-cloud' };
-    } else {
-      const days = Math.floor(diffHours / 24);
-      return { color: 'text-red-600 animate-pulse', bg: 'bg-red-100', status: `Hace ${days} días`, urgency: '¡Subir a Nube ahora!', badge: days.toString(), icon: 'fa-cloud-upload-alt' };
-    }
-  };
-
-  const statusInfo = getBackupStatus();
-
-  // Only show if supabase is configured
-  if (!settings.supabaseUrl || !settings.supabaseKey) return null;
-
-  return (
-    <div className="relative">
-      <button
-        onClick={() => setShowDropdown(!showDropdown)}
-        className={`w-10 h-10 flex items-center justify-center ${isSyncing ? 'bg-green-100' : statusInfo.bg} rounded-xl relative transition-all hover:scale-105`}
-        title={isSyncing ? "Sincronizando con la nube..." : "Estado de Nube"}
-      >
-        <i className={`fas ${statusInfo.icon} ${isSyncing ? 'text-green-600 animate-pulse' : statusInfo.color} text-lg`}></i>
-        {statusInfo.badge && (
-          <span className={`absolute -top-1 -right-1 w-4 h-4 ${statusInfo.color.includes('red') ? 'bg-red-600' : statusInfo.color.includes('orange') ? 'bg-orange-500' : 'bg-yellow-500'} rounded-full text-white text-[10px] flex items-center justify-center font-bold`}>
-            {statusInfo.badge}
-          </span>
-        )}
-      </button>
-
-      {showDropdown && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setShowDropdown(false)}></div>
-          <div className="absolute right-0 top-12 w-64 bg-white rounded-xl shadow-xl border border-gray-100 z-50 p-4 animate-scale-in origin-top-right">
-            <div className="flex items-center gap-3 mb-3">
-              <i className={`fas ${statusInfo.icon} text-2xl ${statusInfo.color}`}></i>
-              <div>
-                <div className="flex items-center gap-2">
-                  <p className="font-bold text-gray-800">Nube / Respaldo</p>
-                  {settings.autoSync && (
-                    <div className="flex items-center gap-1 bg-green-50 px-1.5 py-0.5 rounded-full border border-green-100">
-                      <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
-                      <span className="text-[8px] text-green-700 font-bold uppercase tracking-tighter">Auto</span>
-                    </div>
-                  )}
-                </div>
-                <p className="text-xs text-gray-500">{statusInfo.status}</p>
-              </div>
-            </div>
-            {statusInfo.urgency && (
-              <div className={`${statusInfo.bg} ${statusInfo.color} text-[10px] font-bold p-2 rounded-lg mb-3 text-center uppercase tracking-wider`}>
-                {statusInfo.urgency}
-              </div>
-            )}
-            <div className="grid grid-cols-2 gap-2 mb-4">
-              <button
-                onClick={() => { setShowDropdown(false); onManualUpload(); }}
-                className="flex flex-col items-center justify-center p-3 bg-indigo-50 text-indigo-700 rounded-xl hover:bg-indigo-100 transition-colors gap-2 group"
-                title="Subir datos a la nube"
-              >
-                <i className="fas fa-cloud-upload-alt text-xl group-hover:scale-110 transition-transform"></i>
-                <span className="text-[10px] font-black uppercase">Subir</span>
-              </button>
-
-              <button
-                onClick={() => { setShowDropdown(false); onManualDownload(); }}
-                className="flex flex-col items-center justify-center p-3 bg-amber-50 text-amber-700 rounded-xl hover:bg-amber-100 transition-colors gap-2 group"
-                title="Descargar datos de la nube"
-              >
-                <i className="fas fa-cloud-download-alt text-xl group-hover:scale-110 transition-transform"></i>
-                <span className="text-[10px] font-black uppercase">Bajar</span>
-              </button>
-            </div>
-
-            {userRole !== 'vendedor' && (
-              <button
-                onClick={() => { setShowDropdown(false); onNavigate('settings'); }}
-                className="w-full py-2 bg-gray-100 text-gray-600 rounded-lg text-[11px] font-bold hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
-              >
-                <i className="fas fa-cog"></i>
-                Ir a Configuración
-              </button>
-            )}
-            {settings.lastBackupDate && (
-              <p className="text-xs text-gray-400 mt-2 text-center">
-                Última subida: {new Date(settings.lastBackupDate).toLocaleString()}
-              </p>
-            )}
-          </div>
-        </>
-      )}
-    </div>
-  );
-};
 
 // Notification Bell for Low Stock, Overdue Credits, Pending Orders
 const NotificationBell: React.FC<{
@@ -274,15 +161,7 @@ export const Layout: React.FC<LayoutProps> = ({
 
           <div className="flex items-center gap-4">
             <NotificationBell alerts={alerts} onNavigate={onNavigate} />
-            {settings && (
-              <BackupReminderBell
-                settings={settings}
-                onNavigate={onNavigate}
-                onManualUpload={onManualUpload}
-                onManualDownload={onManualDownload}
-                userRole={user?.role}
-              />
-            )}
+            {/* BackupReminderBell removed */}
 
             <div className="h-8 w-px bg-gray-200 mx-2"></div>
 
@@ -302,15 +181,7 @@ export const Layout: React.FC<LayoutProps> = ({
           <span className="font-black text-primary">{settings?.name || 'Creativos Gift'}</span>
           <div className="flex items-center gap-2">
             <NotificationBell alerts={alerts} onNavigate={onNavigate} />
-            {settings && (
-              <BackupReminderBell
-                settings={settings}
-                onNavigate={onNavigate}
-                onManualUpload={onManualUpload}
-                onManualDownload={onManualDownload}
-                userRole={user?.role}
-              />
-            )}
+            {/* BackupReminderBell removed */}
             <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-white font-bold text-xs">{user?.name?.charAt(0) || '?'}</div>
           </div>
         </header>

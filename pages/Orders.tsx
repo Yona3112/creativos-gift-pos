@@ -29,7 +29,7 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
         (localStorage.getItem('order_datePreset') as 'all' | 'today' | 'yesterday' | 'week' | 'month') || 'all'
     );
     const [dateFilter, setDateFilter] = useState<string>('');
-    const [isSyncing, setIsSyncing] = useState(false);
+    // const [isSyncing, setIsSyncing] = useState(false); // Removed
     const [categoryFilter, setCategoryFilter] = useState<string>(() =>
         localStorage.getItem('order_categoryFilter') || 'all'
     );
@@ -87,37 +87,7 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
     }, []);
     */
 
-    const handleManualSync = async () => {
-        if (isSyncing) return;
-        setIsSyncing(true);
-        try {
-            // Trigger centralized sync via App.tsx with FORCE FULL PUSH
-            if (onUpdate) await onUpdate(true, true);
-            showToast("Sincronización total iniciada", "success");
-        } catch (e) {
-            console.error("❌ Error en sync manual:", e);
-            showToast("Fallo al sincronizar", "error");
-        } finally {
-            setIsSyncing(false);
-        }
-    };
-
-    const handleDeepRefresh = async () => {
-        if (!window.confirm("¿Deseas realizar una descarga profunda? Esto bajará todos los pedidos de la nube para corregir cualquier diferencia. Puede tardar unos segundos.")) return;
-
-        setIsSyncing(true);
-        try {
-            const { SupabaseService } = await import('../services/supabaseService');
-            await SupabaseService.pullAll();
-            if (onUpdate) onUpdate();
-            showToast("Descarga profunda completada con éxito", "success");
-        } catch (e) {
-            console.error("❌ Error en deep refresh:", e);
-            showToast("Error en descarga profunda", "error");
-        } finally {
-            setIsSyncing(false);
-        }
-    };
+    // Manual Sync Logic Removed (Realtime is fully active)
 
     // Simplified Order List Filter
     // Include sales that are: (1) not cancelled, AND (2) are orders, have balance, or are in workflow
@@ -225,17 +195,51 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
         }
     };
 
-    const handleEditOrder = (order: Sale) => {
+    const handleEditOrder = async (order: Sale) => {
         setSelectedOrder(order);
+
+        let guideFile = order.shippingDetails?.guideFile || '';
+        let guideFileType = order.shippingDetails?.guideFileType || '';
+        let guideFileName = order.shippingDetails?.guideFileName || '';
+        let productionImages = order.shippingDetails?.productionImages || [];
+
+        // LOAD ATTACHMENTS ON DEMAND (High Egress Fix)
+        // If we don't have them in the sale object (because we stripped them), fetch from separate table
+        try {
+            // Check if we need to fetch. 
+            // If guideFile is NOT a data URI and NOT a URL, or if we just want to check for "remote" ones
+            if (!guideFile || productionImages.length === 0) {
+                const attachments = await db.getAttachments(order.id);
+
+                if (attachments && attachments.length > 0) {
+                    // Find guide
+                    const guide = attachments.find((a: any) => a.category === 'guide' || a.category === 'general'); // General fallback
+                    if (guide && !guideFile) {
+                        guideFile = guide.file_data;
+                        guideFileType = guide.file_type;
+                        guideFileName = guide.file_name;
+                    }
+
+                    // Find production images
+                    const prodImgs = attachments.filter((a: any) => a.category === 'production');
+                    if (prodImgs.length > 0 && productionImages.length === 0) {
+                        productionImages = prodImgs.map((a: any) => a.file_data);
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("Error loading attachments:", e);
+        }
+
         setEditForm({
             status: order.fulfillmentStatus || 'pending',
             shippingCompany: order.shippingDetails?.company || '',
             tracking: order.shippingDetails?.trackingNumber || '',
             notes: order.shippingDetails?.notes || '',
-            guideFile: order.shippingDetails?.guideFile || '',
-            guideFileType: order.shippingDetails?.guideFileType || '',
-            guideFileName: order.shippingDetails?.guideFileName || '',
-            productionImages: order.shippingDetails?.productionImages || [],
+            guideFile: guideFile,
+            guideFileType: guideFileType,
+            guideFileName: guideFileName,
+            productionImages: productionImages,
             isLocalDelivery: order.shippingDetails?.isLocalDelivery || false,
             sharePhone: customers.find(c => c.id === order.customerId)?.phone || '',
             address: order.shippingDetails?.address || customers.find(c => c.id === order.customerId)?.address || ''
@@ -243,6 +247,7 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
         setIsEditModalOpen(true);
     };
 
+    // Handler para subir guía (PDF o imagen)
     // Handler para subir guía (PDF o imagen)
     const handleGuideUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -262,28 +267,56 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
         }
 
         try {
-            if (isPdf) {
-                const reader = new FileReader();
-                reader.onload = (ev) => {
-                    setEditForm(prev => ({
-                        ...prev,
-                        guideFile: ev.target?.result as string,
-                        guideFileType: 'pdf',
-                        guideFileName: file.name
-                    }));
-                };
-                reader.readAsDataURL(file);
-            } else {
-                const compressed = await db.compressImage(file);
+            // Upload immediately to separate table
+            if (selectedOrder) {
+                showToast("Subiendo archivo...", "info");
+
+                let fileData = '';
+                if (isPdf) {
+                    fileData = await new Promise<string>((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => resolve(ev.target?.result as string);
+                        reader.readAsDataURL(file);
+                    });
+                } else {
+                    fileData = await db.compressImage(file);
+                }
+
+                // Save to cloud attachment table
+                await db.saveAttachment(selectedOrder.id, fileData, isPdf ? 'pdf' : 'image', file.name, 'guide');
+
                 setEditForm(prev => ({
                     ...prev,
-                    guideFile: compressed,
-                    guideFileType: 'image',
+                    guideFile: fileData, // Keep for local preview
+                    guideFileType: isPdf ? 'pdf' : 'image',
                     guideFileName: file.name
                 }));
+                showToast('Guía subida y guardada correctamente', 'success');
+            } else {
+                // New Order (fallback)
+                if (isPdf) {
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                        setEditForm(prev => ({
+                            ...prev,
+                            guideFile: ev.target?.result as string,
+                            guideFileType: 'pdf',
+                            guideFileName: file.name
+                        }));
+                    };
+                    reader.readAsDataURL(file);
+                } else {
+                    const compressed = await db.compressImage(file);
+                    setEditForm(prev => ({
+                        ...prev,
+                        guideFile: compressed,
+                        guideFileType: 'image',
+                        guideFileName: file.name // Fixed: was using file.type
+                    }));
+                }
             }
-            showToast('Guía cargada correctamente', 'success');
         } catch (err) {
+            console.error("Upload error:", err);
             showToast('Error al cargar el archivo', 'error');
         }
     };
@@ -304,11 +337,18 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
         const toProcess: File[] = Array.from(files).slice(0, remaining) as File[];
         const newImages: string[] = [];
 
+        showToast(`Procesando ${toProcess.length} imagen(es)...`, 'info');
+
         for (const file of toProcess) {
             if (!file.type.startsWith('image/')) continue;
             try {
                 const compressed = await db.compressImage(file);
                 newImages.push(compressed);
+
+                // Upload immediately if order exists
+                if (selectedOrder) {
+                    await db.saveAttachment(selectedOrder.id, compressed, 'image', `prod-${Date.now()}.jpg`, 'production');
+                }
             } catch (err) {
                 console.error('Error compressing image', err);
             }
@@ -334,15 +374,26 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
 
         try {
             const isShipping = !!(editForm.shippingCompany || editForm.tracking) && !editForm.isLocalDelivery;
+
+            // OPTIMIZATION: Do NOT save heavy base64 to 'sales' table.
+            // If it's a data URI, we replace it with a placeholder because it's already in sale_attachments.
+            const cleanGuideFile = (editForm.guideFile && editForm.guideFile.startsWith('data:'))
+                ? '[ATTACHMENT]'
+                : editForm.guideFile;
+
+            const cleanProductionImages = editForm.productionImages.map(img =>
+                (img && img.startsWith('data:')) ? '[ATTACHMENT]' : img
+            );
+
             const details: ShippingDetails = {
                 company: editForm.shippingCompany,
                 trackingNumber: editForm.tracking,
                 notes: editForm.notes,
                 method: isShipping ? 'shipping' : 'pickup',
-                guideFile: editForm.guideFile || undefined,
+                guideFile: cleanGuideFile || undefined,
                 guideFileType: editForm.guideFileType || undefined,
                 guideFileName: editForm.guideFileName || undefined,
-                productionImages: editForm.productionImages.length > 0 ? editForm.productionImages : undefined,
+                productionImages: cleanProductionImages.length > 0 ? cleanProductionImages : undefined,
                 isLocalDelivery: editForm.isLocalDelivery,
                 address: editForm.address
             };
@@ -375,6 +426,10 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
             setIsEditModalOpen(false);
 
             // Perform update (this will automatically enqueue for cloud sync)
+            // IF guideFile is huge (base64), we should strip it here?
+            // Ideally we modify db.updateSaleStatus to handle it.
+            // For now, let's keep it simple and focus on the High Egress fix in storageService
+
             await db.updateSaleStatus(selectedOrder.id, editForm.status, details);
             showToast(`Pedido actualizado: ${editForm.status}`, 'success');
 
@@ -400,11 +455,26 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                 ...payDetails
             };
 
-            await db.completeOrder(selectedOrder.id, payment, generateInvoice ? 'FACTURA' : 'TICKET');
+            const updatedSale = await db.completeOrder(selectedOrder.id, payment, generateInvoice ? 'FACTURA' : 'TICKET');
 
             showToast('Pago completado y documento generado', 'success');
             setIsPayModalOpen(false);
             setIsEditModalOpen(false);
+
+            // PRINT RECEIPT IMMEDIATELY
+            try {
+                // Generate HTML for the receipt
+                const html = await db.generateTicketHTML(updatedSale, updatedSale.customerId ? customers.find(c => c.id === updatedSale.customerId) : undefined);
+
+                // Use PrinterService
+                const { PrinterService } = await import('../services/printerService');
+                PrinterService.printHTML(html);
+
+            } catch (printErr) {
+                console.warn("Error printing receipt automatically:", printErr);
+                showToast("Pago registrado, pero hubo error al imprimir", "warning");
+            }
+
             if (onUpdate) onUpdate();
         } catch (e: any) {
             showToast(e.message || 'Error al completar pago', 'error');
@@ -517,9 +587,6 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                 categories={categories}
                 datePreset={datePreset}
                 onDatePresetChange={(preset) => { setDatePreset(preset); setDateFilter(''); }}
-                isSyncing={isSyncing}
-                onManualSync={handleManualSync}
-                onDeepRefresh={handleDeepRefresh}
                 orderCountPerCategory={orderCountPerCategory}
             />
 

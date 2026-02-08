@@ -87,179 +87,254 @@ export const Credits: React.FC<CreditsProps> = ({ settings }) => {
 
     const printPaymentReceipt = (credit: CreditAccount, payment: CreditPayment, customerName: string) => {
         const remaining = credit.totalAmount - credit.paidAmount;
-        const win = window.open('', '', 'width=400,height=500');
-        if (win) {
-            win.document.write(`
-                <html>
-                <head>
-                    <title>Recibo de Abono</title>
-                    <style>
-                        body { font-family: "Courier New", monospace; font-size: 11px; margin: 0; padding: 10px; width: ${settings.printerSize}; }
-                        .text-center { text-align: center; }
-                        .bold { font-weight: bold; }
-                        .line { border-bottom: 1px dashed #000; margin: 5px 0; }
-                    </style>
-                </head>
-                <body>
-                    <div class="text-center">
-                        <h3 class="bold">${settings.name}</h3>
-                        <p>RECIBO DE ABONO</p>
-                        <p>${getLocalDate(payment.date)} ${getLocalTime(payment.date)}</p>
-                    </div>
-                    <div class="line"></div>
-                    <p><strong>Cliente:</strong> ${customerName}</p>
-                    <p><strong>Ref. Crédito:</strong> ${credit.saleId}</p>
-                    <div class="line"></div>
-                    <p>Deuda Total: L ${credit.totalAmount.toFixed(2)}</p>
-                    <p>Abonado Antes: L ${(credit.paidAmount - payment.amount).toFixed(2)}</p>
-                    <br/>
-                    <p style="font-size:14px;" class="bold">ABONO ACTUAL: L ${payment.amount.toFixed(2)}</p>
-                    <br/>
-                    <p class="bold">SALDO RESTANTE: L ${remaining.toFixed(2)}</p>
-                    <div class="line"></div>
-                    <p class="text-center">Firma Cliente</p>
-                    <br/><br/>
-                    <div style="border-top:1px solid #000; width:80%; margin:0 auto;"></div>
-                </body>
-                </html>
-            `);
-            win.document.close();
-            win.focus();
-            setTimeout(() => {
-                win.print();
-                win.close();
-            }, 500);
-        } else {
-            showToast("El navegador bloqueó la impresión. Habilite ventanas emergentes.", "warning");
+        const html = `
+            <html>
+            <head>
+                <title>Recibo de Abono</title>
+                <style>
+                    body { font-family: "Courier New", monospace; font-size: 11px; margin: 0; padding: 10px; width: ${settings.printerSize}; }
+                    .text-center { text-align: center; }
+                    .bold { font-weight: bold; }
+                    .line { border-bottom: 1px dashed #000; margin: 5px 0; }
+                </style>
+            </head>
+            <body>
+                <div class="text-center">
+                    <h3 class="bold">${settings.name}</h3>
+                    <p>RECIBO DE ABONO</p>
+                    <p>${getLocalDate(payment.date)} ${getLocalTime(payment.date)}</p>
+                </div>
+                <div class="line"></div>
+                <p><strong>Cliente:</strong> ${customerName}</p>
+                <p><strong>Ref. Crédito:</strong> ${credit.saleId}</p>
+                <div class="line"></div>
+                <p>Deuda Total: L ${credit.totalAmount.toFixed(2)}</p>
+                <p>Abonado Antes: L ${(credit.paidAmount - payment.amount).toFixed(2)}</p>
+                <br/>
+                <p style="font-size:14px;" class="bold">ABONO ACTUAL: L ${payment.amount.toFixed(2)}</p>
+                <br/>
+                <p class="bold">SALDO RESTANTE: L ${remaining.toFixed(2)}</p>
+                <div class="line"></div>
+                <p class="text-center">Firma Cliente</p>
+                <br/><br/>
+                <div style="border-top:1px solid #000; width:80%; margin:0 auto;"></div>
+            </body>
+            </html>
+        `;
+        // Use PrinterService (dynamically imported or available globally if added to window)
+        // Since we are in a component, we can assume we'll use a local helper or import
+        // For now, let's just implement the iframe logic directly here until verified, OR stick to window.open if user preferred standard popup.
+        // But user complained about stability, so iframe is better.
+        // Re-using the iframe logic inline for simplicity as the Service file might not be imported yet in this update block
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        document.body.appendChild(iframe);
+        const doc = iframe.contentWindow?.document;
+        if (doc) {
+            doc.open();
+            doc.write(html);
+            doc.close();
+            iframe.onload = () => {
+                iframe.contentWindow?.print();
+                setTimeout(() => document.body.removeChild(iframe), 1000);
+            };
         }
     };
 
     const printAccountStatement = (credit: CreditAccount) => {
         const customer = customers.find(c => c.id === credit.customerId);
-        const win = window.open('', '', 'width=800,height=600');
-        if (win) {
-            const paymentsRows = (credit.payments || []).map(p => `
-                <tr>
-                    <td>${getLocalDate(p.date)}</td>
-                    <td>${p.method}</td>
-                    <td>Abono</td>
-                    <td style="text-align:right;">L ${p.amount.toFixed(2)}</td>
-                </tr>
-            `).join('');
+        const paymentsRows = (credit.payments || []).map(p => `
+            <tr>
+                <td>${getLocalDate(p.date)}</td>
+                <td>${p.method}</td>
+                <td>Abono</td>
+                <td style="text-align:right;">L ${p.amount.toFixed(2)}</td>
+            </tr>
+        `).join('');
 
-            win.document.write(`
-                <html>
-                <head>
-                    <title>Estado de Cuenta</title>
-                    <style>
-                        body { font-family: Arial, sans-serif; padding: 40px; color: #333; }
-                        h1 { color: #2c3e50; }
-                        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-                        th, td { padding: 10px; border-bottom: 1px solid #ddd; text-align: left; }
-                        th { background-color: #f9f9f9; }
-                    </style>
-                </head>
-                <body>
-                    <h1>ESTADO DE CUENTA</h1>
-                    <h3>${settings.name}</h3>
-                    <p><strong>Cliente:</strong> ${customer?.name}</p>
-                    <p><strong>Fecha Vencimiento:</strong> ${getLocalDate(credit.dueDate)}</p>
-                    
-                    <table>
-                        <thead>
+        const html = `
+            <html>
+            <head>
+                <title>Estado de Cuenta</title>
+                <style>
+                    body { font-family: Arial, sans-serif; padding: 40px; color: #333; }
+                    h1 { color: #2c3e50; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                    th, td { padding: 10px; border-bottom: 1px solid #ddd; text-align: left; }
+                    th { background-color: #f9f9f9; }
+                </style>
+            </head>
+            <body>
+                <h1>ESTADO DE CUENTA</h1>
+                <h3>${settings.name}</h3>
+                <p><strong>Cliente:</strong> ${customer?.name}</p>
+                <p><strong>Fecha Vencimiento:</strong> ${getLocalDate(credit.dueDate)}</p>
+                
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Detalle</th>
+                            <th>Tipo</th>
+                            <th style="text-align:right;">Monto</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>${getLocalDate(credit.createdAt)}</td>
+                            <td>Apertura Crédito</td>
+                            <td>Cargo Inicial</td>
+                            <td style="text-align:right;">L ${credit.totalAmount.toFixed(2)}</td>
+                        </tr>
+                        ${paymentsRows}
+                        <tr>
+                            <td colspan="3" style="text-align:right; font-weight:bold;">Total Pagado:</td>
+                            <td style="text-align:right; font-weight:bold;">L ${credit.paidAmount.toFixed(2)}</td>
+                        </tr>
                             <tr>
-                                <th>Fecha</th>
-                                <th>Detalle</th>
-                                <th>Tipo</th>
-                                <th style="text-align:right;">Monto</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td>${getLocalDate(credit.createdAt)}</td>
-                                <td>Apertura Crédito</td>
-                                <td>Cargo Inicial</td>
-                                <td style="text-align:right;">L ${credit.totalAmount.toFixed(2)}</td>
-                            </tr>
-                            ${paymentsRows}
-                            <tr>
-                                <td colspan="3" style="text-align:right; font-weight:bold;">Total Pagado:</td>
-                                <td style="text-align:right; font-weight:bold;">L ${credit.paidAmount.toFixed(2)}</td>
-                            </tr>
-                             <tr>
-                                <td colspan="3" style="text-align:right; font-weight:bold; font-size: 18px;">SALDO PENDIENTE:</td>
-                                <td style="text-align:right; font-weight:bold; font-size: 18px; color: red;">L ${(credit.totalAmount - credit.paidAmount).toFixed(2)}</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </body>
-                </html>
-            `);
-            win.document.close();
-            win.focus();
-            setTimeout(() => {
-                win.print();
-                win.close();
-            }, 500);
-        } else {
-            showToast("El navegador bloqueó la impresión. Habilite ventanas emergentes.", "warning");
+                            <td colspan="3" style="text-align:right; font-weight:bold; font-size: 18px;">SALDO PENDIENTE:</td>
+                            <td style="text-align:right; font-weight:bold; font-size: 18px; color: red;">L ${(credit.totalAmount - credit.paidAmount).toFixed(2)}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </body>
+            </html>
+        `;
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        document.body.appendChild(iframe);
+        const doc = iframe.contentWindow?.document;
+        if (doc) {
+            doc.open();
+            doc.write(html);
+            doc.close();
+            iframe.onload = () => {
+                iframe.contentWindow?.print();
+                setTimeout(() => document.body.removeChild(iframe), 1000);
+            };
         }
     };
 
     const printSettlement = (credit: CreditAccount) => {
         const customer = customers.find(c => c.id === credit.customerId);
-        const win = window.open('', '', 'width=800,height=800');
-        if (win) {
-            win.document.write(`
-                <html>
-                <head>
-                    <title>Finiquito de Deuda</title>
-                    <style>
-                        body { font-family: 'Times New Roman', serif; padding: 60px; line-height: 1.6; }
-                        .header { text-align: center; margin-bottom: 50px; }
-                        .title { font-size: 24px; font-weight: bold; text-decoration: underline; margin-bottom: 40px; text-align: center; }
-                        .content { font-size: 16px; text-align: justify; }
-                        .signatures { margin-top: 100px; display: flex; justify-content: space-between; }
-                        .sig-box { width: 40%; border-top: 1px solid #000; text-align: center; padding-top: 10px; }
-                    </style>
-                </head>
-                <body>
-                    <div class="header">
-                        <h2>${settings.name}</h2>
-                        <p>${settings.address}</p>
-                    </div>
+        const html = `
+            <html>
+            <head>
+                <title>Finiquito de Deuda</title>
+                <style>
+                    body { font-family: 'Times New Roman', serif; padding: 60px; line-height: 1.6; }
+                    .header { text-align: center; margin-bottom: 50px; }
+                    .title { font-size: 24px; font-weight: bold; text-decoration: underline; margin-bottom: 40px; text-align: center; }
+                    .content { font-size: 16px; text-align: justify; }
+                    .signatures { margin-top: 100px; display: flex; justify-content: space-between; }
+                    .sig-box { width: 40%; border-top: 1px solid #000; text-align: center; padding-top: 10px; }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h2>${settings.name}</h2>
+                    <p>${settings.address}</p>
+                </div>
+                
+                <div class="title">CARTA DE FINIQUITO Y LIBERACIÓN DE DEUDA</div>
+
+                <div class="content">
+                    <p>Por medio de la presente, <strong>${settings.name}</strong> hace constar que el cliente <strong>${customer?.name}</strong>, con ID de sistema ${customer?.id}, ha cancelado en su totalidad la deuda correspondiente al crédito con referencia <strong>${credit.saleId}</strong>.</p>
                     
-                    <div class="title">CARTA DE FINIQUITO Y LIBERACIÓN DE DEUDA</div>
+                    <p>A la fecha de hoy, ${getLocalDate(new Date().toISOString())}, el saldo de dicha cuenta es <strong>L 0.00</strong>, por lo que se extiende el presente finiquito, liberando al cliente de cualquier obligación de pago relacionada con esta transacción específica.</p>
 
-                    <div class="content">
-                        <p>Por medio de la presente, <strong>${settings.name}</strong> hace constar que el cliente <strong>${customer?.name}</strong>, con ID de sistema ${customer?.id}, ha cancelado en su totalidad la deuda correspondiente al crédito con referencia <strong>${credit.saleId}</strong>.</p>
-                        
-                        <p>A la fecha de hoy, ${getLocalDate(new Date().toISOString())}, el saldo de dicha cuenta es <strong>L 0.00</strong>, por lo que se extiende el presente finiquito, liberando al cliente de cualquier obligación de pago relacionada con esta transacción específica.</p>
+                    <p>Se extiende la presente a petición del interesado para los fines que estime convenientes.</p>
+                </div>
 
-                        <p>Se extiende la presente a petición del interesado para los fines que estime convenientes.</p>
-                    </div>
+                <div class="signatures">
+                        <div class="sig-box">
+                        Firma Autorizada<br/>
+                        ${settings.name}
+                        </div>
+                        <div class="sig-box">
+                        Recibido Conforme<br/>
+                        ${customer?.name}
+                        </div>
+                </div>
+            </body>
+            </html>
+        `;
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        document.body.appendChild(iframe);
+        const doc = iframe.contentWindow?.document;
+        if (doc) {
+            doc.open();
+            doc.write(html);
+            doc.close();
+            iframe.onload = () => {
+                iframe.contentWindow?.print();
+                setTimeout(() => document.body.removeChild(iframe), 1000);
+            };
+        }
+    };
 
-                    <div class="signatures">
-                         <div class="sig-box">
-                            Firma Autorizada<br/>
-                            ${settings.name}
-                         </div>
-                         <div class="sig-box">
-                            Recibido Conforme<br/>
-                            ${customer?.name}
-                         </div>
-                    </div>
-                </body>
-                </html>
-            `);
-            win.document.close();
-            win.focus();
-            setTimeout(() => {
-                win.print();
-                win.close();
-            }, 500);
-        } else {
-            showToast("El navegador bloqueó la impresión. Habilite ventanas emergentes.", "warning");
+    const printContract = async (credit: CreditAccount) => {
+        try {
+            const sale = await db.getSale(credit.saleId); // Need full sale for items
+            const customer = customers.find(c => c.id === credit.customerId);
+
+            if (sale && customer) {
+                const htmlContrato = await db.generateCreditContractHTML(sale, customer, settings);
+                const htmlPagare = await db.generateCreditPagareHTML(sale, customer, settings);
+
+                const html = `
+                    <html><body>
+                    ${htmlContrato}
+                    <div style="page-break-after: always;"></div>
+                    ${htmlPagare}
+                    </body></html>
+                `;
+
+                const iframe = document.createElement('iframe');
+                iframe.style.display = 'none';
+                document.body.appendChild(iframe);
+                const doc = iframe.contentWindow?.document;
+                if (doc) {
+                    doc.open();
+                    doc.write(html);
+                    doc.close();
+                    iframe.onload = () => {
+                        iframe.contentWindow?.print();
+                        setTimeout(() => document.body.removeChild(iframe), 1000);
+                    };
+                }
+            } else {
+                showToast("No se encontró la venta original o el cliente.", "error");
+            }
+        } catch (e) {
+            console.error(e);
+            showToast("Error al generar contrato.", "error");
+        }
+    };
+
+    const printPaymentPlan = async (credit: CreditAccount) => {
+        try {
+            const sale = await db.getSale(credit.saleId);
+            if (sale) {
+                const html = await db.generatePaymentPlanHTML(sale);
+                const iframe = document.createElement('iframe');
+                iframe.style.display = 'none';
+                document.body.appendChild(iframe);
+                const doc = iframe.contentWindow?.document;
+                if (doc) {
+                    doc.open();
+                    doc.write(html);
+                    doc.close();
+                    iframe.onload = () => {
+                        iframe.contentWindow?.print();
+                        setTimeout(() => document.body.removeChild(iframe), 1000);
+                    };
+                }
+            }
+        } catch (e) {
+            console.error(e);
+            showToast("Error al generar plan de pago.", "error");
         }
     };
 

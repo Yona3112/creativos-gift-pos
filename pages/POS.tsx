@@ -261,13 +261,10 @@ export const POS: React.FC<POSProps> = ({
                 e.preventDefault();
                 const customer = lastSale.customerName ? { name: lastSale.customerName } as Customer : undefined;
                 db.generateTicketHTML(lastSale, customer).then(html => {
-                    const win = window.open('', '', 'width=400,height=600');
-                    if (win) {
-                        win.document.write(html);
-                        win.document.close();
-                        win.focus();
-                        setTimeout(() => { win.print(); win.close(); }, 500);
-                    }
+                    db.generateTicketHTML(lastSale, customer).then(async html => {
+                        const { PrinterService } = await import('../services/printerService');
+                        PrinterService.printHTML(html);
+                    });
                 });
             }
 
@@ -1172,29 +1169,19 @@ export const POS: React.FC<POSProps> = ({
                                 const htmlOriginal = await db.generateTicketHTML(lastSale, customer);
 
                                 // Print Customer Copy (ORIGINAL)
-                                const winCliente = window.open('', '', 'width=400,height=600');
-                                if (winCliente) {
-                                    const clienteHtml = htmlOriginal.replace('</style>', `
-                                        .copy-type { text-align: center; font-weight: bold; font-size: 10px; margin-bottom: 5px; padding: 3px; background: #f0f0f0; }
-                                        </style>`).replace('<body>', '<body><div class="copy-type">ORIGINAL: CLIENTE</div>');
-                                    winCliente.document.write(clienteHtml);
-                                    winCliente.document.close();
-                                    winCliente.focus();
-                                    winCliente.print();
-                                }
+                                const { PrinterService } = await import('../services/printerService');
+
+                                const clienteHtml = htmlOriginal.replace('</style>', `
+                                    .copy-type { text-align: center; font-weight: bold; font-size: 10px; margin-bottom: 5px; padding: 3px; background: #f0f0f0; }
+                                    </style>`).replace('<body>', '<body><div class="copy-type">ORIGINAL: CLIENTE</div>');
+                                PrinterService.printHTML(clienteHtml);
 
                                 // Print SAR Copy (COPIA FISCAL) after a short delay
-                                setTimeout(async () => {
-                                    const winSAR = window.open('', '', 'width=400,height=600');
-                                    if (winSAR) {
-                                        const sarHtml = htmlOriginal.replace('</style>', `
-                                            .copy-type { text-align: center; font-weight: bold; font-size: 10px; margin-bottom: 5px; padding: 3px; background: #e0e0e0; border: 1px dashed #666; }
-                                            </style>`).replace('<body>', '<body><div class="copy-type">COPIA: EMISOR</div>');
-                                        winSAR.document.write(sarHtml);
-                                        winSAR.document.close();
-                                        winSAR.focus();
-                                        winSAR.print();
-                                    }
+                                setTimeout(() => {
+                                    const sarHtml = htmlOriginal.replace('</style>', `
+                                        .copy-type { text-align: center; font-weight: bold; font-size: 10px; margin-bottom: 5px; padding: 3px; background: #e0e0e0; border: 1px dashed #666; }
+                                        </style>`).replace('<body>', '<body><div class="copy-type">COPIA: EMISOR</div>');
+                                    PrinterService.printHTML(sarHtml);
                                 }, 1000);
                             }
                         }}>Imprimir (2 Copias)</Button>
@@ -1207,21 +1194,18 @@ export const POS: React.FC<POSProps> = ({
                                         if (lastSale && selectedCustomer && settings) {
                                             const htmlContrato = await db.generateCreditContractHTML(lastSale, selectedCustomer, settings);
                                             const htmlPagare = await db.generateCreditPagareHTML(lastSale, selectedCustomer, settings);
-                                            const win = window.open('', '', 'width=800,height=600');
-                                            if (win) {
-                                                win.document.write(htmlContrato);
-                                                win.document.write('<div style="page-break-after: always;"></div>');
-                                                win.document.write(htmlPagare);
-                                                win.document.close();
-                                                setTimeout(() => win.print(), 500);
-                                            }
+
+                                            // Combine with page break
+                                            const combinedHtml = htmlContrato + '<div style="page-break-after: always;"></div>' + htmlPagare;
+                                            const { PrinterService } = await import('../services/printerService');
+                                            PrinterService.printHTML(combinedHtml);
                                         }
                                     }}>Contrato y Pagaré</Button>
                                     <Button variant="outline" size="sm" className="flex-1 text-[10px] py-2" icon="list-ol" onClick={async () => {
                                         if (lastSale) {
                                             const html = await db.generatePaymentPlanHTML(lastSale);
-                                            const win = window.open('', '', 'width=600,height=800');
-                                            if (win) { win.document.write(html); win.document.close(); win.print(); }
+                                            const { PrinterService } = await import('../services/printerService');
+                                            PrinterService.printHTML(html);
                                         }
                                     }}>Plan de Pago</Button>
                                 </div>

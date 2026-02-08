@@ -10,7 +10,43 @@ interface SettingsProps {
   onUpdate?: () => void;
 }
 
-export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
+// Internal Error Boundary for Settings
+class SettingsErrorBoundary extends React.Component<any, any> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: any, errorInfo: any) {
+    console.error("❌ Stats Settings Crash:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-8 text-center">
+          <h2 className="text-xl font-bold text-red-600 mb-2">Error en Configuración</h2>
+          <p className="text-gray-600 mb-4">Ocurrió un error al mostrar la configuración. No es necesario reiniciar todo el sistema.</p>
+          <button
+            type="button"
+            className="px-4 py-2 bg-primary text-white rounded-lg"
+            onClick={() => this.setState({ hasError: false })}
+          >
+            Reintentar
+          </button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+const SettingsContent: React.FC<SettingsProps> = ({ onUpdate }) => {
   const [settings, setSettings] = useState<CompanySettings | null>(null);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -528,19 +564,11 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
-                <Button size="sm" variant="secondary" onClick={handleBackup} icon="download" className="w-full">Respaldo Local</Button>
-                <Button size="sm" variant="primary" onClick={handleCloudSync} disabled={isSyncing} icon={isSyncing ? 'spinner fa-spin' : 'cloud-download-alt'} className="w-full">
-                  Nube (Sync)
-                </Button>
-                <div className="sm:col-span-2">
-                  <button
-                    onClick={handleForceFullSync}
-                    disabled={isSyncing}
-                    className="w-full mt-1 py-1.5 text-[10px] font-bold text-amber-600 hover:text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg border border-amber-200 transition-all flex items-center justify-center gap-2"
-                  >
-                    <i className="fas fa-upload"></i> ¿Faltan datos? Forzar Subida Total
-                  </button>
-                </div>
+                <Button size="sm" variant="secondary" onClick={handleBackup} icon="download" className="w-full">Respaldo Local (JSON)</Button>
+                {/* 
+                  Botones de sincronización manual ocultos por solicitud del usuario (Feb 2026).
+                  El sistema ahora usa Realtime y sincronización automática en segundo plano.
+                */}
               </div>
 
               {/* INVENTORY REPAIR SECTION */}
@@ -555,46 +583,24 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
                   <Button
                     size="sm"
                     variant="secondary"
-                    icon="sync-alt"
+                    className="text-xs"
                     onClick={async () => {
-                      try {
-                        showToast("Reconciliando inventario...", "info");
+                      if (window.confirm("¿Reconciliar stock con movimientos? Esto recalculará el stock basado en el historial.")) {
+                        setSyncStatus({ type: 'info', message: 'Reconciliando...' });
+                        const { db } = await import('../services/storageService');
                         const result = await db.reconcileStockFromMovements();
                         if (result.fixed > 0) {
                           showToast(`✅ ${result.fixed} productos corregidos`, "success");
-                          console.log("📦 Productos corregidos:", result.details);
                         } else {
-                          showToast("Todo está sincronizado ✓", "success");
+                          showToast("Stock sincronizado correctamente.", "success");
                         }
-                        if (onUpdate) onUpdate();
-                      } catch (e: any) {
-                        showToast(e.message || "Error al reconciliar", "error");
+                        setSyncStatus({ type: 'success', message: 'Stock reconciliado exitosamente.' });
                       }
                     }}
                   >
                     Reconciliar Stock
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="primary"
-                    icon="cloud-upload-alt"
-                    onClick={async () => {
-                      try {
-                        showToast("Subiendo inventario a la nube...", "info");
-                        const result = await db.forcePushProductsToCloud();
-                        if (result.success) {
-                          showToast(`☁️ ${result.count} productos sincronizados`, "success");
-                        } else {
-                          showToast("Error al sincronizar", "error");
-                        }
-                        if (onUpdate) onUpdate();
-                      } catch (e: any) {
-                        showToast(e.message || "Error al subir", "error");
-                      }
-                    }}
-                  >
-                    Forzar Subida a Nube
-                  </Button>
+                  {/* Botón de Forzar Subida eliminado para evitar conflictos con Realtime */}
                 </div>
                 <p className="text-[10px] text-gray-400 mt-2 text-center">
                   💡 Usa "Reconciliar" primero, luego "Forzar Subida" si el problema persiste
@@ -637,5 +643,13 @@ export const Settings: React.FC<SettingsProps> = ({ onUpdate }) => {
       <ConfirmDialog isOpen={deleteUserConfirm.open} title="Desactivar Usuario" message="¿Desactivar este usuario? Ya no podrá iniciar sesión." confirmText="Desactivar" cancelText="Cancelar" variant="danger" onConfirm={async () => { await db.deleteUser(deleteUserConfirm.id); setUsers((await db.getUsers()).filter(u => u.active !== false)); setDeleteUserConfirm({ open: false, id: '' }); }} onCancel={() => setDeleteUserConfirm({ open: false, id: '' })} />
       <ConfirmDialog isOpen={showPurgeConfirm} title="Confirmar Purga de Datos" message={`¿Está seguro? Se eliminarán permanentemente datos antiguos.`} confirmText="Purgar Ahora" cancelText="Cancelar" variant="danger" onConfirm={async () => { const results = await db.purgeOldData(purgeYears); showToast(`Purga completada.`, "success"); setShowPurgeConfirm(false); if (onUpdate) onUpdate(); }} onCancel={() => setShowPurgeConfirm(false)} />
     </div>
+  );
+};
+
+export const Settings = (props: SettingsProps) => {
+  return (
+    <SettingsErrorBoundary>
+      <SettingsContent {...props} />
+    </SettingsErrorBoundary>
   );
 };

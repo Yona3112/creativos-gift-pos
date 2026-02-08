@@ -147,40 +147,33 @@ export const SalesHistory: React.FC<SalesHistoryProps> = ({ sales, customers, us
     const reprintTicket = async (sale: Sale) => {
         const customer = customers.find(c => c.id === sale.customerId);
         const html = await db.generateTicketHTML(sale, customer);
-        const win = window.open('', '', 'width=400,height=600');
 
-        if (win) {
-            win.document.write(html);
-            win.document.close();
-            win.focus();
-            setTimeout(() => { win.print(); win.close(); }, 500);
-        }
+        // Dynamic import
+        const { PrinterService } = await import('../services/printerService');
+        PrinterService.printHTML(html);
     };
 
-    const printCreditNote = (note: CreditNote) => {
+    const printCreditNote = async (note: CreditNote) => {
         const customer = customers.find(c => c.id === note.customerId);
-        const win = window.open('', '', 'width=400,height=600');
-        if (win) {
-            win.document.write(`
-                <html>
-                <body style="font-family: monospace; padding: 20px;">
-                    <h2 style="text-align:center;">NOTA DE CRÉDITO</h2>
-                    <p><b>FOLIO:</b> ${note.folio}</p>
-                    <p><b>FECHA:</b> ${new Date(note.date).toLocaleString()}</p>
-                    <p><b>CLIENTE:</b> ${customer?.name || 'General'}</p>
-                    <hr/>
-                    <p>VALOR ORIGINAL: L ${note.originalTotal.toFixed(2)}</p>
-                    <p>SALDO ACTUAL: L ${note.remainingAmount.toFixed(2)}</p>
-                    <p>MOTIVO: ${note.reason}</p>
-                    <hr/>
-                    <p style="text-align:center;">VÁLIDO POR 30 DÍAS</p>
-                </body>
-                </html>
-             `);
-            win.document.close();
-            win.focus();
-            setTimeout(() => { win.print(); win.close(); }, 500);
-        }
+        const { PrinterService } = await import('../services/printerService');
+
+        const html = `
+            <html>
+            <body style="font-family: monospace; padding: 20px;">
+                <h2 style="text-align:center;">NOTA DE CRÉDITO</h2>
+                <p><b>FOLIO:</b> ${note.folio}</p>
+                <p><b>FECHA:</b> ${new Date(note.date).toLocaleString()}</p>
+                <p><b>CLIENTE:</b> ${customer?.name || 'General'}</p>
+                <hr/>
+                <p>VALOR ORIGINAL: L ${note.originalTotal.toFixed(2)}</p>
+                <p>SALDO ACTUAL: L ${note.remainingAmount.toFixed(2)}</p>
+                <p>MOTIVO: ${note.reason}</p>
+                <hr/>
+                <p style="text-align:center;">VÁLIDO POR 30 DÍAS</p>
+            </body>
+            </html>
+        `;
+        PrinterService.printHTML(html);
     };
 
     const isAnularDisabled = adminPassword === '' || confirmWord.toUpperCase() !== 'ANULAR';
@@ -420,22 +413,26 @@ export const SalesHistory: React.FC<SalesHistoryProps> = ({ sales, customers, us
                                         if (customer) {
                                             const htmlContrato = await db.generateCreditContractHTML(selectedSale, customer, settings);
                                             const htmlPagare = await db.generateCreditPagareHTML(selectedSale, customer, settings);
-                                            const win = window.open('', '', 'width=800,height=600');
-                                            if (win) {
-                                                win.document.write(htmlContrato);
-                                                win.document.write('<div style="page-break-after: always;"></div>');
-                                                win.document.write(htmlPagare);
-                                                win.document.close();
-                                                setTimeout(() => win.print(), 500);
-                                            }
+
+                                            const html = `
+                                                <html><body>
+                                                ${htmlContrato}
+                                                <div style="page-break-after: always;"></div>
+                                                ${htmlPagare}
+                                                </body></html>
+                                            `;
+
+                                            // Dynamic import or assume PrinterService is available
+                                            const { PrinterService } = await import('../services/printerService');
+                                            PrinterService.printHTML(html);
                                         } else {
                                             showToast("No se encontró información del cliente para imprimir el contrato.", "error");
                                         }
                                     }}>Contrato y Pagaré</Button>
                                     <Button variant="outline" size="sm" icon="list-ol" onClick={async () => {
                                         const html = await db.generatePaymentPlanHTML(selectedSale);
-                                        const win = window.open('', '', 'width=600,height=800');
-                                        if (win) { win.document.write(html); win.document.close(); win.print(); }
+                                        const { PrinterService } = await import('../services/printerService');
+                                        PrinterService.printHTML(html);
                                     }}>Plan de Pago</Button>
                                 </>
                             )}

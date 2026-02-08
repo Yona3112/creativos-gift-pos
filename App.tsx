@@ -142,9 +142,21 @@ function App() {
     window.addEventListener('online', handleSyncTrigger);
     window.addEventListener('visibilitychange', handleSyncTrigger);
 
+    // 3. Initialize Realtime Subscription
+    const initRealtime = async () => {
+      const { subscribeToRealtime } = await import('./services/realtimeService');
+      await subscribeToRealtime();
+    };
+    initRealtime();
+
     return () => {
       window.removeEventListener('online', handleSyncTrigger);
       window.removeEventListener('visibilitychange', handleSyncTrigger);
+
+      // Cleanup Realtime
+      import('./services/realtimeService').then(({ unsubscribeFromRealtime }) => {
+        unsubscribeFromRealtime();
+      });
     };
   }, [user?.id]);
 
@@ -305,10 +317,10 @@ function App() {
 
 
   // =========== SUPABASE REALTIME SUBSCRIPTION ===========
-  // This provides instant updates for both sales and settings
+  // This provides instant updates for both sales, settings, products, and customers
   // Supabase is the Single Source of Truth
   useEffect(() => {
-    let unsubscribe: (() => void) | null = null;
+    let cleanupFunctions: (() => void)[] = [];
 
     const setupRealtime = async () => {
       if (!user) return;
@@ -320,31 +332,110 @@ function App() {
           return;
         }
 
-        const { subscribeToRealtime } = await import('./services/realtimeService');
+        const { subscribeToRealtime, onRealtimeChange } = await import('./services/realtimeService');
 
-        // Subscribe to real-time sales and settings changes
-        unsubscribe = await subscribeToRealtime(
-          (sale, eventType) => {
-            console.log(`📡 [Realtime:Sales] Update: ${sale.folio} (${eventType})`);
-            // Update sales state with total remote priority
-            setSales(prevSales => {
-              const existingIndex = prevSales.findIndex(s => s.id === sale.id);
-              if (existingIndex >= 0) {
-                const updated = [...prevSales];
-                updated[existingIndex] = sale;
-                return updated;
-              } else {
-                return [...prevSales, sale];
-              }
-            });
-          },
-          (newSettings) => {
-            console.log('📡 [Realtime:Settings] UI Update');
-            setSettings(newSettings);
-          }
-        );
+        // 1. Initialize Connection (Multiplexed Channel)
+        await subscribeToRealtime();
 
-        console.log('📡 [Realtime] Suscripción global iniciada (Sales + Settings)');
+        // 2. Register Listeners
+
+        // --- SALES ---
+        cleanupFunctions.push(onRealtimeChange('sales', (payload) => {
+          const { action, data } = payload;
+          console.log(`📡 [Realtime:Sales] Action: ${action}`, data?.folio);
+
+          setSales(prevSales => {
+            if (action === 'DELETE') {
+              return prevSales.filter(s => s.id !== payload.id);
+            }
+            if (!data) return prevSales;
+
+            const existingIndex = prevSales.findIndex(s => s.id === data.id);
+            if (existingIndex >= 0) {
+              const updated = [...prevSales];
+              updated[existingIndex] = data;
+              return updated;
+            } else {
+              return [...prevSales, data];
+            }
+          });
+
+          if (data && action !== 'DELETE') showToast(`Pedido actualizado: ${data.folio || 'N/A'}`, 'info');
+        }));
+
+        // --- PRODUCTS ---
+        cleanupFunctions.push(onRealtimeChange('products', (payload) => {
+          const { action, data } = payload;
+          console.log(`📡 [Realtime:Products] Action: ${action}`, data?.name);
+
+          setProducts(prev => {
+            if (action === 'DELETE') return prev.filter(p => p.id !== payload.id);
+            if (!data) return prev;
+
+            const idx = prev.findIndex(p => p.id === data.id);
+            if (idx >= 0) {
+              const updated = [...prev];
+              updated[idx] = data;
+              return updated;
+            }
+            return [...prev, data];
+          });
+        }));
+
+        // --- CUSTOMERS ---
+        cleanupFunctions.push(onRealtimeChange('customers', (payload) => {
+          const { action, data } = payload;
+          setCustomers(prev => {
+            if (action === 'DELETE') return prev.filter(c => c.id !== payload.id);
+            if (!data) return prev;
+
+            const idx = prev.findIndex(c => c.id === data.id);
+            if (idx >= 0) {
+              const updated = [...prev];
+              updated[idx] = data;
+              return updated;
+            }
+            return [...prev, data];
+          });
+        }));
+
+        // --- CREDITS ---
+        cleanupFunctions.push(onRealtimeChange('credits', (payload) => {
+          const { action, data } = payload;
+          setCredits(prev => {
+            if (action === 'DELETE') return prev.filter(c => c.id !== payload.id);
+            if (!data) return prev;
+            const idx = prev.findIndex(c => c.id === data.id);
+            return idx >= 0 ? prev.map((item, i) => i === idx ? data : item) : [...prev, data];
+          });
+        }));
+
+        // --- EXPENSES ---
+        cleanupFunctions.push(onRealtimeChange('expenses', (payload) => {
+          const { action, data } = payload;
+          setExpenses(prev => {
+            if (action === 'DELETE') return prev.filter(c => c.id !== payload.id);
+            if (!data) return prev;
+            const idx = prev.findIndex(c => c.id === data.id);
+            return idx >= 0 ? prev.map((item, i) => i === idx ? data : item) : [...prev, data];
+          });
+        }));
+
+        // --- QUOTES ---
+        cleanupFunctions.push(onRealtimeChange('quotes', (payload) => {
+          // Quotes are not currently kept in a global state in App.tsx (except maybe for reporting/loading?)
+          // But if we add a state for quotes later, this would go here.
+          // For now, we just log it or Toast it.
+          if (payload.action === 'INSERT') showToast(`Nueva cotización recibida`, 'info');
+        }));
+
+        // --- SETTINGS ---
+        cleanupFunctions.push(onRealtimeChange('settings', (newSettings) => {
+          console.log('📡 [Realtime:Settings] Global Update');
+          setSettings(newSettings);
+        }));
+
+        console.log('📡 [Realtime] Suscripción global iniciada (Sales, Products, Customers, Settings)');
       } catch (error) {
         console.warn('⚠️ [Realtime] Error al configurar:', error);
       }
@@ -353,10 +444,11 @@ function App() {
     setupRealtime();
 
     return () => {
-      if (unsubscribe) {
-        unsubscribe();
+      cleanupFunctions.forEach(fn => fn());
+      import('./services/realtimeService').then(({ unsubscribeFromRealtime }) => {
+        unsubscribeFromRealtime();
         console.log('📡 [Realtime] Suscripción terminada');
-      }
+      });
     };
   }, [user?.id]);
 
@@ -390,7 +482,7 @@ function App() {
 
   // Calculate Badges
   const badges = {
-    orders: sales.filter(s => (s.fulfillmentStatus === 'pending' || s.fulfillmentStatus === 'production') && s.status === 'active').length,
+    // orders: REMOVED as per user request (buggy) - moved to Notification Bell
     credits: (credits || []).filter(c => {
       if (c.status === 'paid' || c.status === 'cancelled') return false;
       const today = new Date();
@@ -416,6 +508,12 @@ function App() {
   });
   if (overdueCredits.length > 0) {
     alerts.push({ type: 'credit', message: `${overdueCredits.length} crédito(s) vencido(s)`, link: 'credits' });
+  }
+
+  // Pending Orders (Replacing Badge)
+  const pendingOrders = sales.filter(s => (s.fulfillmentStatus === 'pending' || s.fulfillmentStatus === 'production') && s.status === 'active');
+  if (pendingOrders.length > 0) {
+    alerts.push({ type: 'order', message: `${pendingOrders.length} pedido(s) en proceso`, link: 'orders' });
   }
 
   // Pending Orders Due Tomorrow

@@ -1,40 +1,61 @@
 /**
  * Supabase Realtime Service
  * Handles real-time subscriptions for live data synchronization
+ * Optimized for Supabase Pro limits (Concurrent connections / Message rate)
  */
 
 import { db, db_engine } from './storageService';
 import { SyncQueueService } from './syncQueueService';
-import { Sale, FulfillmentStatus, ShippingDetails } from '../types';
+import { Sale, Product, Customer, InventoryMovement, Quote, CreditAccount } from '../types';
 
 // Type for Realtime payload
-interface RealtimePayload {
+interface RealtimePayload<T> {
     eventType: 'INSERT' | 'UPDATE' | 'DELETE';
-    new: any;
-    old: any;
+    new: T;
+    old: Partial<T>;
 }
 
-// Subscription references for cleanup
-let salesSubscription: any = null;
-let settingsSubscription: any = null;
+// Subscription reference for cleanup
+let globalSubscription: any = null;
 let isSubscribed = false;
 
-// Callback types
-type SalesChangeCallback = (sale: Sale, eventType: 'INSERT' | 'UPDATE') => void;
-type SettingsChangeCallback = (settings: any) => void;
+// Event Emitters for React Hooks
+const listeners: Record<string, Function[]> = {
+    'sales': [],
+    'products': [],
+    'customers': [],
+    'inventory': [],
+    'settings': []
+};
 
 /**
- * Subscribe to real-time changes on the sales and settings tables
- * Should be called once globally (in App.tsx) to avoid connection pool exhaustion
+ * Register a listener for a specific table
  */
-export async function subscribeToRealtime(
-    onSaleChange: SalesChangeCallback,
-    onSettingsChange: SettingsChangeCallback
-): Promise<() => void> {
-    // Avoid duplicate subscriptions
-    if (isSubscribed && (salesSubscription || settingsSubscription)) {
-        console.log('📡 [Realtime] Ya existe una suscripción activa');
-        return () => unsubscribeFromRealtime();
+export function onRealtimeChange(table: string, callback: (payload: any) => void) {
+    if (!listeners[table]) listeners[table] = [];
+    listeners[table].push(callback);
+    return () => {
+        listeners[table] = listeners[table].filter(cb => cb !== callback);
+    };
+}
+
+/**
+ * Broadcast change to listeners
+ */
+function broadcastChange(table: string, payload: any) {
+    if (listeners[table]) {
+        listeners[table].forEach(cb => cb(payload));
+    }
+}
+
+/**
+ * Subscribe to real-time changes on ALL critical tables
+ * Uses a single CHANNEL to multiplex subscriptions (Best Practice for Supabase)
+ */
+export async function subscribeToRealtime(): Promise<void> {
+    if (isSubscribed) {
+        console.log('📡 [Realtime] Ya conectado.');
+        return;
     }
 
     try {
@@ -43,268 +64,203 @@ export async function subscribeToRealtime(
 
         if (!client) {
             console.warn('⚠️ [Realtime] Cliente Supabase no disponible');
-            return () => { };
+            return;
         }
 
-        // --- SALES SUBSCRIPTION ---
-        salesSubscription = client
-            .channel('sales-realtime')
-            .on(
-                'postgres_changes',
-                {
-                    event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
-                    schema: 'public',
-                    table: 'sales'
-                },
-                async (payload: RealtimePayload) => {
-                    console.log(`📡 [Realtime:Sales] Evento recibido: ${payload.eventType}`);
+        console.log('🔌 [Realtime] Iniciando conexión multiplexada...');
 
-                    if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-                        const remoteSale = payload.new as Sale;
+        // SINGLE CHANNEL for all tables (Efficient for Supabase Quotas)
+        const channel = client.channel('global-app-changes');
 
-                        // CRITICAL: Validate remote sale has required fields
-                        if (!remoteSale || !remoteSale.id) {
-                            console.warn('⚠️ [Realtime:Sales] Datos de venta inválidos, ignorando');
-                            return;
-                        }
+        // 1. SALES / ORDERS
+        channel.on('postgres_changes', { event: '*', schema: 'public', table: 'sales' }, async (payload: RealtimePayload<Sale>) => {
+            console.log(`📡 [RT:Sales] ${payload.eventType} ID: ${payload.new?.id || payload.old?.id}`);
+            await handleGenericUpdate('sales', payload, db_engine.sales);
+        });
 
-                        // Ensure items is always an array
-                        if (!Array.isArray(remoteSale.items)) {
-                            remoteSale.items = [];
-                        }
+        // 2. PRODUCTS (Stock updates)
+        channel.on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, async (payload: RealtimePayload<Product>) => {
+            await handleGenericUpdate('products', payload, db_engine.products);
+        });
 
-                        // SINGLE SOURCE OF TRUTH: Remote Wins (UNLESS local has pending changes)
-                        // We always update local with remote data, but we check if we have 
-                        // local "intent" that hasn't reached the cloud yet.
-                        try {
-                            // SMART MERGE: Don't overwrite if local changes are pending for this ID
-                            const hasPendingLocal = await SyncQueueService.hasPendingChanges('sales', remoteSale.id);
-                            if (hasPendingLocal) {
-                                console.log(`🚧 [Realtime:Sales] Ignorando cambio de nube para ${remoteSale.folio}: Hay cambios locales pendientes.`);
-                                return;
-                            }
+        // 3. CUSTOMERS
+        channel.on('postgres_changes', { event: '*', schema: 'public', table: 'customers' }, async (payload: RealtimePayload<Customer>) => {
+            await handleGenericUpdate('customers', payload, db_engine.customers);
+        });
 
-                            // Check for local differences for logging only
-                            const localSale = await db_engine.sales.get(remoteSale.id);
+        // 4. INVENTORY HISTORY (Audit)
+        channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'inventory_history' }, async (payload: RealtimePayload<InventoryMovement>) => {
+            // Only insert, history is append-only usually
+            await handleGenericUpdate('inventoryHistory', payload, db_engine.inventoryHistory);
+        });
 
-                            // Process update
-                            await db_engine.sales.put(remoteSale);
+        // 5. SETTINGS
+        channel.on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, async (payload: RealtimePayload<any>) => {
+            if (payload.eventType === 'UPDATE' && payload.new) {
+                await db.saveSettings(payload.new);
+                broadcastChange('settings', payload.new);
+            }
+        });
 
-                            if (localSale) {
-                                console.log(`✅ [Realtime:Sales] Actualizado: ${remoteSale.folio} (Sync desde nube)`);
-                            } else {
-                                console.log(`🆕 [Realtime:Sales] Nuevo pedido: ${remoteSale.folio}`);
-                            }
+        // 6. CREDITS (Critical for multi-device payments)
+        channel.on('postgres_changes', { event: '*', schema: 'public', table: 'credits' }, async (payload: RealtimePayload<CreditAccount>) => {
+            await handleGenericUpdate('credits', payload, db_engine.credits);
+        });
 
-                            onSaleChange(remoteSale, payload.eventType);
-                        } catch (err) {
-                            console.error('❌ [Realtime:Sales] Error al guardar en IndexDB:', err);
-                        }
-                    } else if (payload.eventType === 'DELETE') {
-                        const oldId = payload.old?.id;
-                        if (oldId) {
-                            await db_engine.sales.delete(oldId);
-                            console.log(`🗑️ [Realtime:Sales] Pedido eliminado: ${oldId}`);
-                        }
-                    }
-                }
-            )
-            .subscribe((status: string) => {
-                if (status === 'SUBSCRIBED') {
-                    console.log('📡 [Realtime:Sales] Suscripción activa');
-                    isSubscribed = true;
-                }
-            });
+        // 7. EXPENSES
+        channel.on('postgres_changes', { event: '*', schema: 'public', table: 'expenses' }, async (payload: RealtimePayload<any>) => {
+            await handleGenericUpdate('expenses', payload, db_engine.expenses);
+        });
 
-        // --- SETTINGS SUBSCRIPTION ---
-        settingsSubscription = client
-            .channel('settings-realtime')
-            .on(
-                'postgres_changes',
-                {
-                    event: '*',
-                    schema: 'public',
-                    table: 'settings'
-                },
-                async (payload: RealtimePayload) => {
-                    console.log(`📡 [Realtime:Settings] Cambios detectados: ${payload.eventType}`);
+        // 8. QUOTES
+        channel.on('postgres_changes', { event: '*', schema: 'public', table: 'quotes' }, async (payload: RealtimePayload<Quote>) => {
+            await handleGenericUpdate('quotes', payload, db_engine.quotes);
+        });
 
-                    if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-                        const remoteSettings = payload.new;
-                        if (remoteSettings) {
-                            // Update local settings immediately
-                            await db.saveSettings(remoteSettings);
-                            console.log('✅ [Realtime:Settings] Configuraciones actualizadas desde la nube');
-                            onSettingsChange(remoteSettings);
-                        }
-                    }
-                }
-            )
-            .subscribe((status: string) => {
-                if (status === 'SUBSCRIBED') {
-                    console.log('📡 [Realtime:Settings] Suscripción activa');
-                }
-            });
+        // 9. CASH CUTS
+        channel.on('postgres_changes', { event: '*', schema: 'public', table: 'cash_cuts' }, async (payload: RealtimePayload<any>) => {
+            await handleGenericUpdate('cash_cuts', payload, db_engine.cashCuts);
+        });
 
-        // Return cleanup function
-        return () => unsubscribeFromRealtime();
+        globalSubscription = channel.subscribe(async (status: string) => {
+            if (status === 'SUBSCRIBED') {
+                console.log('✅ [Realtime] Conectado y escuchando cambios (Ventas, Productos, Clientes, Inventario)');
+                isSubscribed = true;
+            } else if (status === 'CLOSED') {
+                console.log('❌ [Realtime] Desconectado');
+                isSubscribed = false;
+            } else if (status === 'CHANNEL_ERROR') {
+                console.error('❌ [Realtime] Error en el canal');
+                isSubscribed = false;
+                // Retry logic could go here
+            }
+        });
 
     } catch (error) {
-        console.error('❌ [Realtime] Error al suscribirse:', error);
-        return () => { };
+        console.error('❌ [Realtime] Excepción al conectar:', error);
     }
 }
 
 /**
- * Unsubscribe from all realtime channels
+ * Validates if the cloud object has the minimal required fields to be considered valid.
+ * This prevents corrupt data from polluting the local DB.
  */
-export async function unsubscribeFromRealtime(): Promise<void> {
-    try {
-        const { SupabaseService } = await import('./supabaseService');
-        const client = await SupabaseService.getClient();
+function isValidPayload(table: string, obj: any): boolean {
+    if (!obj) return false;
+    if (!obj.id) return false;
 
-        if (client) {
-            if (salesSubscription) {
-                await client.removeChannel(salesSubscription);
-                console.log('📡 [Realtime:Sales] Canal eliminado');
+    // Specific validation rules per table
+    if (table === 'sales') {
+        // Sales must have a folio or an ID, and items should be defined (even if empty array)
+        if (!obj.folio && !obj.id) return false;
+        // Fix items if null
+        if (!obj.items) obj.items = [];
+    }
+
+    return true;
+}
+
+/**
+ * Generic handler for DB updates
+ */
+async function handleGenericUpdate(tableName: string, payload: RealtimePayload<any>, dbTable: any) {
+    const { eventType, new: newRecord, old: oldRecord } = payload;
+    const tableKey = tableName === 'inventoryHistory' ? 'inventory_history' : tableName; // Mapping for listeners
+
+    try {
+        if (eventType === 'DELETE') {
+            if (oldRecord && oldRecord.id) {
+                await dbTable.delete(oldRecord.id);
+                console.log(`🗑️ [RT:${tableName}] Eliminado: ${oldRecord.id}`);
+                broadcastChange(tableKey, { action: 'DELETE', id: oldRecord.id });
             }
-            if (settingsSubscription) {
-                await client.removeChannel(settingsSubscription);
-                console.log('📡 [Realtime:Settings] Canal eliminado');
-            }
+            return;
         }
 
-        salesSubscription = null;
-        settingsSubscription = null;
-        isSubscribed = false;
-    } catch (error) {
-        console.warn('⚠️ [Realtime] Error al eliminar suscripciones:', error);
-        isSubscribed = false;
+        // INSERT / UPDATE
+        if (!newRecord || !isValidPayload(tableName, newRecord)) {
+            console.warn(`⚠️ [RT:${tableName}] Payload inválido ignorado:`, newRecord);
+            return;
+        }
+
+        // Conflict Protection: Don't overwrite if we have pending local changes for this specific ID
+        const hasPending = await SyncQueueService.hasPendingChanges(tableName === 'inventoryHistory' ? 'inventory_history' : tableName, newRecord.id);
+        if (hasPending) {
+            console.log(`🛡️ [RT:${tableName}] Ignorando update Cloud para ${newRecord.id} porque hay cambios locales pendientes.`);
+            return;
+        }
+
+        // Apply update
+        // Ensure _synced is true since it came from cloud
+        newRecord._synced = true;
+
+        // Handle special fields
+        if (tableName === 'sales' && !Array.isArray(newRecord.items)) newRecord.items = [];
+
+        await dbTable.put(newRecord);
+        console.log(`🔄 [RT:${tableName}] Sincronizado: ${newRecord.folio || newRecord.name || newRecord.id}`);
+
+        broadcastChange(tableKey, { action: eventType, data: newRecord });
+
+    } catch (err) {
+        console.error(`❌ [Realtime] Error procesando ${tableName}:`, err);
     }
+}
+
+/**
+ * Unsubscribe from all
+ */
+export async function unsubscribeFromRealtime(): Promise<void> {
+    if (globalSubscription) {
+        const { SupabaseService } = await import('./supabaseService');
+        const client = await SupabaseService.getClient();
+        if (client) await client.removeChannel(globalSubscription);
+    }
+    globalSubscription = null;
+    isSubscribed = false;
+    console.log('🔌 [Realtime] Desconectado manualmente');
+}
+
+/**
+ * Status check
+ */
+export function isRealtimeConnected(): boolean {
+    return isSubscribed;
 }
 
 /**
  * Update order status via PostgreSQL RPC for atomic operation
- * This prevents race conditions when multiple devices update simultaneously
  */
 export async function updateOrderStatusViaRPC(
     saleId: string,
-    newStatus: FulfillmentStatus,
-    shippingDetails?: Partial<ShippingDetails>
+    newStatus: string,
+    shippingDetails?: any
 ): Promise<{ success: boolean; message: string; sale?: Sale }> {
     try {
         const { SupabaseService } = await import('./supabaseService');
         const client = await SupabaseService.getClient();
+        if (!client) throw new Error('Sin conexión a Supabase');
 
-        if (!client) {
-            throw new Error('Cliente Supabase no disponible');
-        }
-
-        // Create a timeout promise
-        const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('TIMEOUT_EXCEEDED')), 5000)
-        );
-
-        // Call the RPC function with a 5-second timeout
-        const rpcPromise = client.rpc('update_order_status', {
+        const { data, error } = await client.rpc('update_order_status', {
             p_sale_id: saleId,
             p_new_status: newStatus,
             p_shipping_details: shippingDetails ? JSON.stringify(shippingDetails) : null
         });
 
-        const { data, error } = await Promise.race([rpcPromise, timeoutPromise]) as any;
-
-        if (error) {
-            // Fallback: If RPC doesn't exist, use direct update
-            if (error.code === '42883') { // undefined_function
-                console.warn('⚠️ [RPC] Función no existe, usando actualización directa');
-                return await updateOrderStatusDirect(client, saleId, newStatus, shippingDetails);
-            }
-            throw error;
-        }
-
-        if (data && data.success) {
-            const updatedSale = data.updated_sale as Sale;
-            // Update local immediately
-            await db_engine.sales.put(updatedSale);
-            console.log(`✅ [RPC] Estado actualizado atómicamente: ${saleId} → ${newStatus}`);
-            return { success: true, message: 'Estado actualizado', sale: updatedSale };
-        } else {
-            return { success: false, message: data?.message || 'Error desconocido' };
-        }
-
-    } catch (error: any) {
-        console.error('❌ [RPC] Error:', error);
-        return { success: false, message: error.message || 'Error al actualizar estado' };
-    }
-}
-
-/**
- * Direct update fallback when RPC is not available
- */
-async function updateOrderStatusDirect(
-    client: any,
-    saleId: string,
-    newStatus: FulfillmentStatus,
-    shippingDetails?: Partial<ShippingDetails>
-): Promise<{ success: boolean; message: string; sale?: Sale }> {
-    try {
-        // First fetch current state to check for conflicts
-        const { data: currentData, error: fetchError } = await client
-            .from('sales')
-            .select('*')
-            .eq('id', saleId)
-            .single();
-
-        if (fetchError) throw fetchError;
-        if (!currentData) return { success: false, message: 'Pedido no encontrado' };
-
-        // Prepare update
-        const now = new Date().toISOString();
-        const updatePayload: any = {
-            fulfillmentStatus: newStatus,
-            updatedAt: now
-        };
-
-        // CRITICAL: Deep merge shippingDetails to preserve productionImages and other nested data
-        if (shippingDetails || currentData.shippingDetails) {
-            const existingDetails = currentData.shippingDetails || {};
-            const newDetails = shippingDetails || {};
-            updatePayload.shippingDetails = {
-                ...existingDetails,
-                ...newDetails,
-                // Explicitly preserve productionImages unless explicitly being updated
-                productionImages: newDetails.productionImages !== undefined
-                    ? newDetails.productionImages
-                    : existingDetails.productionImages
-            };
-        }
-
-        // Perform update
-        const { data, error } = await client
-            .from('sales')
-            .update(updatePayload)
-            .eq('id', saleId)
-            .select()
-            .single();
-
         if (error) throw error;
 
-        // Update local
-        await db_engine.sales.put(data);
-        console.log(`✅ [Direct] Estado actualizado: ${saleId} → ${newStatus}`);
+        if (data.success && data.updated_sale) {
+            const updated = data.updated_sale;
+            updated._synced = true;
+            await db_engine.sales.put(updated);
+            return { success: true, message: 'Actualizado', sale: updated };
+        }
 
-        return { success: true, message: 'Estado actualizado', sale: data };
+        return { success: false, message: data.message || 'Error desconocido' };
 
-    } catch (error: any) {
-        console.error('❌ [Direct] Error:', error);
-        return { success: false, message: error.message || 'Error al actualizar' };
+    } catch (e: any) {
+        console.error("RPC Error:", e);
+        // Fallback or rethrow? For Pro strategy, we prefer RPC to ensure data integrity
+        return { success: false, message: e.message };
     }
-}
-
-/**
- * Check if Realtime is currently connected
- */
-export function isRealtimeConnected(): boolean {
-    return isSubscribed;
 }

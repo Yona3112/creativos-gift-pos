@@ -411,6 +411,14 @@ export class StorageService {
     return folio;
   }
 
+
+  /**
+   * Retrieves a single sale by ID.
+   */
+  async getSale(id: string): Promise<Sale | undefined> {
+    return await db_engine.sales.get(id);
+  }
+
   // --- PRODUCTS & KARDEX ---
   async getProducts(): Promise<Product[]> {
     const products = await db_engine.products.toArray();
@@ -578,16 +586,24 @@ export class StorageService {
     }
   }
 
-  // --- CUSTOMERS ---
+  // --- CUSTOMER METHODS ---
   async getCustomers(): Promise<Customer[]> {
     const customers = await db_engine.customers.toArray();
     return customers.filter(c => c.active !== false);
   }
   async saveCustomer(c: Customer) {
-    // Auto-generate ID if not provided (new customer)
-    if (!c.id) {
-      c.id = Date.now().toString() + Math.random().toString(36).substring(2, 7);
+    if (!c.id) c.id = Date.now().toString();
+    if (c.active === undefined) c.active = true;
+
+    // Auto-generate BP Code if missing
+    if (!c.code) {
+      // Use a timestamp suffix or random number for simplicity and uniqueness
+      // Format: BP-YYYY-XXXX
+      const year = new Date().getFullYear();
+      const random = Math.floor(Math.random() * 9000) + 1000;
+      c.code = `BP-${year}-${random}`;
     }
+
     c.updatedAt = this.getLocalNowISO();
     c._synced = false;
     await db_engine.customers.put(c);
@@ -686,12 +702,15 @@ export class StorageService {
       await db_engine.sales.add(newSale);
 
       // Actualizar Stock y Kardex
+      // MOVED TO DATABASE TRIGGER (Supabase) to prevent race conditions
+      /*
       await this.updateStock(
         (newSale.items || []).filter(i => !i.id.startsWith('manual-')),
         'SALE',
         newSale.userId,
         newSale.folio
       );
+      */
 
       if (newSale.customerId) {
         const customer = await db_engine.customers.get(newSale.customerId);
@@ -985,6 +1004,7 @@ export class StorageService {
   }
 
   // --- UTILS ---
+  // --- UTILS ---
   async compressImage(file: File): Promise<string> {
     return new Promise((resolve) => {
       const reader = new FileReader();
@@ -994,17 +1014,78 @@ export class StorageService {
         img.src = e.target?.result as string;
         img.onload = () => {
           const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 400;
-          const scale = MAX_WIDTH / img.width;
-          canvas.width = MAX_WIDTH;
-          canvas.height = img.height * scale;
+          let width = img.width;
+          let height = img.height;
+          const MAX_WIDTH = 800; // Increased quality slightly for readability
+          const MAX_HEIGHT = 800;
+
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height *= MAX_WIDTH / width;
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width *= MAX_HEIGHT / height;
+              height = MAX_HEIGHT;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
           const ctx = canvas.getContext('2d');
-          ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
-          // Usamos WebP para máxima compresión
-          resolve(canvas.toDataURL('image/webp', 0.6));
+          ctx?.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.7)); // Balanced compression
         };
       };
     });
+  }
+
+  // --- ATTACHMENTS (High Egress Fix) ---
+  // These methods interact directly with Supabase to avoid syncing heavy data via Realtime
+  async saveAttachment(saleId: string, fileData: string, type: 'image' | 'pdf', fileName?: string, category: 'guide' | 'production' | 'general' = 'general') {
+    // 1. Save locally in a separate collection if desired, or just cloud depending on strategy.
+    // For this fix, we prioritize CLOUD storage to keep local DB light, 
+    // BUT we need local access too. Let's use Dexie for cache but NOT sync it via the main channel.
+
+    // We will assume this is primarily for the Cloud to avoid the 1GB egress issue on the 'sales' table.
+    try {
+      const { SupabaseService } = await import('./supabaseService');
+      const client = await SupabaseService.getClient();
+      if (client) {
+        const { error } = await client.from('sale_attachments').insert({
+          id: Date.now().toString(),
+          sale_id: saleId,
+          file_type: type,
+          file_name: fileName,
+          file_data: fileData,
+          category: category
+        });
+        if (error) console.error("Error uploading attachment:", error);
+      }
+    } catch (e) {
+      console.error("Failed to save attachment to cloud:", e);
+    }
+  }
+
+  async getAttachments(saleId: string): Promise<any[]> {
+    try {
+      const { SupabaseService } = await import('./supabaseService');
+      const client = await SupabaseService.getClient();
+      if (client) {
+        const { data, error } = await client
+          .from('sale_attachments')
+          .select('*')
+          .eq('sale_id', saleId);
+
+        if (error) throw error;
+        return data || [];
+      }
+    } catch (e) {
+      console.error("Failed to get attachments:", e);
+      return [];
+    }
+    return [];
   }
 
   // --- LEGACY COMPATIBILITY WRAPPERS (To avoid breaking App.tsx) ---
@@ -1498,6 +1579,21 @@ export class StorageService {
     // Sort by date descending and return the most recent
     const sorted = [...cuts].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     return sorted[0];
+  }
+
+  // --- CUSTOMER 360 DATA ---
+  async getSalesByCustomer(customerId: string) {
+    const allSales = await db_engine.sales.toArray();
+    return allSales
+      .filter(s => s.customerId === customerId && s.status !== 'cancelled')
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }
+
+  async getCreditsByCustomer(customerId: string) {
+    const allCredits = await db_engine.credits.toArray();
+    return allCredits
+      .filter(c => c.customerId === customerId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
   // Fetch all financial data (sales, credit payments, expenses) since the last cash cut

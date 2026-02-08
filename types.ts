@@ -107,6 +107,7 @@ export enum LoyaltyLevel {
 
 export interface Customer {
   id: string;
+  code?: string; // BP-XXXX Code
   type: 'Natural' | 'Juridico';
   name: string;
   legalRepresentative?: string;
