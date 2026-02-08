@@ -20,9 +20,42 @@ export const OrderCard: React.FC<OrderCardProps> = ({
     isProcessing
 }) => {
     const [previewImage, setPreviewImage] = React.useState<string | null>(null);
+    const [lazyImages, setLazyImages] = React.useState<string[]>([]);
+    const [isLoadingImages, setIsLoadingImages] = React.useState(false);
 
     const customer = customers.find(c => c.id === order.customerId);
     const customerName = order.customerName || customer?.name || 'Consumidor Final';
+
+    // Lazy load production images if they are missing from the main object (High Egress Fix)
+    React.useEffect(() => {
+        const hasImages = order.shippingDetails?.productionImages && order.shippingDetails.productionImages.length > 0;
+
+        if (!hasImages && !isLoadingImages) {
+            const fetchAttachments = async () => {
+                try {
+                    setIsLoadingImages(true);
+                    const { db } = await import('../../services/storageService');
+                    const attachments = await db.getAttachments(order.id);
+                    if (attachments && attachments.length > 0) {
+                        const prodImgs = attachments
+                            .filter((a: any) => a.category === 'production')
+                            .map((a: any) => a.file_data);
+                        setLazyImages(prodImgs);
+                    }
+                } catch (e) {
+                    console.error("Error lazy loading card images:", e);
+                } finally {
+                    setIsLoadingImages(false);
+                }
+            };
+            fetchAttachments();
+        }
+    }, [order.id, order.shippingDetails?.productionImages]);
+
+    // Combined images (local + lazy)
+    const displayImages = (order.shippingDetails?.productionImages && order.shippingDetails.productionImages.length > 0)
+        ? order.shippingDetails.productionImages
+        : lazyImages;
 
     // Get unique categories for this order items
     const orderCatIds = [...new Set((order.items || []).map(item => item.categoryId))];
@@ -140,14 +173,14 @@ export const OrderCard: React.FC<OrderCardProps> = ({
             </div>
 
             {/* Production Images */}
-            {order.shippingDetails?.productionImages && order.shippingDetails.productionImages.length > 0 && (
+            {(displayImages.length > 0 || isLoadingImages) && (
                 <div className="mb-2">
-                    <div className="flex gap-1 flex-wrap">
-                        {order.shippingDetails.productionImages.map((img, idx) => (
+                    <div className="flex gap-1 flex-wrap min-h-[40px]">
+                        {displayImages.map((img, idx) => (
                             <img
                                 key={idx}
                                 src={img}
-                                className="w-8 h-8 object-cover rounded-md border border-gray-200 shadow-xs hover:scale-110 transition-transform cursor-zoom-in"
+                                className="w-10 h-10 object-contain bg-gray-50 rounded-md border border-gray-200 shadow-xs hover:scale-110 transition-transform cursor-zoom-in"
                                 alt="Producción"
                                 onClick={(e) => {
                                     e.stopPropagation();
@@ -155,6 +188,11 @@ export const OrderCard: React.FC<OrderCardProps> = ({
                                 }}
                             />
                         ))}
+                        {isLoadingImages && (
+                            <div className="w-10 h-10 flex items-center justify-center bg-gray-50 rounded-md border border-dashed border-gray-200">
+                                <i className="fas fa-spinner animate-spin text-gray-400 text-[10px]"></i>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

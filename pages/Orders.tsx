@@ -929,7 +929,7 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                                     <img
                                         src={img}
                                         alt={`Producción ${idx + 1}`}
-                                        className="w-full h-20 object-cover rounded-lg border border-amber-200 cursor-zoom-in hover:brightness-110 shadow-sm"
+                                        className="w-full h-20 object-contain bg-gray-50 rounded-lg border border-amber-200 cursor-zoom-in hover:brightness-110 shadow-sm"
                                         onClick={() => setPreviewImage(img)}
                                     />
                                     <button
