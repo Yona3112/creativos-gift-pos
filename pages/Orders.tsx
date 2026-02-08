@@ -311,7 +311,7 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                         ...prev,
                         guideFile: compressed,
                         guideFileType: 'image',
-                        guideFileName: file.name // Fixed: was using file.type
+                        guideFileName: file.name
                     }));
                 }
             }

@@ -5,7 +5,7 @@ import {
   Branch, CreditAccount, Promotion, Supplier, Consumable,
   CashCut, Quote, CreditNote, CreditPayment,
   Expense, InventoryMovement, MovementType, FulfillmentStatus, ShippingDetails, UserRole,
-  PriceHistoryEntry, PaymentDetails, AuditLog
+  PriceHistoryEntry, PaymentDetails, AuditLog, OrderTracking
 } from '../types';
 
 // --- DATABASE CONFIGURATION (DEXIE) ---
@@ -28,6 +28,7 @@ class AppDatabase extends Dexie {
   inventoryHistory!: Table<InventoryMovement>;
   priceHistory!: Table<PriceHistoryEntry>;
   auditLogs!: Table<AuditLog>;
+  orderTracking!: Table<OrderTracking>;
   syncQueue!: Table<{
     id?: number;
     tableName: string;
@@ -40,7 +41,7 @@ class AppDatabase extends Dexie {
 
   constructor() {
     super('CreativosGiftDB');
-    (this as any).version(3).stores({
+    (this as any).version(4).stores({
       products: 'id, code, name, categoryId, active',
       categories: 'id, name',
       customers: 'id, name, phone, rtn, active',
@@ -59,6 +60,7 @@ class AppDatabase extends Dexie {
       inventoryHistory: '++id, productId, date, type',
       priceHistory: '++id, productId, date',
       auditLogs: 'id, date, userId, module, action',
+      orderTracking: 'id, sale_id, created_at',
       syncQueue: '++id, tableName, timestamp'
     });
   }
@@ -1596,6 +1598,38 @@ export class StorageService {
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
+  // --- ORDER TRACKING (Sync Fix) ---
+  async addOrderTracking(saleId: string, status: string, details?: string) {
+    // 1. Save local log
+    const entry: OrderTracking = {
+      id: crypto.randomUUID(),
+      sale_id: saleId,
+      status,
+      user_id: (await this.getCurrentUser())?.id,
+      details,
+      created_at: this.getLocalNowISO(),
+      _synced: false
+    };
+    await db_engine.orderTracking.put(entry);
+
+    // 2. Update local Sale immediately for UI responsiveness
+    const sale = await db_engine.sales.get(saleId);
+    if (sale) {
+      sale.fulfillmentStatus = status as FulfillmentStatus;
+      sale.updatedAt = entry.created_at;
+      await db_engine.sales.put(sale);
+    }
+
+    // 3. Push to Cloud (The Trigger will handle the rest on other devices)
+    this.pushToCloud('order_tracking', entry, 'INSERT');
+  }
+
+  async getOrderTracking(saleId: string) {
+    return await db_engine.orderTracking
+      .where('sale_id').equals(saleId)
+      .sortBy('created_at');
+  }
+
   // Fetch all financial data (sales, credit payments, expenses) since the last cash cut
   async getUncutData() {
     const lastCut = await this.getLastCashCut();
@@ -1710,12 +1744,27 @@ export class StorageService {
       throw new Error(`No se puede marcar como "${status === 'shipped' ? 'Enviado' : 'Entregado'}" hasta completar el pago. Saldo pendiente: L ${(sale.balance || 0).toFixed(2)}`);
     }
 
-    sale.fulfillmentStatus = status;
-    // CRITICAL: Deep merge shippingDetails to preserve productionImages and other nested data
-    if (shippingDetails || sale.shippingDetails) {
-      const existingDetails: Partial<ShippingDetails> = sale.shippingDetails || {};
+    const oldStatus = sale.fulfillmentStatus;
+    const isStatusChange = oldStatus !== status;
+
+    // 1. TRACKING SYSTEM (The Source of Truth for Status)
+    if (isStatusChange) {
+      // This updates the local sale status and timestamp immediately via db.addOrderTracking
+      // And queues the tracking event for the cloud
+      await this.addOrderTracking(id, status, `Cambio de estado: ${oldStatus} -> ${status}`);
+    }
+
+    // 2. RELOAD (to get updates from addOrderTracking)
+    const updatedSale = await db_engine.sales.get(id) || sale;
+
+    // 3. HANDLE DETAILS (Shipping, Images, etc)
+    // If shippingDetails are provided, we MUST update the sale record itself
+    // because order_tracking events don't carry full shipping objects.
+    if (shippingDetails) {
+      const existingDetails: Partial<ShippingDetails> = updatedSale.shippingDetails || {};
       const newDetails: Partial<ShippingDetails> = shippingDetails || {};
-      sale.shippingDetails = {
+
+      updatedSale.shippingDetails = {
         ...existingDetails,
         ...newDetails,
         // Explicitly preserve productionImages unless explicitly being updated
@@ -1723,32 +1772,28 @@ export class StorageService {
           ? newDetails.productionImages
           : existingDetails.productionImages
       } as ShippingDetails;
+
+      // Update timestamp again to reflect the details change
+      updatedSale.updatedAt = this.getLocalNowISO();
+      updatedSale._synced = false;
+
+      await db_engine.sales.put(updatedSale);
+      this.pushToCloud('sales', updatedSale);
+    } else if (isStatusChange) {
+      // If ONLY status changed, addOrderTracking already updated local sale and queued tracking event.
+      // We might want to push the Sale update too just in case, but it's redundant if the Trigger works.
+      // However, for safety (legacy sync support), we can push the sale too.
+      // But let's rely on Tracking for status to avoid race conditions.
     }
 
-    // AUTO-CLOSE ORDER: If delivered and fully paid, it's no longer an active "order"
-    if (status === 'delivered' && (sale.balance || 0) <= 0) {
-      sale.isOrder = false;
+    // AUTO-CLOSE ORDER: If delivered and fully paid
+    if (status === 'delivered' && (updatedSale.balance || 0) <= 0) {
+      updatedSale.isOrder = false;
+      await db_engine.sales.put(updatedSale);
+      this.pushToCloud('sales', updatedSale);
     }
 
-    // Record HISTORY of status change
-    if (!sale.fulfillmentHistory) sale.fulfillmentHistory = [];
-
-    // Avoid duplicate status entries if the date is very close (e.g. repeated clicks)
-    const lastEntry = sale.fulfillmentHistory[sale.fulfillmentHistory.length - 1];
-    if (!lastEntry || lastEntry.status !== status) {
-      sale.fulfillmentHistory.push({
-        status,
-        date: this.getLocalNowISO()
-      });
-    }
-
-    // CRITICAL: Update timestamp for sync
-    sale.updatedAt = this.getLocalNowISO();
-    sale._synced = false;
-
-    await db_engine.sales.put(sale);
-    this.pushToCloud('sales', sale);
-    return sale;
+    return updatedSale;
   }
 
   async deleteBranch(id: string) {

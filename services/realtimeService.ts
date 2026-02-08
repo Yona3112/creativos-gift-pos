@@ -122,6 +122,34 @@ export async function subscribeToRealtime(): Promise<void> {
             await handleGenericUpdate('cash_cuts', payload, db_engine.cashCuts);
         });
 
+        // 10. ORDER TRACKING (Critical for Sync)
+        channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'order_tracking' }, async (payload: RealtimePayload<any>) => {
+            // When a tracking event arrives, we insert it AND update the local sale
+            await handleGenericUpdate('orderTracking', payload, db_engine.orderTracking);
+
+            // The trigger updates the sale on the server, but for the local client receiving the event,
+            // we should also update the local sale state to reflect the change immediately
+            // without waiting for the 'sales' table update (which might come later or be de-prioritized)
+            if (payload.new && payload.new.sale_id && payload.new.status) {
+                const sale = await db_engine.sales.get(payload.new.sale_id);
+                if (sale) {
+                    // Update if the tracking event is newer
+                    const eventTime = new Date(payload.new.created_at).getTime();
+                    const saleTime = sale.updatedAt ? new Date(sale.updatedAt).getTime() : 0;
+
+                    if (eventTime > saleTime) {
+                        sale.fulfillmentStatus = payload.new.status;
+                        sale.updatedAt = payload.new.created_at;
+                        sale._synced = true; // It came from cloud via tracking
+                        await db_engine.sales.put(sale);
+                        console.log(`🚚 [RT:Tracking] Pedido ${sale.folio} movido a ${sale.fulfillmentStatus}`);
+                        // Notify UI
+                        broadcastChange('sales', { action: 'UPDATE', data: sale });
+                    }
+                }
+            }
+        });
+
         globalSubscription = channel.subscribe(async (status: string) => {
             if (status === 'SUBSCRIBED') {
                 console.log('✅ [Realtime] Conectado y escuchando cambios (Ventas, Productos, Clientes, Inventario)');

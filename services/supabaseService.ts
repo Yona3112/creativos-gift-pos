@@ -691,6 +691,7 @@ export class SupabaseService {
             { cloud: 'expenses', dexie: 'expenses' },
             { cloud: 'inventory_history', dexie: 'inventoryHistory' },
             { cloud: 'price_history', dexie: 'priceHistory' },
+            { cloud: 'order_tracking', dexie: 'orderTracking' },
             { cloud: 'settings', dexie: 'settings' }
         ];
 

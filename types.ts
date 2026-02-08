@@ -87,6 +87,17 @@ export interface InventoryMovement {
   updatedAt?: string;
 }
 
+// --- NUEVO: TRACKING DE PEDIDOS (SYNC FIX) ---
+export interface OrderTracking {
+  id: string;
+  sale_id: string;
+  status: string;
+  user_id?: string;
+  details?: string;
+  created_at?: string;
+  _synced?: boolean;
+}
+
 export interface Category {
   id: string;
   name: string;
