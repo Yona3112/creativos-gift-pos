@@ -145,8 +145,17 @@ export class StorageService {
       });
     }
 
-    // NEW: Limpieza de imágenes en ventas existentes para optimizar sincronización
-    await this.cleanupSalesData();
+    // OPTIMIZATION: Cleanup in background, do NOT block startup
+    // This process can be slow on mobile if there are thousands of sales
+    this.cleanupSalesData().catch(e => console.warn("Background cleanup failed:", e));
+  }
+
+  // Safe unique ID generator for mobile/insecure contexts
+  generateUUID(): string {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+    return 'id-' + Date.now() + '-' + Math.random().toString(36).substring(2, 11);
   }
 
   /**
@@ -1602,7 +1611,7 @@ export class StorageService {
   async addOrderTracking(saleId: string, status: string, details?: string) {
     // 1. Save local log
     const entry: OrderTracking = {
-      id: crypto.randomUUID(),
+      id: this.generateUUID(),
       sale_id: saleId,
       status,
       user_id: (await this.getCurrentUser())?.id,
