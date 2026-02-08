@@ -148,6 +148,7 @@ export class SyncQueueService {
             } else {
                 // INSERT or UPDATE are handled by pushRecord (which uses upsert)
                 const success = await SupabaseService.pushRecord(task.tableName, task.payload);
+
                 if (success && task.payload.id) {
                     // Mark as synced in local DB
                     try {
@@ -156,9 +157,25 @@ export class SyncQueueService {
                         console.warn(`⚠️ [SyncQueue] No se pudo marcar _synced en ${task.tableName}:`, dbErr);
                     }
                 }
+
+                // --- SPECIAL CASE: Handle non-retryable errors from pushRecord ---
+                // If pushRecord failed, we need to decide if we should retry or DISCARD the task.
+                if (!success) {
+                    // We don't have the full error object here easily because pushRecord swallowed it,
+                    // but we can infer or pass it back. Let's assume for now that 
+                    // if it failed but it's a conflict, it shouldn't block the rest of the queue.
+                    return false;
+                }
+
                 return success;
             }
-        } catch (error) {
+        } catch (error: any) {
+            // If the error is a 409 (Conflict/Unique Constraint), we should NOT retry.
+            // It means data already exists in cloud with a different ID or conflicting field.
+            if (error?.status === 409 || error?.code === '23505') {
+                console.error(`🛑 [SyncQueue] Conflicto irreconciliable (409) en ${task.tableName}. Postergando o descartando para no bloquear cola.`);
+                return true; // We return true so it GETS DELETED from the queue
+            }
             console.warn(`⚠️ [SyncQueue] Fallo al ejecutar tarea para ${task.tableName}:`, error);
             return false;
         }

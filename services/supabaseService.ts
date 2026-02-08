@@ -276,18 +276,26 @@ export class SupabaseService {
 
             const cloudTable = this.getCloudTableName(tableName);
             const sanitized = this.sanitizeRecord(tableName, record);
-            const { error } = await client
+            const { error, status } = await client
                 .from(cloudTable)
                 .upsert(sanitized);
 
             if (error) {
-                console.error(`❌ [Push] Error enviando a ${cloudTable}:`, error.message);
+                console.error(`❌ [Push] Error enviando a ${cloudTable} (Status ${status}):`, error.message);
+
+                // If conflict, throw it so SyncQueueService can catch it and decide to discard
+                if (status === 409 || error.code === '23505') {
+                    throw { status, code: error.code, message: error.message };
+                }
                 return false;
             }
 
             console.log(`📡 [Push] ${cloudTable} synced: ${record.id || record.folio || 'Record'}`);
             return true;
-        } catch (err) {
+        } catch (err: any) {
+            // Re-throw if it's a structural conflict we should handle
+            if (err.status === 409 || err.code === '23505') throw err;
+
             console.warn(`⚠️ [Push] Fallo crítico en ${tableName}:`, err);
             return false;
         }
