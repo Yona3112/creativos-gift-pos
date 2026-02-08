@@ -14,6 +14,8 @@ export interface SyncTask {
 
 export class SyncQueueService {
     private static isProcessing = false;
+    private static MAX_ATTEMPTS = 5;
+    private static MAX_QUEUE_SIZE = 1000;
 
     /**
      * Enqueue a new synchronization task
@@ -47,6 +49,20 @@ export class SyncQueueService {
         const tasks = await db_engine.syncQueue.toArray();
         if (tasks.length === 0) return;
 
+        // SAFETY VALVE: If queue is massive, it indicates a structural failure (like the table mismatch)
+        // We must purge invalid tasks to allow the system to breathe.
+        if (tasks.length > this.MAX_QUEUE_SIZE) {
+            console.warn(`🚨 [SyncQueue] Cola crítica (${tasks.length} tareas). Eliminando tareas antiguas fallidas...`);
+            const failedTasks = tasks.filter(t => t.attempts >= this.MAX_ATTEMPTS);
+            if (failedTasks.length > 0) {
+                await db_engine.syncQueue.bulkDelete(failedTasks.map(t => t.id!));
+                console.log(`🧹 [SyncQueue] Eliminadas ${failedTasks.length} tareas fallidas permanentemente.`);
+                // Reload tasks after partial purge
+                const remainingTasks = await db_engine.syncQueue.toArray();
+                if (remainingTasks.length === 0) return;
+            }
+        }
+
         console.log(`📡 [SyncQueue] Procesando ${tasks.length} tareas pendientes...`);
         this.isProcessing = true;
 
@@ -79,6 +95,15 @@ export class SyncQueueService {
                         });
                     }
                     // Stop processing this batch if we hit a failure (likely network)
+                    // But first check if this task has hit the burnout limit
+                    if (task.attempts >= this.MAX_ATTEMPTS) {
+                        console.error(`🛑 [SyncQueue] Tarea para ${task.tableName} falló definitivamente tras ${task.attempts} intentos. Eliminando.`);
+                        const originalTasks = tasks.filter(t =>
+                            t.tableName === task.tableName &&
+                            t.payload.id === task.payload.id
+                        );
+                        await db_engine.syncQueue.bulkDelete(originalTasks.map(t => t.id!));
+                    }
                     break;
                 }
             }
@@ -162,7 +187,8 @@ export class SyncQueueService {
 
         const tables = [
             'sales', 'expenses', 'customers', 'products', 'categories',
-            'credits', 'creditNotes', 'inventoryHistory'
+            'credits', 'creditNotes', 'inventoryHistory', 'quotes', 'cashCuts',
+            'orderTracking'
         ];
 
         for (const tableName of tables) {

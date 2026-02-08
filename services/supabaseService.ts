@@ -114,13 +114,18 @@ export class SupabaseService {
                 'id', 'folio', 'saleId', 'customerId', 'originalTotal',
                 'remainingAmount', 'reason', 'date', 'status', 'updatedAt'
             ],
+            order_tracking: [
+                'id', 'sale_id', 'status', 'user_id', 'details', 'created_at'
+            ],
             price_history: [
                 'id', 'productId', 'date', 'oldPrice', 'newPrice', 'oldCost',
                 'newCost', 'userId', 'updatedAt'
             ]
         };
 
-        const allowedColumns = TABLE_SCHEMAS[tableName];
+        // Mapper to translate Dexie table names to Supabase cloud table names
+        const cloudName = this.getCloudTableName(tableName);
+        const allowedColumns = TABLE_SCHEMAS[cloudName];
         const cleaned: any = {};
 
         if (allowedColumns) {
@@ -235,6 +240,33 @@ export class SupabaseService {
     }
 
     /**
+     * Helper to translate Dexie table names to Supabase snake_case names
+     */
+    static getCloudTableName(tableName: string): string {
+        const mapping: Record<string, string> = {
+            'sales': 'sales',
+            'products': 'products',
+            'customers': 'customers',
+            'categories': 'categories',
+            'branches': 'branches',
+            'users': 'users',
+            'credits': 'credits',
+            'promotions': 'promotions',
+            'suppliers': 'suppliers',
+            'consumables': 'consumables',
+            'quotes': 'quotes',
+            'cashCuts': 'cash_cuts',
+            'creditNotes': 'credit_notes',
+            'expenses': 'expenses',
+            'inventoryHistory': 'inventory_history',
+            'priceHistory': 'price_history',
+            'orderTracking': 'order_tracking',
+            'settings': 'settings'
+        };
+        return mapping[tableName] || tableName;
+    }
+
+    /**
      * Push a single record to Supabase immediately
      */
     static async pushRecord(tableName: string, record: any): Promise<boolean> {
@@ -242,17 +274,18 @@ export class SupabaseService {
             const client = await this.getClient();
             if (!client) return false;
 
+            const cloudTable = this.getCloudTableName(tableName);
             const sanitized = this.sanitizeRecord(tableName, record);
             const { error } = await client
-                .from(tableName)
+                .from(cloudTable)
                 .upsert(sanitized);
 
             if (error) {
-                console.error(`❌ [Push] Error enviando a ${tableName}:`, error.message);
+                console.error(`❌ [Push] Error enviando a ${cloudTable}:`, error.message);
                 return false;
             }
 
-            console.log(`📡 [Push] ${tableName} synced: ${record.id || record.folio || 'Record'}`);
+            console.log(`📡 [Push] ${cloudTable} synced: ${record.id || record.folio || 'Record'}`);
             return true;
         } catch (err) {
             console.warn(`⚠️ [Push] Fallo crítico en ${tableName}:`, err);
@@ -299,17 +332,15 @@ export class SupabaseService {
      */
     static async deleteFromTable(tableName: string, id: string) {
         const client = await this.getClient();
-        if (!client) {
-            console.warn("⚠️ Supabase no configurado, eliminación local únicamente.");
-            return;
-        }
+        if (!client) return;
 
         try {
-            const { error } = await client.from(tableName).delete().eq('id', id);
+            const cloudTable = this.getCloudTableName(tableName);
+            const { error } = await client.from(cloudTable).delete().eq('id', id);
             if (error) {
-                console.error(`❌ Error eliminando de ${tableName}:`, error);
+                console.error(`❌ [Delete] Error eliminando en ${cloudTable}:`, error.message);
             } else {
-                console.log(`✅ Eliminado de ${tableName}: ${id}`);
+                console.log(`✅ Eliminado de ${cloudTable}: ${id}`);
             }
         } catch (e) {
             console.warn(`⚠️ Error en deleteFromTable(${tableName}):`, e);
