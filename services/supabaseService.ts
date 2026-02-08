@@ -428,7 +428,7 @@ export class SupabaseService {
 
         const settings = await db.getSettings();
         const lastPush = settings.lastCloudPush ? new Date(settings.lastCloudPush).getTime() : 0;
-        const now = await db.getLocalNowISO();
+        const now = db.getLocalNowISO();
 
         // SAFE PUSH DRIFT: Aumentado a 10 MINUTOS para garantizar que si un teléfono 
         // tiene el reloj levemente desincronizado, sus cambios siempre se suban.
@@ -468,7 +468,7 @@ export class SupabaseService {
                     // Fallback to business date if updatedAt is missing
                     // We extract just the date part to avoid ISO/Timezone issues
                     const itemDate = item.date ? item.date.substring(0, 10) : '';
-                    const lastPushDate = new Date(safeLastPush).toISOString().substring(0, 10);
+                    const lastPushDate = db.getLocalNowISO(new Date(safeLastPush)).substring(0, 10);
                     return itemDate >= lastPushDate;
                 });
 
@@ -591,7 +591,7 @@ export class SupabaseService {
         ];
 
         const pulledData: any = {};
-        const now = new Date().toISOString();
+        const now = db.getLocalNowISO();
 
         // Tables that need date filtering to avoid timeout
         const largeTables = ['sales', 'inventory_history', 'price_history'];
@@ -675,7 +675,7 @@ export class SupabaseService {
         if (!lastSync) {
             const sevenDaysAgo = new Date();
             sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-            lastSync = sevenDaysAgo.toISOString();
+            lastSync = db.getLocalNowISO(sevenDaysAgo);
             console.log(`📥 PullDelta: Primera sincronización - usando últimos 7 días`);
         } else {
             console.log(`📥 PullDelta: Usando marca de tiempo: ${lastSync}`);
@@ -684,7 +684,7 @@ export class SupabaseService {
         // CLOCK DRIFT PROTECTION: Aumentado a 60 min (1 hora) para máxima robustez.
         // Esto previene que pedidos se queden "perdidos" por desincronización de reloj.
         const lastSyncDate = new Date(lastSync);
-        const driftedSync = new Date(lastSyncDate.getTime() - (60 * 60 * 1000)).toISOString();
+        const driftedSync = db.getLocalNowISO(new Date(lastSyncDate.getTime() - (60 * 60 * 1000)));
 
         const now = await db.getLocalNowISO(); // Use unified timestamp
         const tables = [

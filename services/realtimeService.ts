@@ -134,8 +134,8 @@ export async function subscribeToRealtime(): Promise<void> {
                 const sale = await db_engine.sales.get(payload.new.sale_id);
                 if (sale) {
                     // Update if the tracking event is newer
-                    const eventTime = new Date(payload.new.created_at).getTime();
-                    const saleTime = sale.updatedAt ? new Date(sale.updatedAt).getTime() : 0;
+                    const eventTime = db.getSystemDate(payload.new.created_at).getTime();
+                    const saleTime = sale.updatedAt ? db.getSystemDate(sale.updatedAt).getTime() : 0;
 
                     if (eventTime > saleTime) {
                         sale.fulfillmentStatus = payload.new.status;
@@ -150,17 +150,31 @@ export async function subscribeToRealtime(): Promise<void> {
             }
         });
 
+        let retryCount = 0;
+        const maxRetries = 5;
+
         globalSubscription = channel.subscribe(async (status: string) => {
             if (status === 'SUBSCRIBED') {
-                console.log('✅ [Realtime] Conectado y escuchando cambios (Ventas, Productos, Clientes, Inventario)');
+                console.log('✅ [Realtime] Conectado y escuchando cambios (Multiplexado)');
                 isSubscribed = true;
+                retryCount = 0;
             } else if (status === 'CLOSED') {
                 console.log('❌ [Realtime] Desconectado');
                 isSubscribed = false;
             } else if (status === 'CHANNEL_ERROR') {
-                console.error('❌ [Realtime] Error en el canal');
                 isSubscribed = false;
-                // Retry logic could go here
+                retryCount++;
+                console.error(`❌ [Realtime] Error en el canal (Intento ${retryCount}/${maxRetries})`);
+
+                if (retryCount <= maxRetries) {
+                    const delay = Math.min(1000 * Math.pow(2, retryCount), 30000);
+                    setTimeout(() => {
+                        console.log(`🔄 [Realtime] Reintentando conexión en ${delay}ms...`);
+                        subscribeToRealtime();
+                    }, delay);
+                } else {
+                    console.error('🚫 [Realtime] Máximo de reintentos alcanzado. Se requiere manual reconnection.');
+                }
             }
         });
 

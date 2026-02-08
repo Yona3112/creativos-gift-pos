@@ -69,10 +69,10 @@ class AppDatabase extends Dexie {
 export const db_engine = new AppDatabase();
 
 export class StorageService {
-  getLocalNowISO() {
+  getLocalNowISO(date?: Date) {
     // Returns a full ISO string (YYYY-MM-DDTHH:mm:ss.sssZ) adjusted for Honduras time
     // but represented as if it were UTC to avoid automatic shifts by components
-    const d = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Tegucigalpa" }));
+    const d = new Date((date || new Date()).toLocaleString("en-US", { timeZone: "America/Tegucigalpa" }));
     return d.toISOString();
   }
 
@@ -654,8 +654,8 @@ export class StorageService {
         }
 
         // 2. Validar Fecha Límite
-        const deadline = new Date(settings.billingDeadline + 'T23:59:59');
-        if (new Date() > deadline) {
+        const deadlineDate = this.getSystemDate(settings.billingDeadline + 'T23:59:59Z');
+        if (this.getSystemNow() > deadlineDate) {
           throw new Error(`La fecha límite de emisión de facturas ha expirado (${settings.billingDeadline}).`);
         }
 
@@ -752,7 +752,7 @@ export class StorageService {
           totalAmount: data.creditData.totalWithInterest,
           paidAmount: data.creditData.downPayment || 0,
           status: (data.creditData.downPayment >= data.creditData.totalWithInterest - 0.1) ? 'paid' : 'pending',
-          dueDate: new Date(Date.now() + (data.creditData.term * 30 * 24 * 60 * 60 * 1000)).toISOString(),
+          dueDate: new Date(this.getSystemNow().getTime() + (data.creditData.term * 30 * 24 * 60 * 60 * 1000)).toISOString(),
           createdAt: this.getLocalNowISO(),
           payments: initialPayments as CreditPayment[],
           interestRate: data.creditData.rate,
@@ -920,9 +920,10 @@ export class StorageService {
         if (refundable > 0) {
           if (refundType === 'cash') {
             // Devolución en efectivo/banco: registrar como nota de crédito USADA inmediatamente
+            const folio = `DEV-${sale.folio}`;
             await db_engine.creditNotes.add({
-              id: Date.now().toString(),
-              folio: `DEV-${sale.folio}`,
+              id: folio.toLowerCase(), // Deterministic ID to avoid duplicates across devices
+              folio: folio,
               saleId: sale.id,
               customerId: sale.customerId || '',
               originalTotal: refundable,
@@ -935,9 +936,10 @@ export class StorageService {
             });
           } else {
             // Nota de Crédito tradicional: disponible para uso futuro
+            const folio = `NC-${sale.folio}`;
             await db_engine.creditNotes.add({
-              id: Date.now().toString(),
-              folio: `NC-${sale.folio}`,
+              id: folio.toLowerCase(), // Deterministic ID to avoid duplicates across devices
+              folio: folio,
               saleId: sale.id,
               customerId: sale.customerId || '',
               originalTotal: refundable,
@@ -948,12 +950,12 @@ export class StorageService {
             });
           }
         }
+      }
 
-        if (sale) {
-          await db_engine.sales.put(sale);
-          // Redundant immediate push removed
-          // this.pushToCloud('sales', sale);
-        }
+      if (sale) {
+        await db_engine.sales.put(sale);
+        // Redundant immediate push removed
+        // this.pushToCloud('sales', sale);
       }
     });
   }
@@ -988,6 +990,7 @@ export class StorageService {
 
   // --- CREDITS ---
   async getCredits(): Promise<CreditAccount[]> { return await db_engine.credits.toArray(); }
+
   async addCreditPayment(creditId: string, payment: Omit<CreditPayment, 'id'>) {
     const c = await db_engine.credits.get(creditId);
     if (c) {
@@ -1014,7 +1017,6 @@ export class StorageService {
     }
   }
 
-  // --- UTILS ---
   // --- UTILS ---
   async compressImage(file: File): Promise<string> {
     return new Promise((resolve) => {
@@ -1503,8 +1505,8 @@ export class StorageService {
 
   calculateEarlyPayoff(credit: CreditAccount) {
     if (credit.status === 'paid' || !credit.interestRate) return null;
-    const today = new Date();
-    const start = new Date(credit.createdAt);
+    const today = this.getSystemNow();
+    const start = this.getSystemDate(credit.createdAt);
     const diffTime = Math.abs(today.getTime() - start.getTime());
     const daysElapsed = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
