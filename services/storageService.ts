@@ -358,7 +358,52 @@ export class StorageService {
     // this.pushToCloud('settings', settings);
   }
 
+  /**
+   * Pull settings from Supabase and merge with local (newer wins)
+   * This ensures that devices that were offline get the latest settings
+   */
+  async pullSettingsFromCloud(): Promise<CompanySettings | null> {
+    try {
+      const { SupabaseService } = await import('./supabaseService');
+      const client = await SupabaseService.getClient();
+      if (!client) {
+        console.log('☁️ [Settings] Sin conexión a Supabase, usando settings locales');
+        return null;
+      }
 
+      const { data, error } = await client.from('settings').select('*').eq('id', 'main').single();
+
+      if (error) {
+        console.error('☁️ [Settings] Error al obtener settings de la nube:', error);
+        return null;
+      }
+
+      if (!data) {
+        console.log('☁️ [Settings] No hay settings en la nube');
+        return null;
+      }
+
+      const localSettings = await this.getSettings();
+      const cloudUpdatedAt = data.updatedAt ? new Date(data.updatedAt).getTime() : 0;
+      const localUpdatedAt = localSettings.updatedAt ? new Date(localSettings.updatedAt).getTime() : 0;
+
+      console.log(`☁️ [Settings] Comparando: Local=${new Date(localUpdatedAt).toISOString()} vs Cloud=${new Date(cloudUpdatedAt).toISOString()}`);
+
+      if (cloudUpdatedAt > localUpdatedAt) {
+        console.log('☁️ [Settings] La nube tiene settings más recientes, actualizando local...');
+        const mergedSettings = { ...localSettings, ...data, id: 'main' };
+        await db_engine.settings.put(mergedSettings);
+        console.log(`✅ [Settings] Settings sincronizados: themeColor=${mergedSettings.themeColor}, darkMode=${mergedSettings.darkMode}`);
+        return mergedSettings;
+      } else {
+        console.log('☁️ [Settings] Local tiene settings más recientes o iguales');
+        return localSettings;
+      }
+    } catch (e) {
+      console.error('☁️ [Settings] Error en pullSettingsFromCloud:', e);
+      return null;
+    }
+  }
 
   // --- SEQUENTIAL CODE GENERATORS WITH RECALCULATION ---
 

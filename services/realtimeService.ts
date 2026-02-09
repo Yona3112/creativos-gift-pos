@@ -96,7 +96,14 @@ export async function subscribeToRealtime(): Promise<void> {
 
         // 5. SETTINGS
         channel.on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, async (payload: RealtimePayload<any>) => {
+            console.log(`📡 [RT:Settings] Evento recibido: ${payload.eventType}`, payload.new);
             if (payload.eventType === 'UPDATE' && payload.new) {
+                console.log(`📡 [RT:Settings] Guardando settings: themeColor=${payload.new.themeColor}, darkMode=${payload.new.darkMode}`);
+                await db.saveSettings(payload.new);
+                broadcastChange('settings', payload.new);
+                console.log(`✅ [RT:Settings] Settings propagados a la app`);
+            } else if (payload.eventType === 'INSERT' && payload.new) {
+                console.log(`📡 [RT:Settings] INSERT detectado, también guardando...`);
                 await db.saveSettings(payload.new);
                 broadcastChange('settings', payload.new);
             }

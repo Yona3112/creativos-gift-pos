@@ -108,6 +108,10 @@ function App() {
       db.getCredits(), db.getPromotions(), db.getConsumables(),
       db.getSettings(), db.getExpenses()
     ]);
+
+    // Pull settings from cloud to ensure multi-device consistency
+    const cloudSettings = await db.pullSettingsFromCloud();
+    const finalSettings = cloudSettings || sett;
     setProducts(p);
     setCategories(c);
     setCustomers(cust);
@@ -117,7 +121,7 @@ function App() {
     setCredits(cr);
     setPromotions(pr);
     setConsumables(con);
-    setSettings(sett);
+    setSettings(finalSettings);
     setExpenses(exp);
   };
 
