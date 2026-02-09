@@ -1082,6 +1082,7 @@ export class StorageService {
   }
 
   async getAttachments(saleId: string): Promise<any[]> {
+    console.log(`📎 [Attachments] Buscando adjuntos para venta: ${saleId}`);
     try {
       const { SupabaseService } = await import('./supabaseService');
       const client = await SupabaseService.getClient();
@@ -1091,11 +1092,17 @@ export class StorageService {
           .select('*')
           .eq('sale_id', saleId);
 
-        if (error) throw error;
+        if (error) {
+          console.error("📎 [Attachments] Error al obtener adjuntos:", error);
+          throw error;
+        }
+        console.log(`📎 [Attachments] Encontrados ${data?.length || 0} adjuntos para ${saleId}`);
         return data || [];
+      } else {
+        console.warn("📎 [Attachments] No hay cliente Supabase disponible");
       }
     } catch (e) {
-      console.error("Failed to get attachments:", e);
+      console.error("📎 [Attachments] Fallo al obtener adjuntos:", e);
       return [];
     }
     return [];
