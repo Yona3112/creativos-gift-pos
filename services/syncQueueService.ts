@@ -150,11 +150,14 @@ export class SyncQueueService {
                 const success = await SupabaseService.pushRecord(task.tableName, task.payload);
 
                 if (success && task.payload.id) {
-                    // Mark as synced in local DB
+                    // Mark as synced in local DB (only if table exists locally)
                     try {
-                        await (db_engine as any)[task.tableName].update(task.payload.id, { _synced: true });
+                        const localTable = (db_engine as any)[task.tableName];
+                        if (localTable && typeof localTable.update === 'function') {
+                            await localTable.update(task.payload.id, { _synced: true });
+                        }
                     } catch (dbErr) {
-                        console.warn(`⚠️ [SyncQueue] No se pudo marcar _synced en ${task.tableName}:`, dbErr);
+                        // Silently ignore - some tables like order_tracking are Supabase-only
                     }
                 }
 
