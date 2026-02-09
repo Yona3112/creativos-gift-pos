@@ -430,3 +430,33 @@ export interface AuditLog {
   updatedAt?: string;
   _synced?: boolean;
 }
+
+// Type for sync queue payloads - union of all syncable entities
+export type SyncPayload =
+  | (Product & { id: string })
+  | (Category & { id: string })
+  | (Customer & { id: string })
+  | (Sale & { id: string })
+  | (Expense & { id: string })
+  | (CreditNote & { id: string })
+  | (CreditAccount & { id: string })
+  | (Quote & { id: string })
+  | (CashCut & { id: string })
+  | (OrderTracking & { id: string })
+  | (InventoryMovement & { id: string })
+  | (CompanySettings & { id: string })
+  | (Branch & { id: string })
+  | (User & { id: string })
+  | (Consumable & { id: string })
+  | (Supplier & { id: string })
+  | (AuditLog & { id: string });
+
+// Table names for sync operations (includes both camelCase for local and snake_case for DB)
+export type SyncTableName =
+  | 'products' | 'categories' | 'customers' | 'sales' | 'expenses'
+  | 'credit_notes' | 'creditNotes' | 'credits' | 'quotes' | 'cash_cuts' | 'cashCuts'
+  | 'order_tracking' | 'orderTracking' | 'inventory_history' | 'inventoryHistory'
+  | 'settings' | 'branches' | 'users' | 'consumables' | 'suppliers'
+  | 'audit_logs' | 'promotions' | 'price_history' | 'priceHistory' | 'sale_attachments';
+
+

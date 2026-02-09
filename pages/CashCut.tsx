@@ -283,9 +283,27 @@ export const CashCut: React.FC = () => {
 
     const win = window.open('', '_blank', 'width=400,height=600');
     if (win) {
-      win.document.write(html);
+      // Add print toolbar at the top
+      const printToolbar = `
+        <div id="print-toolbar" style="position: fixed; top: 0; left: 0; right: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 10px rgba(0,0,0,0.2); z-index: 9999;">
+          <span style="color: white; font-weight: bold; font-size: 14px;">📋 Previsualización de Impresión</span>
+          <div style="display: flex; gap: 10px;">
+            <button onclick="document.getElementById('print-toolbar').style.display='none'; window.print(); document.getElementById('print-toolbar').style.display='flex';" style="background: white; color: #667eea; border: none; padding: 8px 20px; border-radius: 6px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+              🖨️ Imprimir
+            </button>
+            <button onclick="window.close();" style="background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); padding: 8px 16px; border-radius: 6px; cursor: pointer;">
+              ✕ Cerrar
+            </button>
+          </div>
+        </div>
+        <style>
+          @media print { #print-toolbar { display: none !important; } }
+          body { padding-top: 60px; }
+        </style>
+      `;
+      win.document.write(printToolbar + html);
       win.document.close();
-      setTimeout(() => { win.print(); win.close(); }, 500);
+      // No auto-print - user clicks button when ready
     }
   };
 

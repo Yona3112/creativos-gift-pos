@@ -179,8 +179,24 @@ export const Quotes: React.FC<QuotesProps> = ({ products, customers, user, branc
                 </html>
             `);
             win.document.close();
+            // Add print toolbar
+            const printToolbar = document.createElement('div');
+            printToolbar.id = 'print-toolbar';
+            printToolbar.innerHTML = `
+              <style>
+                #print-toolbar { position: fixed; top: 0; left: 0; right: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 10px rgba(0,0,0,0.2); z-index: 9999; }
+                @media print { #print-toolbar { display: none !important; } }
+                body { padding-top: 60px !important; }
+              </style>
+              <span style="color: white; font-weight: bold; font-size: 14px;">📋 Previsualización - Cotización</span>
+              <div style="display: flex; gap: 10px;">
+                <button onclick="document.getElementById('print-toolbar').style.display='none'; window.print(); document.getElementById('print-toolbar').style.display='flex';" style="background: white; color: #667eea; border: none; padding: 8px 20px; border-radius: 6px; font-weight: bold; cursor: pointer;">🖨️ Imprimir</button>
+                <button onclick="window.close();" style="background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.3); padding: 8px 16px; border-radius: 6px; cursor: pointer;">✕ Cerrar</button>
+              </div>
+            `;
+            win.document.body.insertBefore(printToolbar, win.document.body.firstChild);
             win.focus();
-            setTimeout(() => { win.print(); win.close(); }, 500);
+            // No auto-print - user clicks button when ready
         }
     };
 

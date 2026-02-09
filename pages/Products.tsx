@@ -480,10 +480,11 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
                                 fontSize: 10,
                                 margin: 0
                             });
-                            setTimeout(() => {
-                                window.print();
-                                window.close();
-                            }, 500);
+                            // Add print toolbar
+                            const toolbar = document.createElement('div');
+                            toolbar.id = 'print-toolbar';
+                            toolbar.innerHTML = '<style>#print-toolbar{position:fixed;top:0;left:0;right:0;background:linear-gradient(135deg,#667eea,#764ba2);padding:12px 20px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 2px 10px rgba(0,0,0,0.2);z-index:9999}@media print{#print-toolbar{display:none!important}}body{padding-top:60px!important}</style><span style="color:white;font-weight:bold;font-size:14px">📋 Previsualización - Etiqueta</span><div style="display:flex;gap:10px"><button onclick="document.getElementById(\'print-toolbar\').style.display=\'none\';window.print();document.getElementById(\'print-toolbar\').style.display=\'flex\';" style="background:white;color:#667eea;border:none;padding:8px 20px;border-radius:6px;font-weight:bold;cursor:pointer">🖨️ Imprimir</button><button onclick="window.close();" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.3);padding:8px 16px;border-radius:6px;cursor:pointer">✕ Cerrar</button></div>';
+                            document.body.insertBefore(toolbar, document.body.firstChild);
                         } catch(e) {
                             document.body.innerHTML = "Error generating barcode: " + e.message;
                         }
@@ -564,7 +565,11 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
                                     displayValue: true, fontSize: 8, margin: 0
                                 });
                             }
-                            setTimeout(() => { window.print(); window.close(); }, 500);
+                            // Add print toolbar
+                            const toolbar = document.createElement('div');
+                            toolbar.id = 'print-toolbar';
+                            toolbar.innerHTML = '<style>#print-toolbar{position:fixed;top:0;left:0;right:0;background:linear-gradient(135deg,#667eea,#764ba2);padding:12px 20px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 2px 10px rgba(0,0,0,0.2);z-index:9999}@media print{#print-toolbar{display:none!important}}body{padding-top:60px!important}</style><span style="color:white;font-weight:bold;font-size:14px">📋 Previsualización - ${labelCount} Etiquetas</span><div style="display:flex;gap:10px"><button onclick="document.getElementById(\'print-toolbar\').style.display=\'none\';window.print();document.getElementById(\'print-toolbar\').style.display=\'flex\';" style="background:white;color:#667eea;border:none;padding:8px 20px;border-radius:6px;font-weight:bold;cursor:pointer">🖨️ Imprimir</button><button onclick="window.close();" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.3);padding:8px 16px;border-radius:6px;cursor:pointer">✕ Cerrar</button></div>';
+                            document.body.insertBefore(toolbar, document.body.firstChild);
                         } catch(e) { document.body.innerHTML = "Error: " + e.message; }
                     </script>
                 </body>

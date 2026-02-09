@@ -1,12 +1,13 @@
 
 import { db_engine } from './storageService';
 import { SupabaseService } from './supabaseService';
+import { SyncPayload, SyncTableName } from '../types';
 
 export interface SyncTask {
     id?: number;
-    tableName: string;
+    tableName: SyncTableName;
     action: 'INSERT' | 'UPDATE' | 'DELETE';
-    payload: any;
+    payload: SyncPayload;
     timestamp: string;
     attempts: number;
     lastError?: string;
@@ -20,7 +21,7 @@ export class SyncQueueService {
     /**
      * Enqueue a new synchronization task
      */
-    static async enqueue(tableName: string, action: 'INSERT' | 'UPDATE' | 'DELETE', payload: any) {
+    static async enqueue(tableName: SyncTableName, action: 'INSERT' | 'UPDATE' | 'DELETE', payload: SyncPayload) {
         const task: SyncTask = {
             tableName,
             action,
@@ -69,7 +70,7 @@ export class SyncQueueService {
         try {
             // Deduplicate tasks: If multiple updates for same ID, keep only the latest one
             // This is critical for efficiency and avoiding race conditions
-            const reducedTasks = this.deduplicateTasks(tasks);
+            const reducedTasks = this.deduplicateTasks(tasks as SyncTask[]);
 
             for (const task of reducedTasks) {
                 const success = await this.executeTask(task);
@@ -119,7 +120,7 @@ export class SyncQueueService {
         const uniqueTasks = new Map<string, SyncTask>();
 
         for (const task of tasks) {
-            const key = `${task.tableName}-${task.payload.id || task.payload.folio || Math.random()}`;
+            const key = `${task.tableName}-${task.payload.id || (task.payload as { folio?: string }).folio || Math.random()}`;
 
             // If it's a DELETE, it wins over any previous INSERT/UPDATE
             if (task.action === 'DELETE') {
@@ -221,7 +222,7 @@ export class SyncQueueService {
                 if (unsynced.length > 0) {
                     console.log(`🩹 [SyncQueue] Autocuración: Encolando ${unsynced.length} registros huérfanos de ${tableName}`);
                     for (const record of unsynced) {
-                        await this.enqueue(tableName, 'UPDATE', record);
+                        await this.enqueue(tableName as SyncTableName, 'UPDATE', record as SyncPayload);
                     }
                 }
             } catch (err) {
