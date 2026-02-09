@@ -708,24 +708,25 @@ export class SupabaseService {
                     ? 'id, code, name, description, price, cost, stock, minStock, enableLowStockAlert, categoryId, providerId, active, isTaxable, updatedAt'
                     : '*';
 
-                // OPTIMIZACIÓN EXTREMA: Si es la tabla de ventas, pedir lotes muy pequeños
-                const limitRows = table === 'sales' ? 20 : 50;
+                // OPTIMIZACIÓN: Aumentar límite de ventas para capturar todas las ventas recientes
+                // 200 ventas debería cubrir todas las ventas de los últimos 7 días típicos
+                const limitRows = table === 'sales' ? 200 : 100;
 
                 const data = await this.requestWithRetry<any[]>(
                     () => client.from(table).select(columns).gte('updatedAt', driftedSync).limit(limitRows),
                     table
                 );
 
-                // Si aún así falla la tabla de ventas por timeout, intentamos con solo 5 (último recurso)
+                // Si aún así falla la tabla de ventas por timeout, intentamos con solo 50 (último recurso)
                 if (data === null && table === 'sales') {
-                    console.warn("⚠️ Reintentando ventas con límite ultra-bajo (5 registros)...");
-                    const ultraLowData = await this.requestWithRetry<any[]>(
-                        () => client.from(table).select(columns).gte('updatedAt', driftedSync).limit(5),
+                    console.warn("⚠️ Reintentando ventas con límite reducido (50 registros)...");
+                    const reducedData = await this.requestWithRetry<any[]>(
+                        () => client.from(table).select(columns).gte('updatedAt', driftedSync).limit(50),
                         table
                     );
-                    if (ultraLowData) {
-                        results[table] = ultraLowData;
-                        totalChanges += ultraLowData.length;
+                    if (reducedData) {
+                        results[table] = reducedData;
+                        totalChanges += reducedData.length;
                     }
                     continue;
                 }

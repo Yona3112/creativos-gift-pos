@@ -71,31 +71,34 @@ function App() {
 
   const refreshData = async (shouldPushToCloud = false, isManual = false, forceFull = false) => {
     try {
-      if (shouldPushToCloud) {
-        const sett = await db.getSettings();
-        if (sett.supabaseUrl && sett.supabaseKey && (sett.autoSync || isManual)) {
-          try {
+      const sett = await db.getSettings();
+      const hasCloudConfig = sett.supabaseUrl && sett.supabaseKey;
+
+      // ALWAYS try to pull from cloud if configured (not just when pushing)
+      if (hasCloudConfig && (sett.autoSync || isManual || !shouldPushToCloud)) {
+        try {
+          const { SupabaseService } = await import('./services/supabaseService');
+
+          // Always pull on startup or manual sync
+          console.log("🔄 Sincronizando: Descargando cambios de la nube...");
+          await SupabaseService.pullDelta();
+
+          // Only push if requested
+          if (shouldPushToCloud) {
             setIsSyncing(true);
-            const { SupabaseService } = await import('./services/supabaseService');
-
-            // CRITICAL: Pull before Push to avoid regressions
-            console.log("🔄 Sincronizando: Descargando cambios...");
-            await SupabaseService.pullDelta();
-
             console.log(`🔄 Sincronizando: Subiendo cambios (${forceFull ? 'FULL' : 'DELTA'})...`);
             await SupabaseService.syncAll(forceFull);
-
             console.log("✅ Sincronización completa (Pull + Push).");
 
             // Update last backup date
             const now = new Date().toISOString();
             await db.saveSettings({ ...sett, lastBackupDate: now });
-          } catch (pushErr) {
-            console.warn("⚠️ No se pudo sincronizar con la nube:", pushErr);
-            if (isManual) showToast("Error al sincronizar con la nube", "error");
-          } finally {
-            setIsSyncing(false);
           }
+        } catch (syncErr) {
+          console.warn("⚠️ Error en sincronización:", syncErr);
+          if (isManual) showToast("Error al sincronizar con la nube", "error");
+        } finally {
+          if (shouldPushToCloud) setIsSyncing(false);
         }
       }
     } catch (e) {
