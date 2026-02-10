@@ -78,7 +78,7 @@ export class SupabaseService {
                 'total', 'paymentMethod', 'paymentDetails', 'customerId', 'customerName',
                 'userId', 'branchId', 'status', 'cai', 'documentType', 'pointsUsed',
                 'pointsMonetaryValue', 'fulfillmentStatus', 'shippingDetails',
-                'originalQuoteId', 'isOrder', 'deposit', 'balance', 'updatedAt',
+                'originalQuoteId', 'isOrder', 'deliveryDate', 'deposit', 'balance', 'updatedAt',
                 'createdAt', 'fulfillmentHistory', 'balancePaymentDate',
                 'balancePaymentMethod', 'balancePaid'
             ],
@@ -137,8 +137,10 @@ export class SupabaseService {
                 'id', 'sale_id', 'status', 'user_id', 'details', 'created_at'
             ],
             price_history: [
-                'id', 'productId', 'date', 'oldPrice', 'newPrice', 'oldCost',
                 'newCost', 'userId', 'updatedAt'
+            ],
+            sale_attachments: [
+                'id', 'sale_id', 'file_type', 'file_name', 'file_data', 'category', 'created_at'
             ]
         };
 
@@ -295,6 +297,7 @@ export class SupabaseService {
             'inventoryHistory': 'inventory_history',
             'priceHistory': 'price_history',
             'orderTracking': 'order_tracking',
+            'saleAttachments': 'sale_attachments',
             'settings': 'settings'
         };
         return mapping[tableName] || tableName;

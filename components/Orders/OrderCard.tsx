@@ -145,6 +145,17 @@ export const OrderCard: React.FC<OrderCardProps> = ({
             <div className="flex justify-between items-start mb-1.5">
                 <span className="font-mono font-black text-xs text-gray-400 bg-white/60 px-1.5 py-0.5 rounded-lg">{order.folio}</span>
                 <div className="flex items-center gap-1.5 text-gray-500 mr-6">
+                    {order.deliveryDate && (
+                        <div className={`text-[10px] font-black px-1.5 py-0.5 rounded-lg flex items-center gap-1 ${new Date(order.deliveryDate).toDateString() === new Date().toDateString()
+                                ? 'bg-red-100 text-red-700 animate-pulse'
+                                : new Date(order.deliveryDate) < new Date()
+                                    ? 'bg-black text-white'
+                                    : 'bg-blue-100 text-blue-700'
+                            }`}>
+                            <i className="fas fa-calendar-day"></i>
+                            {new Date(order.deliveryDate).toLocaleDateString()}
+                        </div>
+                    )}
                     {order.shippingDetails?.isLocalDelivery && <span className="bg-green-100 text-green-700 text-[10px] font-black w-5 h-5 flex items-center justify-center rounded-full" title="Entrega Local">L</span>}
                     {order.shippingDetails?.guideFile && <i className="fas fa-file-alt text-sky-500 text-xs" title="Tiene Guía"></i>}
                     <div className="text-[10px] font-bold">

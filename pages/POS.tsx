@@ -54,6 +54,7 @@ export const POS: React.FC<POSProps> = ({
     const [creditNoteValid, setCreditNoteValid] = useState<boolean>(false);
     const [creditNoteMax, setCreditNoteMax] = useState<number>(0);
     const [depositAmount, setDepositAmount] = useState<string>('');
+    const [deliveryDate, setDeliveryDate] = useState<string>('');
 
     const [isNewCustomerModalOpen, setIsNewCustomerModalOpen] = useState(false);
     const [newCustomerData, setNewCustomerData] = useState<Partial<Customer>>({ name: '', phone: '', rtn: '', type: 'Natural' });
@@ -450,6 +451,7 @@ export const POS: React.FC<POSProps> = ({
                 isOrder,
                 deposit: grossPayToday,
                 balance,
+                deliveryDate: !isImmediateDelivery ? deliveryDate : undefined,
                 creditData: paymentMethod === 'Crédito' ? {
                     principal: total - (parseFloat(creditDownPayment) || 0),
                     downPayment: parseFloat(creditDownPayment) || 0,
@@ -476,6 +478,7 @@ export const POS: React.FC<POSProps> = ({
             setGlobalDiscount('');
             setReceivedAmount('');
             setDepositAmount('');
+            setDeliveryDate('');
             setIsPaymentModalOpen(false);
             setIsCartOpen(false);  // Close cart overlay after sale
             // Reset credit note state
@@ -885,24 +888,38 @@ export const POS: React.FC<POSProps> = ({
                                 <button onClick={() => setIsImmediateDelivery(false)} className={`flex-1 py-2 rounded-lg text-xs font-bold ${!isImmediateDelivery ? 'bg-white text-primary shadow-sm' : 'text-gray-500'}`}>Pedido</button>
                             </div>
                         </div>
-                        {!isImmediateDelivery && paymentMethod !== 'Crédito' && (
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Monto Anticipo (Opcional)</label>
-                                <div className="flex items-center gap-2">
-                                    <Input
-                                        type="number"
-                                        placeholder={`Total: ${total.toFixed(2)}`}
-                                        value={depositAmount}
-                                        onChange={e => {
-                                            const val = Math.min(total, parseFloat(e.target.value) || 0);
-                                            setDepositAmount(val > 0 ? val.toString() : '');
-                                        }}
-                                        className="flex-1"
-                                    />
-                                    <div className="bg-gray-100 p-2 rounded-lg text-xs">
-                                        <p className="font-bold text-gray-500">Pendiente</p>
-                                        <p className="font-bold text-red-500">L {(total - (parseFloat(depositAmount) || 0)).toFixed(2)}</p>
+                        {!isImmediateDelivery && (
+                            <div className="col-span-2 grid grid-cols-2 gap-4">
+                                {paymentMethod !== 'Crédito' && (
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Monto Anticipo (Opcional)</label>
+                                        <div className="flex items-center gap-2">
+                                            <Input
+                                                type="number"
+                                                placeholder={`Total: ${total.toFixed(2)}`}
+                                                value={depositAmount}
+                                                onChange={e => {
+                                                    const val = Math.min(total, parseFloat(e.target.value) || 0);
+                                                    setDepositAmount(val > 0 ? val.toString() : '');
+                                                }}
+                                                className="flex-1"
+                                            />
+                                            <div className="bg-gray-100 p-2 rounded-lg text-xs">
+                                                <p className="font-bold text-gray-500">Pendiente</p>
+                                                <p className="font-bold text-red-500">L {(total - (parseFloat(depositAmount) || 0)).toFixed(2)}</p>
+                                            </div>
+                                        </div>
                                     </div>
+                                )}
+                                <div className={paymentMethod === 'Crédito' ? 'col-span-2' : ''}>
+                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Fecha de Entrega / Evento</label>
+                                    <Input
+                                        type="date"
+                                        value={deliveryDate}
+                                        onChange={e => setDeliveryDate(e.target.value)}
+                                        className="w-full"
+                                        required={!isImmediateDelivery}
+                                    />
                                 </div>
                             </div>
                         )}

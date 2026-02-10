@@ -30,6 +30,17 @@ class AppDatabase extends Dexie {
   priceHistory!: Table<PriceHistoryEntry>;
   auditLogs!: Table<AuditLog>;
   orderTracking!: Table<OrderTracking>;
+  saleAttachments!: Table<{
+    id: string;
+    sale_id: string;
+    file_type: string;
+    file_name?: string;
+    file_data: string;
+    category: string;
+    created_at: string;
+    updatedAt?: string;
+    _synced?: boolean;
+  }>;
   syncQueue!: Table<{
     id?: number;
     tableName: string;
@@ -42,7 +53,7 @@ class AppDatabase extends Dexie {
 
   constructor() {
     super('CreativosGiftDB');
-    (this as any).version(4).stores({
+    (this as any).version(5).stores({
       products: 'id, code, name, categoryId, active',
       categories: 'id, name',
       customers: 'id, name, phone, rtn, active',
@@ -62,6 +73,7 @@ class AppDatabase extends Dexie {
       priceHistory: '++id, productId, date',
       auditLogs: 'id, date, userId, module, action',
       orderTracking: 'id, sale_id, created_at',
+      saleAttachments: 'id, sale_id, category',
       syncQueue: '++id, tableName, timestamp'
     });
   }
@@ -747,8 +759,13 @@ export class StorageService {
         pointsUsed: data.pointsUsed,
         pointsMonetaryValue: data.pointsMonetaryValue,
         fulfillmentStatus: data.fulfillmentStatus || 'delivered',
-        shippingDetails: data.shippingDetails,
+        shippingDetails: data.shippingDetails ? {
+          ...data.shippingDetails,
+          guideFile: undefined, // Removed from main record
+          productionImages: undefined // Removed from main record
+        } : undefined,
         isOrder: data.isOrder,
+        deliveryDate: data.deliveryDate,
         deposit: data.deposit,
         balance: data.balance,
         fulfillmentHistory: [{
@@ -760,6 +777,46 @@ export class StorageService {
       };
 
       await db_engine.sales.add(newSale);
+
+      // --- OPTIMIZACIÓN: Guardar adjuntos pesados por separado ---
+      if (data.shippingDetails) {
+        if (data.shippingDetails.guideFile) {
+          const attId = `att-guide-${newSale.id}`;
+          const attachment = {
+            id: attId,
+            sale_id: newSale.id,
+            file_type: data.shippingDetails.guideFileType || 'image',
+            file_name: data.shippingDetails.guideFileName || 'guia.pdf',
+            file_data: data.shippingDetails.guideFile,
+            category: 'guide',
+            created_at: this.getLocalNowISO(),
+            updatedAt: this.getLocalNowISO(),
+            _synced: false
+          };
+          await db_engine.saleAttachments.add(attachment);
+          this.pushToCloud('saleAttachments', attachment, 'INSERT');
+        }
+
+        if (data.shippingDetails.productionImages && data.shippingDetails.productionImages.length > 0) {
+          for (let i = 0; i < data.shippingDetails.productionImages.length; i++) {
+            const img = data.shippingDetails.productionImages[i];
+            const attId = `att-prod-${i}-${newSale.id}`;
+            const attachment = {
+              id: attId,
+              sale_id: newSale.id,
+              file_type: 'image',
+              file_name: `prod-${i}.jpg`,
+              file_data: img,
+              category: 'production',
+              created_at: this.getLocalNowISO(),
+              updatedAt: this.getLocalNowISO(),
+              _synced: false
+            };
+            await db_engine.saleAttachments.add(attachment);
+            this.pushToCloud('saleAttachments', attachment, 'INSERT');
+          }
+        }
+      }
 
       // Actualizar Stock y Kardex
       // MOVED TO DATABASE TRIGGER (Supabase) to prevent race conditions

@@ -202,6 +202,7 @@ export interface Sale {
   fulfillmentStatus?: FulfillmentStatus;
   shippingDetails?: ShippingDetails;
   isOrder?: boolean;
+  deliveryDate?: string; // ISO date for scheduled orders
   deposit?: number;
   balance?: number;
   balancePaymentDate?: string;  // Date when pending balance was paid (for cash flow tracking)

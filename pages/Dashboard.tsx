@@ -1,9 +1,11 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
-import { Product, Sale, CreditAccount, Customer, Consumable } from '../types';
-import { Card, Button, Badge } from '../components/UIComponents';
+import { Product, Sale, CreditAccount, Customer, Consumable, CompanySettings } from '../types';
+import { Card, Button, Badge, showToast, Modal, Input } from '../components/UIComponents';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { NotificationService, SystemNotification } from '../services/NotificationService';
+import { PrinterService } from '../services/printerService';
+import { db } from '../services/storageService';
 
 interface DashboardProps {
     products: Product[];
@@ -50,21 +52,6 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, customers, consumables, onNavigate }) => {
-    // Notification state
-    const [notifications, setNotifications] = useState<SystemNotification[]>([]);
-    const [reorderSuggestions, setReorderSuggestions] = useState<Awaited<ReturnType<typeof NotificationService.getReorderSuggestions>>>([]);
-
-    // Load notifications and reorder suggestions on mount
-    useEffect(() => {
-        const loadNotifications = async () => {
-            const notifs = await NotificationService.getAllNotifications();
-            setNotifications(notifs);
-            const reorder = await NotificationService.getReorderSuggestions();
-            setReorderSuggestions(reorder);
-        };
-        loadNotifications();
-    }, [products, credits]); // Reload when data changes
-
     // Helper for Local Date (Fix UTC Bug)
     const getLocalDate = (d: Date = new Date()) => {
         const offset = d.getTimezoneOffset() * 60000;
@@ -73,6 +60,29 @@ export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, 
 
     const today = getLocalDate();
     const currentMonthPrefix = today.substring(0, 7);
+
+    // Print Modal State
+    const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+    const [printStartDate, setPrintStartDate] = useState(today);
+    const [printEndDate, setPrintEndDate] = useState(today);
+
+    // Notification state
+    const [notifications, setNotifications] = useState<SystemNotification[]>([]);
+    const [reorderSuggestions, setReorderSuggestions] = useState<Awaited<ReturnType<typeof NotificationService.getReorderSuggestions>>>([]);
+    const [settings, setSettings] = useState<CompanySettings | null>(null);
+
+    // Load notifications and reorder suggestions on mount
+    useEffect(() => {
+        const loadNotifications = async () => {
+            const notifs = await NotificationService.getAllNotifications();
+            setNotifications(notifs);
+            const reorder = await NotificationService.getReorderSuggestions();
+            setReorderSuggestions(reorder);
+            const s = await db.getSettings();
+            setSettings(s);
+        };
+        loadNotifications();
+    }, [products, credits]); // Reload when data changes
 
     const stats = useMemo(() => {
         // --- NEW REVENUE-BASED LOGIC ---
@@ -239,6 +249,120 @@ export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, 
             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
             .slice(0, 5);
     }, [sales]);
+
+    const printProductionRange = (startDate: string, endDate: string) => {
+        const s = settings;
+        if (!s) return;
+
+        const start = new Date(startDate + 'T00:00:00');
+        const end = new Date(endDate + 'T23:59:59');
+
+        const filtered = sales.filter(sale => {
+            const dDateStr = sale.deliveryDate || getLocalDate(new Date(sale.date));
+            const dDate = new Date(dDateStr + 'T12:00:00');
+            return dDate >= start && dDate <= end && sale.fulfillmentStatus !== 'delivered' && sale.status === 'active';
+        });
+
+        if (filtered.length === 0) {
+            showToast("No hay pedidos programados para el rango seleccionado", 'info');
+            return;
+        }
+
+        const grouped: Record<string, Sale[]> = {};
+        filtered.forEach(sale => {
+            const dDate = sale.deliveryDate || getLocalDate(new Date(sale.date));
+            if (!grouped[dDate]) grouped[dDate] = [];
+            grouped[dDate].push(sale);
+        });
+
+        const sortedDates = Object.keys(grouped).sort();
+
+        const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <style>
+                @page { margin: 5mm; }
+                body { 
+                    font-family: 'Courier New', monospace; 
+                    font-size: 11px; 
+                    width: ${s.printerSize === '58mm' ? '48mm' : '72mm'}; 
+                    margin: 0 auto; 
+                    padding: 5px; 
+                }
+                .center { text-align: center; }
+                .bold { font-weight: bold; }
+                .hr { border-top: 1px dashed #333; margin: 8px 0; }
+                .date-header { 
+                    background: #333; 
+                    color: white; 
+                    text-align: center; 
+                    padding: 4px; 
+                    margin: 15px 0 5px 0;
+                    font-size: 12px;
+                    border-radius: 2px;
+                }
+                .order-section { margin: 8px 0; border: 1px solid #ddd; padding: 5px; border-radius: 4px; }
+                .order-header { font-weight: bold; font-size: 13px; margin-bottom: 2px; border-bottom: 1px dotted #ccc; }
+                .customer-info { font-size: 10px; color: #444; margin-bottom: 4px; }
+                .item-row { margin: 2px 0; display: flex; align-items: flex-start; }
+                .item-qty { font-weight: bold; margin-right: 5px; min-width: 15px; }
+                .item-notes { font-style: italic; font-size: 9px; color: #555; margin-left: 20px; margin-bottom: 2px; }
+                .balance-box { margin-top: 3px; font-weight: bold; text-align: right; font-size: 10px; }
+            </style>
+        </head>
+        <body>
+            <div class="center">
+                <div class="bold" style="font-size: 16px;">${s.name}</div>
+                <div class="bold">PLAN DE PRODUCCIÓN</div>
+                <div style="font-size: 10px;">${new Date(startDate + 'T12:00:00').toLocaleDateString('es-HN')} al ${new Date(endDate + 'T12:00:00').toLocaleDateString('es-HN')}</div>
+            </div>
+
+            ${sortedDates.map(dateStr => {
+            const dateFormatted = new Date(dateStr + 'T12:00:00').toLocaleDateString('es-HN', {
+                weekday: 'long',
+                month: 'long',
+                day: 'numeric'
+            });
+            const daySales = grouped[dateStr];
+
+            return `
+                    <div class="date-header">${dateFormatted.toUpperCase()}</div>
+                    ${daySales.map(order => `
+                        <div class="order-section">
+                            <div class="order-header">FOLIO: ${order.folio}</div>
+                            <div class="customer-info">👤 ${order.customerName || 'Consumidor Final'}</div>
+                            
+                            ${(order.items || []).map(item => `
+                                <div class="item-row">
+                                    <span class="item-qty">${item.quantity}x</span>
+                                    <span>${item.name}</span>
+                                </div>
+                                ${item.notes ? `<div class="item-notes">📝 ${item.notes}</div>` : ''}
+                            `).join('')}
+
+                            ${order.balance && order.balance > 0 ? `
+                                <div class="balance-box">SALDO: L ${order.balance.toFixed(2)}</div>
+                            ` : ''}
+                        </div>
+                    `).join('')}
+                `;
+        }).join('')}
+
+            <div class="hr"></div>
+            <div class="center" style="font-size: 9px; margin-top: 10px;">
+                <p>Total Pedidos: ${filtered.length}</p>
+                <p>Generado: ${new Date().toLocaleString('es-HN')}</p>
+            </div>
+        </body>
+        </html>
+        `;
+
+        PrinterService.printHTML(html, "Producción Personalizada");
+        setIsPrintModalOpen(false);
+    };
+
+
 
     return (
         <div className="space-y-6 pb-10">
@@ -516,8 +640,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, 
                                         tomorrowArr.setDate(tomorrowArr.getDate() + 1);
                                         const tomorrowStr = getLocalDate(tomorrowArr);
 
-                                        const todayDeliveries = sales.filter(s => getLocalDate(new Date(s.date)) === today && s.fulfillmentStatus !== 'delivered' && s.status === 'active');
-                                        const tomorrowDeliveries = sales.filter(s => getLocalDate(new Date(s.date)) === tomorrowStr && s.fulfillmentStatus !== 'delivered' && s.status === 'active');
+                                        const todayDeliveries = sales.filter(s => {
+                                            const dDate = s.deliveryDate || getLocalDate(new Date(s.date));
+                                            return dDate === today && s.fulfillmentStatus !== 'delivered' && s.status === 'active';
+                                        });
+                                        const tomorrowDeliveries = sales.filter(s => {
+                                            const dDate = s.deliveryDate || getLocalDate(new Date(s.date));
+                                            return dDate === tomorrowStr && s.fulfillmentStatus !== 'delivered' && s.status === 'active';
+                                        });
 
                                         let message = `🍱 *RESUMEN DE PRODUCCIÓN - CREATIVOS GIFT*\n\n`;
 
@@ -567,6 +697,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, 
                                 >
                                     Enviar Resumen WhatsApp
                                 </Button>
+                                <div className="flex gap-2">
+                                    <Button
+                                        variant="secondary"
+                                        size="xs"
+                                        icon="print"
+                                        className="h-7 text-[10px] text-gray-600"
+                                        onClick={() => setIsPrintModalOpen(true)}
+                                    >
+                                        Imprimir Producción
+                                    </Button>
+                                </div>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -576,7 +717,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, 
                                         <span className="font-bold text-xs text-gray-500 uppercase">Vencen Hoy</span>
                                     </div>
                                     <div className="space-y-2">
-                                        {sales.filter(s => getLocalDate(new Date(s.date)) === today && s.fulfillmentStatus !== 'delivered' && s.status === 'active').slice(0, 5).map(order => (
+                                        {sales.filter(s => {
+                                            const dDate = s.deliveryDate || getLocalDate(new Date(s.date));
+                                            return dDate === today && s.fulfillmentStatus !== 'delivered' && s.status === 'active';
+                                        }).slice(0, 5).map(order => (
                                             <div key={order.id} className="flex justify-between items-center text-sm p-2 bg-white rounded-lg border border-gray-50">
                                                 <span className="font-bold">{order.folio}</span>
                                                 <span className="text-gray-500 truncate max-w-[100px]">{order.customerName}</span>
@@ -600,7 +744,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, 
                                         {sales.filter(s => {
                                             const tom = new Date();
                                             tom.setDate(tom.getDate() + 1);
-                                            return getLocalDate(new Date(s.date)) === getLocalDate(tom) && s.fulfillmentStatus !== 'delivered' && s.status === 'active';
+                                            const dDate = s.deliveryDate || getLocalDate(new Date(s.date));
+                                            return dDate === getLocalDate(tom) && s.fulfillmentStatus !== 'delivered' && s.status === 'active';
                                         }).slice(0, 5).map(order => (
                                             <div key={order.id} className="flex justify-between items-center text-sm p-2 bg-white rounded-lg border border-gray-50">
                                                 <span className="font-bold">{order.folio}</span>
@@ -613,7 +758,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, 
                                         {sales.filter(s => {
                                             const tom = new Date();
                                             tom.setDate(tom.getDate() + 1);
-                                            return getLocalDate(new Date(s.date)) === getLocalDate(tom) && s.fulfillmentStatus !== 'delivered' && s.status === 'active';
+                                            const dDate = s.deliveryDate || getLocalDate(new Date(s.date));
+                                            return dDate === getLocalDate(tom) && s.fulfillmentStatus !== 'delivered' && s.status === 'active';
                                         }).length === 0 && (
                                                 <p className="text-xs text-gray-400 italic text-center py-2">No hay pedidos para mañana</p>
                                             )}
@@ -666,6 +812,66 @@ export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, 
                 </div>
 
             </div>
+
+            <Modal
+                isOpen={isPrintModalOpen}
+                onClose={() => setIsPrintModalOpen(false)}
+                title="Imprimir Hoja de Producción"
+                size="sm"
+            >
+                <div className="space-y-4">
+                    <p className="text-sm text-gray-600 font-bold mb-2">Seleccione el rango de fechas de entrega:</p>
+
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-gray-50 p-3 rounded-xl border border-gray-200">
+                            <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Desde</label>
+                            <input
+                                type="date"
+                                className="w-full bg-transparent font-bold text-gray-800 outline-none"
+                                value={printStartDate}
+                                onChange={(e) => setPrintStartDate(e.target.value)}
+                            />
+                        </div>
+                        <div className="bg-gray-50 p-3 rounded-xl border border-gray-200">
+                            <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">Hasta</label>
+                            <input
+                                type="date"
+                                className="w-full bg-transparent font-bold text-gray-800 outline-none"
+                                value={printEndDate}
+                                onChange={(e) => setPrintEndDate(e.target.value)}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 py-2">
+                        <Button size="sm" variant="outline" className="text-[10px] h-8" onClick={() => { setPrintStartDate(today); setPrintEndDate(today); }}>
+                            Hoy
+                        </Button>
+                        <Button size="sm" variant="outline" className="text-[10px] h-8" onClick={() => {
+                            const tom = new Date(); tom.setDate(tom.getDate() + 1);
+                            const d = getLocalDate(tom); setPrintStartDate(d); setPrintEndDate(d);
+                        }}>
+                            Mañana
+                        </Button>
+                        <Button size="sm" variant="outline" className="text-[10px] h-8" onClick={() => {
+                            setPrintStartDate(today);
+                            const week = new Date(); week.setDate(week.getDate() + 6);
+                            setPrintEndDate(getLocalDate(week));
+                        }}>
+                            Próximos 7 Días
+                        </Button>
+                    </div>
+
+                    <div className="pt-4 flex gap-3">
+                        <Button variant="secondary" className="flex-1" onClick={() => setIsPrintModalOpen(false)}>
+                            Cancelar
+                        </Button>
+                        <Button variant="primary" className="flex-1" onClick={() => printProductionRange(printStartDate, printEndDate)}>
+                            <i className="fas fa-print mr-2"></i> Imprimir
+                        </Button>
+                    </div>
+                </div>
+            </Modal>
         </div>
     );
 };

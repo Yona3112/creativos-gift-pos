@@ -30,6 +30,9 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
         (localStorage.getItem('order_datePreset') as 'all' | 'today' | 'yesterday' | 'week' | 'month') || 'all'
     );
     const [dateFilter, setDateFilter] = useState<string>('');
+    const [filterByDeliveryDate, setFilterByDeliveryDate] = useState<boolean>(() =>
+        localStorage.getItem('order_filterByDeliveryDate') === 'true'
+    );
     // const [isSyncing, setIsSyncing] = useState(false); // Removed
     const [categoryFilter, setCategoryFilter] = useState<string>(() =>
         localStorage.getItem('order_categoryFilter') || 'all'
@@ -44,6 +47,7 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
     useEffect(() => { localStorage.setItem('order_datePreset', datePreset); }, [datePreset]);
     useEffect(() => { localStorage.setItem('order_categoryFilter', categoryFilter); }, [categoryFilter]);
     useEffect(() => { localStorage.setItem('order_categoryFilter', categoryFilter); }, [categoryFilter]);
+    useEffect(() => { localStorage.setItem('order_filterByDeliveryDate', filterByDeliveryDate.toString()); }, [filterByDeliveryDate]);
 
     // Edit Modal State
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -555,11 +559,13 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
 
                 let matchDate = true;
                 const range = getDateRange(datePreset);
+                const targetDate = filterByDeliveryDate ? (s.deliveryDate || s.date) : s.date;
+
                 if (range) {
-                    const orderDate = (s.date || '').split('T')[0];
+                    const orderDate = (targetDate || '').split('T')[0];
                     matchDate = orderDate >= range.from && orderDate <= range.to;
                 } else if (dateFilter) {
-                    matchDate = (s.date || '').startsWith(dateFilter);
+                    matchDate = (targetDate || '').startsWith(dateFilter);
                 }
 
                 const matchCategory = categoryFilter === 'all'
@@ -603,6 +609,18 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                 orderCountPerCategory={orderCountPerCategory}
             />
 
+            <div className="flex items-center gap-2 px-1">
+                <Button
+                    size="sm"
+                    variant={filterByDeliveryDate ? 'primary' : 'outline'}
+                    onClick={() => setFilterByDeliveryDate(!filterByDeliveryDate)}
+                    className="text-[10px] font-black uppercase tracking-wider"
+                >
+                    <i className={`fas fa-${filterByDeliveryDate ? 'calendar-check' : 'calendar-alt'} mr-2`}></i>
+                    Filtrar por: {filterByDeliveryDate ? 'Fecha de Entrega' : 'Fecha de Registro'}
+                </Button>
+            </div>
+
             <OrdersBoard
                 orders={filteredOrders}
                 categories={categories}
@@ -616,7 +634,11 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
 
             {/* Modals begin here */}
 
-            <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title={`Gestionar Pedido ${selectedOrder?.folio}`}>
+            <Modal
+                isOpen={isEditModalOpen}
+                onClose={() => setIsEditModalOpen(false)}
+                title={selectedOrder ? `Pedido ${selectedOrder.folio} - ${getCustomerName(selectedOrder)}` : 'Gestionar Pedido'}
+            >
                 <div className="space-y-5">
                     <div className="bg-gray-50 p-4 rounded-xl text-sm border border-gray-100 flex flex-col md:flex-row justify-between gap-4">
                         <div className="flex-1">
@@ -647,6 +669,16 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                             <div className="mt-2 inline-block px-2 py-0.5 bg-primary/10 text-primary rounded-full text-[10px] font-black uppercase tracking-wider">
                                 {timeAgo(selectedOrder?.date || '')} de antigüedad
                             </div>
+
+                            {selectedOrder?.deliveryDate && (
+                                <div className="mt-4 p-3 rounded-xl bg-blue-50 border border-blue-100">
+                                    <p className="text-[10px] font-black text-blue-400 uppercase mb-1">PROGRAMADO PARA:</p>
+                                    <p className="text-sm font-black text-blue-700 flex items-center gap-2">
+                                        <i className="fas fa-calendar-check"></i>
+                                        {new Date(selectedOrder.deliveryDate).toLocaleDateString('es-HN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                                    </p>
+                                </div>
+                            )}
                         </div>
                     </div>
 
