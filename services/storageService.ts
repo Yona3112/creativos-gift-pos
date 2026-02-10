@@ -901,6 +901,7 @@ export class StorageService {
       if (sale && sale.status === 'active') {
         const settings = await this.getSettings();
         sale.status = 'cancelled';
+        sale.balance = 0; // REPAIR: Cancelled sales should not have a pending balance
         sale.updatedAt = this.getLocalNowISO();
         await db_engine.sales.put(sale);
 
