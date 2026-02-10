@@ -269,6 +269,11 @@ export const Customers: React.FC<CustomersProps> = ({ customers, onUpdate, user,
             <Input label="DNI" value={formData.dni || ''} onChange={e => setFormData({ ...formData, dni: e.target.value })} maxLength={13} />
           )}
 
+          <div className="grid grid-cols-2 gap-4">
+            <Input label="Email" value={formData.email || ''} onChange={e => setFormData({ ...formData, email: e.target.value })} placeholder="correo@ejemplo.com" />
+            <Input label="Dirección" value={formData.address || ''} onChange={e => setFormData({ ...formData, address: e.target.value })} placeholder="Colonia, Calle..." />
+          </div>
+
           <div className="flex justify-end gap-2 pt-4">
             <Button type="button" variant="secondary" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
             <Button type="submit">Guardar</Button>

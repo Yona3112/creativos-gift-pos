@@ -2,6 +2,7 @@
 import { db_engine } from './storageService';
 import { SupabaseService } from './supabaseService';
 import { SyncPayload, SyncTableName } from '../types';
+import { logger } from './logger';
 
 export interface SyncTask {
     id?: number;
@@ -32,7 +33,7 @@ export class SyncQueueService {
 
         try {
             await db_engine.syncQueue.add(task);
-            console.log(`📥 [SyncQueue] Tarea encolada: ${action} en ${tableName}`);
+            logger.log(`📥 [SyncQueue] Tarea encolada: ${action} en ${tableName}`);
 
             // Trigger background processing (async)
             this.processQueue();
@@ -53,18 +54,18 @@ export class SyncQueueService {
         // SAFETY VALVE: If queue is massive, it indicates a structural failure (like the table mismatch)
         // We must purge invalid tasks to allow the system to breathe.
         if (tasks.length > this.MAX_QUEUE_SIZE) {
-            console.warn(`🚨 [SyncQueue] Cola crítica (${tasks.length} tareas). Eliminando tareas antiguas fallidas...`);
+            logger.warn(`🚨 [SyncQueue] Cola crítica (${tasks.length} tareas). Eliminando tareas antiguas fallidas...`);
             const failedTasks = tasks.filter(t => t.attempts >= this.MAX_ATTEMPTS);
             if (failedTasks.length > 0) {
                 await db_engine.syncQueue.bulkDelete(failedTasks.map(t => t.id!));
-                console.log(`🧹 [SyncQueue] Eliminadas ${failedTasks.length} tareas fallidas permanentemente.`);
+                logger.log(`🧹 [SyncQueue] Eliminadas ${failedTasks.length} tareas fallidas permanentemente.`);
                 // Reload tasks after partial purge
                 const remainingTasks = await db_engine.syncQueue.toArray();
                 if (remainingTasks.length === 0) return;
             }
         }
 
-        console.log(`📡 [SyncQueue] Procesando ${tasks.length} tareas pendientes...`);
+        logger.log(`📡 [SyncQueue] Procesando ${tasks.length} tareas pendientes...`);
         this.isProcessing = true;
 
         try {
@@ -82,7 +83,7 @@ export class SyncQueueService {
                         t.payload.id === task.payload.id
                     );
                     await db_engine.syncQueue.bulkDelete(originalTasks.map(t => t.id!));
-                    console.log(`✅ [SyncQueue] Tarea completada y eliminada: ${task.tableName} (${task.payload.id || 'N/A'})`);
+                    logger.log(`✅ [SyncQueue] Tarea completada y eliminada: ${task.tableName} (${task.payload.id || 'N/A'})`);
                 } else {
                     // Update attempts on all original tasks for this record
                     const originalTasks = tasks.filter(t =>
@@ -180,7 +181,7 @@ export class SyncQueueService {
                 console.error(`🛑 [SyncQueue] Conflicto irreconciliable (409) en ${task.tableName}. Postergando o descartando para no bloquear cola.`);
                 return true; // We return true so it GETS DELETED from the queue
             }
-            console.warn(`⚠️ [SyncQueue] Fallo al ejecutar tarea para ${task.tableName}:`, error);
+            logger.warn(`⚠️ [SyncQueue] Fallo al ejecutar tarea para ${task.tableName}:`, error);
             return false;
         }
     }
@@ -201,7 +202,7 @@ export class SyncQueueService {
      * and enqueue them for processing.
      */
     static async auditAndEnqueueUnsynced() {
-        console.log('🔍 [SyncQueue] Ejecutando auditoría de autocuración...');
+        logger.log('🔍 [SyncQueue] Ejecutando auditoría de autocuración...');
 
         // 0. Reconcile Sales & Credits BEFORE auditing
         await this.reconcileCreditsAndSales();
@@ -220,13 +221,13 @@ export class SyncQueueService {
                     .toArray();
 
                 if (unsynced.length > 0) {
-                    console.log(`🩹 [SyncQueue] Autocuración: Encolando ${unsynced.length} registros huérfanos de ${tableName}`);
+                    logger.log(`🩹 [SyncQueue] Autocuración: Encolando ${unsynced.length} registros huérfanos de ${tableName}`);
                     for (const record of unsynced) {
                         await this.enqueue(tableName as SyncTableName, 'UPDATE', record as SyncPayload);
                     }
                 }
             } catch (err) {
-                console.warn(`⚠️ [SyncQueue] Fallo al auditar tabla ${tableName}:`, err);
+                logger.warn(`⚠️ [SyncQueue] Fallo al auditar tabla ${tableName}:`, err);
             }
         }
     }
@@ -239,15 +240,15 @@ export class SyncQueueService {
         try {
             const credits = await db_engine.credits.toArray();
             if (credits.length === 0) {
-                console.log('⚖️ [Reconciliation] No hay créditos registrados para reconciliar.');
+                logger.log('⚖️ [Reconciliation] No hay créditos registrados para reconciliar.');
                 return;
             }
 
-            console.log(`⚖️ [Reconciliation] Analizando ${credits.length} cuentas de crédito...`);
+            logger.log(`⚖️ [Reconciliation] Analizando ${credits.length} cuentas de crédito...`);
 
             for (const credit of credits) {
                 if (!credit.saleId) {
-                    console.log(`⚖️ [Reconciliation] Crédito ${credit.id} sin saleId (Folio). Saltando.`);
+                    logger.log(`⚖️ [Reconciliation] Crédito ${credit.id} sin saleId (Folio). Saltando.`);
                     continue;
                 }
 
@@ -259,31 +260,31 @@ export class SyncQueueService {
 
                     // If balance is out of sync, fix the sale record
                     if (Math.abs(currentSaleBalance - actualBalance) > 0.01) {
-                        console.log(`⚖️ [Reconciliation] ¡DISCREPANCIA DETECTADA! Pedido ${sale.folio}:`);
-                        console.log(`   - Saldo en Venta: L ${currentSaleBalance}`);
-                        console.log(`   - Saldo Real (en Créditos): L ${actualBalance}`);
-                        console.log(`   - Corrigiendo...`);
+                        logger.log(`⚖️ [Reconciliation] ¡DISCREPANCIA DETECTADA! Pedido ${sale.folio}:`);
+                        logger.log(`   - Saldo en Venta: L ${currentSaleBalance}`);
+                        logger.log(`   - Saldo Real (en Créditos): L ${actualBalance}`);
+                        logger.log(`   - Corrigiendo...`);
 
                         sale.balance = actualBalance;
 
                         // If fully paid, optionally update fulfillment if it was stuck
                         if (actualBalance === 0 && sale.fulfillmentStatus === 'pending') {
-                            console.log(`   - Marcando pedido como entregado (Totalmente pagado).`);
+                            logger.log(`   - Marcando pedido como entregado (Totalmente pagado).`);
                             sale.fulfillmentStatus = 'delivered';
                         }
 
                         sale.updatedAt = new Date().toISOString();
                         sale._synced = false; // Mark for upload
                         await db_engine.sales.put(sale);
-                        console.log(`✅ [Reconciliation] Pedido ${sale.folio} actualizado con éxito.`);
+                        logger.log(`✅ [Reconciliation] Pedido ${sale.folio} actualizado con éxito.`);
                     }
                 } else {
                     // This happens if the sale hasn't been downloaded yet or folio mismatch
-                    // console.log(`⚖️ [Reconciliation] No se encontró la venta para el folio ${credit.saleId}`);
+                    // logger.log(`⚖️ [Reconciliation] No se encontró la venta para el folio ${credit.saleId}`);
                 }
             }
         } catch (err) {
-            console.warn('⚠️ [Reconciliation] Falló la reconciliación:', err);
+            logger.warn('⚠️ [Reconciliation] Falló la reconciliación:', err);
         }
     }
 }

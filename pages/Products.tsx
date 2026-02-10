@@ -36,6 +36,8 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
     const debouncedSearch = useDebounce(searchTerm, 300);
     const [currentPage, setCurrentPage] = useState(1);
     const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; id: string; name: string }>({ open: false, id: '', name: '' });
+    const [isSaving, setIsSaving] = useState(false);
+    const [isCompressing, setIsCompressing] = useState(false);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -96,6 +98,8 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (isSaving) return;
+        setIsSaving(true);
         const userStr = localStorage.getItem('creativos_gift_currentUser');
         const user = userStr ? JSON.parse(userStr) : { id: 'admin' };
 
@@ -112,14 +116,21 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
                 console.error('Error saving product:', error);
                 alert('Ocurrió un error al guardar el producto.');
             }
+        } finally {
+            setIsSaving(false);
         }
     };
 
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
-            const compressed = await db.compressImage(file);
-            setFormData(prev => ({ ...prev, image: compressed }));
+            setIsCompressing(true);
+            try {
+                const compressed = await db.compressImage(file);
+                setFormData(prev => ({ ...prev, image: compressed }));
+            } finally {
+                setIsCompressing(false);
+            }
         }
     };
 
@@ -675,7 +686,7 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
                 <form onSubmit={handleSubmit} className="space-y-3">
                     <div className="flex gap-4 items-start">
                         <div className="relative w-24 h-24 bg-gray-50 rounded-2xl border-2 border-dashed flex items-center justify-center overflow-hidden cursor-pointer" onClick={() => fileInputRef.current?.click()}>
-                            {formData.image ? <img src={formData.image} className="w-full h-full object-cover" /> : <i className="fas fa-camera text-xl text-gray-300"></i>}
+                            {isCompressing ? <div className="text-center"><i className="fas fa-spinner fa-spin text-primary text-lg"></i><p className="text-[8px] text-gray-400 mt-1">Comprimiendo...</p></div> : formData.image ? <img src={formData.image} className="w-full h-full object-cover" /> : <i className="fas fa-camera text-xl text-gray-300"></i>}
                             <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
                         </div>
                         <div className="flex-1 space-y-3">
@@ -757,7 +768,7 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
                         )}
                         <div className="flex gap-2 ml-auto">
                             <Button type="button" variant="secondary" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
-                            <Button type="submit">Guardar Producto</Button>
+                            <Button type="submit" disabled={isSaving}>{isSaving ? <><i className="fas fa-spinner fa-spin mr-2"></i>Guardando...</> : 'Guardar Producto'}</Button>
                         </div>
                     </div>
                 </form>

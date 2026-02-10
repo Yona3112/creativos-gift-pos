@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Sale, Customer, FulfillmentStatus, ShippingDetails, CompanySettings, PaymentDetails, Category } from '../types';
 import { Card, Button, Input, Badge, Modal, showToast, ImagePreviewModal } from '../components/UIComponents';
 import { db } from '../services/storageService';
+import { logger } from '../services/logger';
 import { BoxfulService } from '../services/boxfulService';
 import { OrderCard } from '../components/Orders/OrderCard';
 import { OrdersBoard } from '../components/Orders/OrdersBoard';
@@ -159,7 +160,7 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
             }
 
             try {
-                console.log(`📤 Cambio rápido: ${order.folio} ${order.fulfillmentStatus} → ${newStatus}`);
+                logger.log(`📤 Cambio rápido: ${order.folio} ${order.fulfillmentStatus} → ${newStatus}`);
 
                 // OPTIMISTIC UI REMOVED: Now relying on database -> onUpdate -> Re-render cycle
                 // updateOrderInState(order.id, newStatus);
@@ -195,57 +196,69 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
         }
     };
 
-    const handleEditOrder = async (order: Sale) => {
+    const [isLoadingAttachments, setIsLoadingAttachments] = useState(false);
+
+    const handleEditOrder = (order: Sale) => {
         setSelectedOrder(order);
 
-        let guideFile = order.shippingDetails?.guideFile || '';
-        let guideFileType = order.shippingDetails?.guideFileType || '';
-        let guideFileName = order.shippingDetails?.guideFileName || '';
-        let productionImages = order.shippingDetails?.productionImages || [];
-
-        // LOAD ATTACHMENTS ON DEMAND (High Egress Fix)
-        // If we don't have them in the sale object (because we stripped them), fetch from separate table
-        try {
-            // Check if we need to fetch. 
-            // If guideFile is NOT a data URI and NOT a URL, or if we just want to check for "remote" ones
-            if (!guideFile || productionImages.length === 0) {
-                const attachments = await db.getAttachments(order.id);
-
-                if (attachments && attachments.length > 0) {
-                    // Find guide
-                    const guide = attachments.find((a: any) => a.category === 'guide' || a.category === 'general'); // General fallback
-                    if (guide && !guideFile) {
-                        guideFile = guide.file_data;
-                        guideFileType = guide.file_type;
-                        guideFileName = guide.file_name;
-                    }
-
-                    // Find production images
-                    const prodImgs = attachments.filter((a: any) => a.category === 'production');
-                    if (prodImgs.length > 0 && productionImages.length === 0) {
-                        productionImages = prodImgs.map((a: any) => a.file_data);
-                    }
-                }
-            }
-        } catch (e) {
-            console.error("Error loading attachments:", e);
-        }
-
+        // Set form immediately with whatever data we have (no blocking await)
         setEditForm({
             status: order.fulfillmentStatus || 'pending',
             shippingCompany: order.shippingDetails?.company || '',
             tracking: order.shippingDetails?.trackingNumber || '',
             notes: order.shippingDetails?.notes || '',
-            guideFile: guideFile,
-            guideFileType: guideFileType,
-            guideFileName: guideFileName,
-            productionImages: productionImages,
+            guideFile: order.shippingDetails?.guideFile || '',
+            guideFileType: order.shippingDetails?.guideFileType || '',
+            guideFileName: order.shippingDetails?.guideFileName || '',
+            productionImages: order.shippingDetails?.productionImages || [],
             isLocalDelivery: order.shippingDetails?.isLocalDelivery || false,
             sharePhone: customers.find(c => c.id === order.customerId)?.phone || '',
             address: order.shippingDetails?.address || customers.find(c => c.id === order.customerId)?.address || ''
         });
+
+        // Open modal IMMEDIATELY - no waiting
         setIsEditModalOpen(true);
     };
+
+    // Load attachments lazily AFTER modal opens
+    useEffect(() => {
+        if (!isEditModalOpen || !selectedOrder) return;
+
+        const guideFile = selectedOrder.shippingDetails?.guideFile || '';
+        const productionImages = selectedOrder.shippingDetails?.productionImages || [];
+
+        // Only fetch if we don't already have the data locally
+        if (guideFile && !guideFile.startsWith('[') && productionImages.length > 0) return;
+
+        let cancelled = false;
+        const loadAttachments = async () => {
+            setIsLoadingAttachments(true);
+            try {
+                const attachments = await db.getAttachments(selectedOrder.id);
+                if (cancelled || !attachments || attachments.length === 0) return;
+
+                const guide = attachments.find((a: any) => a.category === 'guide' || a.category === 'general');
+                const prodImgs = attachments.filter((a: any) => a.category === 'production');
+
+                setEditForm(prev => ({
+                    ...prev,
+                    guideFile: (!prev.guideFile || prev.guideFile === '[ATTACHMENT]') && guide ? guide.file_data : prev.guideFile,
+                    guideFileType: (!prev.guideFileType) && guide ? guide.file_type : prev.guideFileType,
+                    guideFileName: (!prev.guideFileName) && guide ? guide.file_name : prev.guideFileName,
+                    productionImages: prev.productionImages.length === 0 && prodImgs.length > 0
+                        ? prodImgs.map((a: any) => a.file_data)
+                        : prev.productionImages
+                }));
+            } catch (e) {
+                console.error("Error loading attachments:", e);
+            } finally {
+                if (!cancelled) setIsLoadingAttachments(false);
+            }
+        };
+
+        loadAttachments();
+        return () => { cancelled = true; };
+    }, [isEditModalOpen, selectedOrder?.id]);
 
     // Handler para subir guía (PDF o imagen)
     // Handler para subir guía (PDF o imagen)
@@ -419,8 +432,8 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                 return;
             }
 
-            console.log(`📤 Guardando pedido ${selectedOrder.folio}: ${selectedOrder.fulfillmentStatus} → ${editForm.status}`);
-            console.log(`📦 Guía: ${editForm.guideFile ? 'SÍ' : 'NO'}, Local: ${editForm.isLocalDelivery ? 'SÍ' : 'NO'}`);
+            logger.log(`📤 Guardando pedido ${selectedOrder.folio}: ${selectedOrder.fulfillmentStatus} → ${editForm.status}`);
+            logger.log(`📦 Guía: ${editForm.guideFile ? 'SÍ' : 'NO'}, Local: ${editForm.isLocalDelivery ? 'SÍ' : 'NO'}`);
 
             // Close modal optimistically
             setIsEditModalOpen(false);
@@ -900,6 +913,11 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                                         />
                                     )}
                                 </div>
+                            ) : isLoadingAttachments ? (
+                                <div className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-sky-200 rounded-xl bg-sky-50/50">
+                                    <i className="fas fa-spinner fa-spin text-2xl text-sky-400 mb-2"></i>
+                                    <span className="text-sm text-sky-600 font-medium">Cargando guía...</span>
+                                </div>
                             ) : (
                                 <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-sky-300 rounded-xl cursor-pointer hover:bg-sky-100 transition-colors">
                                     <i className="fas fa-cloud-upload-alt text-2xl text-sky-400 mb-2"></i>
@@ -941,7 +959,13 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                                 </div>
                             ))}
 
-                            {editForm.productionImages.length < 3 && (
+                            {isLoadingAttachments && editForm.productionImages.length === 0 && (
+                                <div className="flex flex-col items-center justify-center h-20 border-2 border-dashed border-amber-200 rounded-lg bg-amber-50/50">
+                                    <i className="fas fa-spinner fa-spin text-amber-400"></i>
+                                    <span className="text-[9px] text-amber-500 mt-1">Cargando...</span>
+                                </div>
+                            )}
+                            {editForm.productionImages.length < 3 && !isLoadingAttachments && (
                                 <label className="flex flex-col items-center justify-center h-20 border-2 border-dashed border-amber-300 rounded-lg cursor-pointer hover:bg-amber-100 transition-colors">
                                     <i className="fas fa-plus text-amber-400"></i>
                                     <span className="text-[9px] text-amber-600 mt-1">Agregar</span>

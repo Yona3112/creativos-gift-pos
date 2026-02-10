@@ -7,6 +7,7 @@ import {
   Expense, InventoryMovement, MovementType, FulfillmentStatus, ShippingDetails, UserRole,
   PriceHistoryEntry, PaymentDetails, AuditLog, OrderTracking
 } from '../types';
+import { logger } from './logger';
 
 // --- DATABASE CONFIGURATION (DEXIE) ---
 class AppDatabase extends Dexie {
@@ -115,7 +116,7 @@ export class StorageService {
   async init() {
     const isMigrated = localStorage.getItem('dexie_migrated');
     if (!isMigrated) {
-      console.log("Iniciando migración de LocalStorage a IndexedDB...");
+      logger.log("Iniciando migración de LocalStorage a IndexedDB...");
       await this.migrateFromLocalStorage();
       localStorage.setItem('dexie_migrated', 'true');
     }
@@ -147,7 +148,7 @@ export class StorageService {
 
     // OPTIMIZATION: Cleanup in background, do NOT block startup
     // This process can be slow on mobile if there are thousands of sales
-    this.cleanupSalesData().catch(e => console.warn("Background cleanup failed:", e));
+    this.cleanupSalesData().catch(e => logger.warn("Background cleanup failed:", e));
   }
 
   // Safe unique ID generator for mobile/insecure contexts
@@ -178,9 +179,9 @@ export class StorageService {
         // Si no se modificó nada, retornar falso para no disparar escrituras innecesarias
         if (!modified) return false;
       });
-      console.log("✅ Auditoría de peso de ventas finalizada.");
+      logger.log("✅ Auditoría de peso de ventas finalizada.");
     } catch (e) {
-      console.warn("⚠️ Error en cleanupSalesData (Optimizado):", e);
+      logger.warn("⚠️ Error en cleanupSalesData (Optimizado):", e);
     }
   }
 
@@ -241,7 +242,7 @@ export class StorageService {
       await db_engine.auditLogs.put(log);
       this.pushToCloud('audit_logs', log, 'INSERT');
     } catch (e) {
-      console.warn("Could not save audit log", e);
+      logger.warn("Could not save audit log", e);
     }
   }
 
@@ -348,7 +349,7 @@ export class StorageService {
       // Cast to any to bypass strict type checking for legacy table names
       await SyncQueueService.enqueue(tableName as any, action, cleanRecord as any);
     } catch (e) {
-      console.warn(`⚠️ [SyncQueue] Error al encolar en ${tableName}:`, e);
+      logger.warn(`⚠️ [SyncQueue] Error al encolar en ${tableName}:`, e);
     }
   }
 
@@ -370,7 +371,7 @@ export class StorageService {
       const { SupabaseService } = await import('./supabaseService');
       const client = await SupabaseService.getClient();
       if (!client) {
-        console.log('☁️ [Settings] Sin conexión a Supabase, usando settings locales');
+        logger.log('☁️ [Settings] Sin conexión a Supabase, usando settings locales');
         return null;
       }
 
@@ -382,7 +383,7 @@ export class StorageService {
       }
 
       if (!data) {
-        console.log('☁️ [Settings] No hay settings en la nube');
+        logger.log('☁️ [Settings] No hay settings en la nube');
         return null;
       }
 
@@ -390,16 +391,16 @@ export class StorageService {
       const cloudUpdatedAt = data.updatedAt ? new Date(data.updatedAt).getTime() : 0;
       const localUpdatedAt = localSettings.updatedAt ? new Date(localSettings.updatedAt).getTime() : 0;
 
-      console.log(`☁️ [Settings] Comparando: Local=${new Date(localUpdatedAt).toISOString()} vs Cloud=${new Date(cloudUpdatedAt).toISOString()}`);
+      logger.log(`☁️ [Settings] Comparando: Local=${new Date(localUpdatedAt).toISOString()} vs Cloud=${new Date(cloudUpdatedAt).toISOString()}`);
 
       if (cloudUpdatedAt > localUpdatedAt) {
-        console.log('☁️ [Settings] La nube tiene settings más recientes, actualizando local...');
+        logger.log('☁️ [Settings] La nube tiene settings más recientes, actualizando local...');
         const mergedSettings = { ...localSettings, ...data, id: 'main' };
         await db_engine.settings.put(mergedSettings);
-        console.log(`✅ [Settings] Settings sincronizados: themeColor=${mergedSettings.themeColor}, darkMode=${mergedSettings.darkMode}`);
+        logger.log(`✅ [Settings] Settings sincronizados: themeColor=${mergedSettings.themeColor}, darkMode=${mergedSettings.darkMode}`);
         return mergedSettings;
       } else {
-        console.log('☁️ [Settings] Local tiene settings más recientes o iguales');
+        logger.log('☁️ [Settings] Local tiene settings más recientes o iguales');
         return localSettings;
       }
     } catch (e) {
@@ -817,16 +818,16 @@ export class StorageService {
         const { SupabaseService } = await import('./supabaseService');
         const client = await SupabaseService.getClient();
         if (client) {
-          console.log(`📤 Subiendo venta ${newSale.folio} a la nube inmediatamente...`);
+          logger.log(`📤 Subiendo venta ${newSale.folio} a la nube inmediatamente...`);
           const { error } = await client.from('sales').upsert(newSale);
           if (error) {
             console.error('❌ Error al subir venta:', error.message);
           } else {
-            console.log(`✅ Venta ${newSale.folio} subida a la nube`);
+            logger.log(`✅ Venta ${newSale.folio} subida a la nube`);
           }
         }
       } catch (pushErr) {
-        console.warn('⚠️ Push inmediato falló (usará autoSync):', pushErr);
+        logger.warn('⚠️ Push inmediato falló (usará autoSync):', pushErr);
       }
       */
       newSale.updatedAt = this.getLocalNowISO();
@@ -888,7 +889,7 @@ export class StorageService {
     if (fixed > 0) {
       settings.currentTicketNumber = maxTicket;
       await this.saveSettings(settings);
-      console.log(`🔧 Fixed ${fixed} duplicate folios:`, details);
+      logger.log(`🔧 Fixed ${fixed} duplicate folios:`, details);
     }
 
     return { fixed, details };
@@ -1130,7 +1131,7 @@ export class StorageService {
   }
 
   async getAttachments(saleId: string): Promise<any[]> {
-    console.log(`📎 [Attachments] Buscando adjuntos para venta: ${saleId}`);
+    logger.log(`📎 [Attachments] Buscando adjuntos para venta: ${saleId}`);
     try {
       const { SupabaseService } = await import('./supabaseService');
       const client = await SupabaseService.getClient();
@@ -1144,10 +1145,10 @@ export class StorageService {
           console.error("📎 [Attachments] Error al obtener adjuntos:", error);
           throw error;
         }
-        console.log(`📎 [Attachments] Encontrados ${data?.length || 0} adjuntos para ${saleId}`);
+        logger.log(`📎 [Attachments] Encontrados ${data?.length || 0} adjuntos para ${saleId}`);
         return data || [];
       } else {
-        console.warn("📎 [Attachments] No hay cliente Supabase disponible");
+        logger.warn("📎 [Attachments] No hay cliente Supabase disponible");
       }
     } catch (e) {
       console.error("📎 [Attachments] Fallo al obtener adjuntos:", e);
@@ -1375,7 +1376,7 @@ export class StorageService {
               .first();
 
             if (duplicateByContent) {
-              console.log(`⏭️ Omitiendo gasto duplicado por contenido: ${remoteItem.description}`);
+              logger.log(`⏭️ Omitiendo gasto duplicado por contenido: ${remoteItem.description}`);
               continue;
             }
           }
@@ -1428,7 +1429,7 @@ export class StorageService {
         if (!localProduct) {
           // Product doesn't exist locally, add it
           await db_engine.products.put(remoteProduct);
-          console.log(`➕ Nuevo producto desde nube: ${remoteProduct.name}`);
+          logger.log(`➕ Nuevo producto desde nube: ${remoteProduct.name}`);
         } else {
           // Product exists locally - check if we have recent inventory movements
           const lastLocalMovement = productMovementMap.get(remoteProduct.id);
@@ -1443,7 +1444,7 @@ export class StorageService {
               const preservedStock = localProduct.stock;
               const merged = { ...remoteProduct, stock: preservedStock, updatedAt: localProduct.updatedAt };
               await db_engine.products.put(merged);
-              console.log(`🔒 Preservado stock local de "${localProduct.name}": ${preservedStock} (mov. local más reciente)`);
+              logger.log(`🔒 Preservado stock local de "${localProduct.name}": ${preservedStock} (mov. local más reciente)`);
               continue;
             }
           }
@@ -1452,16 +1453,16 @@ export class StorageService {
           if (remoteUpdatedAt && localUpdatedAt) {
             if (remoteUpdatedAt > localUpdatedAt) {
               await db_engine.products.put(remoteProduct);
-              console.log(`☁️ Actualizado desde nube: ${remoteProduct.name}`);
+              logger.log(`☁️ Actualizado desde nube: ${remoteProduct.name}`);
             } else {
-              console.log(`📱 Conservado local (más reciente): ${localProduct.name}`);
+              logger.log(`📱 Conservado local (más reciente): ${localProduct.name}`);
             }
           } else if (remoteUpdatedAt && !localUpdatedAt) {
             // Remote has date, local doesn't - but preserve local stock if we have movements
             if (lastLocalMovement) {
               const merged = { ...remoteProduct, stock: localProduct.stock };
               await db_engine.products.put(merged);
-              console.log(`🔄 Merge: datos de nube + stock local para "${localProduct.name}"`);
+              logger.log(`🔄 Merge: datos de nube + stock local para "${localProduct.name}"`);
             } else {
               await db_engine.products.put(remoteProduct);
             }
@@ -1476,16 +1477,16 @@ export class StorageService {
         const localSale = await db_engine.sales.get(remoteSale.id);
         if (!localSale) {
           await db_engine.sales.put(remoteSale);
-          console.log(`📥 Nuevo pedido descargado: ${remoteSale.folio}`);
+          logger.log(`📥 Nuevo pedido descargado: ${remoteSale.folio}`);
         } else {
           const remoteUpdatedAt = remoteSale.updatedAt ? new Date(remoteSale.updatedAt).getTime() : 0;
           const localUpdatedAt = localSale.updatedAt ? new Date(localSale.updatedAt).getTime() : 0;
 
           if (remoteUpdatedAt > localUpdatedAt) {
             await db_engine.sales.put(remoteSale);
-            console.log(`☁️ Pedido actualizado desde nube: ${remoteSale.folio}`);
+            logger.log(`☁️ Pedido actualizado desde nube: ${remoteSale.folio}`);
           } else {
-            console.log(`🔒 Pedido local ${localSale.folio} conservado (más reciente o igual)`);
+            logger.log(`🔒 Pedido local ${localSale.folio} conservado (más reciente o igual)`);
           }
         }
       }
@@ -1520,7 +1521,7 @@ export class StorageService {
 
     // Settings: USE REMOTE as primary, only keep local counters and credentials
     if (data.settings) {
-      console.log("🔄 [restoreData] Remote settings:", JSON.stringify({
+      logger.log("🔄 [restoreData] Remote settings:", JSON.stringify({
         name: data.settings.name,
         hasLogo: !!data.settings.logo,
         logoLength: data.settings.logo?.length || 0,
@@ -1547,14 +1548,14 @@ export class StorageService {
         if (localSettings.supabaseKey) merged.supabaseKey = localSettings.supabaseKey;
       }
 
-      console.log("🔄 [restoreData] Final merged:", JSON.stringify({
+      logger.log("🔄 [restoreData] Final merged:", JSON.stringify({
         name: merged.name,
         hasLogo: !!merged.logo,
         logoLength: merged.logo?.length || 0,
       }));
 
       await db_engine.settings.put(merged);
-      console.log("✅ [restoreData] Settings saved");
+      logger.log("✅ [restoreData] Settings saved");
     }
   }
 
@@ -1939,6 +1940,9 @@ export class StorageService {
       sale.balancePaymentMethod = 'Transferencia';
     }
 
+    // Merge payment details BEFORE pushing to cloud (avoid double-save mismatch)
+    sale.paymentDetails = { ...sale.paymentDetails, ...paymentDetails };
+
     await db_engine.sales.put(sale);
     this.pushToCloud('sales', sale);
 
@@ -1962,19 +1966,8 @@ export class StorageService {
         this.pushToCloud('credits', credit);
       }
     } catch (e) {
-      console.warn("⚠️ Error liquidando crédito asociado:", e);
+      logger.warn("⚠️ Error liquidando crédito asociado:", e);
     }
-
-    // Actualizar detalles de pago (append note or merge)
-    // Simple merge for now
-    sale.paymentDetails = { ...sale.paymentDetails, ...paymentDetails };
-
-    // CRITICAL: Update timestamp for sync
-    sale.updatedAt = this.getLocalNowISO();
-
-    await db_engine.sales.put(sale);
-    // Redundant immediate push removed
-    // this.pushToCloud('sales', sale);
 
     return sale;
   }
@@ -2049,68 +2042,69 @@ export class StorageService {
     const dateStr = new Date(sale.date).toLocaleString('es-HN');
 
     const itemsHtml = (sale.items || []).map(item => `
-      <tr style="border-bottom: 1px dashed #eee;">
-        <td style="padding: 5px 0;">${item.quantity} x ${item.name}</td>
-        <td style="padding: 5px 0; text-align: right;">L ${(item.price * item.quantity).toFixed(2)}</td>
-      </tr>
-    `).join('');
+        < tr style = "border-bottom: 1px dashed #eee;" >
+          <td style="padding: 5px 0;" > ${item.quantity} x ${item.name} </td>
+            < td style = "padding: 5px 0; text-align: right;" > L ${(item.price * item.quantity).toFixed(2)} </td>
+              </tr>
+                `).join('');
 
     return `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <style>
-          @page { margin: 0; }
-          body { font-family: 'Courier New', Courier, monospace; font-size: 12px; width: ${settings.printerSize === '58mm' ? '180px' : '280px'}; margin: 0 auto; color: #000; padding: 10px; }
-          .center { text-align: center; }
-          .bold { font-weight: bold; }
-          .hr { border-top: 1px dashed #000; margin: 10px 0; }
-          table { width: 100%; border-collapse: collapse; }
-          .footer { font-size: 10px; margin-top: 20px; }
-          .row { display: flex; justify-content: space-between; margin-bottom: 2px; }
-        </style>
-      </head>
-      <body>
-        <div class="center">
+              < !DOCTYPE html >
+                <html>
+                <head>
+                <style>
+                @page { margin: 0; }
+          body { font - family: 'Courier New', Courier, monospace; font - size: 12px; width: ${settings.printerSize === '58mm' ? '180px' : '280px'}; margin: 0 auto; color: #000; padding: 10px; }
+          .center { text - align: center; }
+          .bold { font - weight: bold; }
+          .hr { border - top: 1px dashed #000; margin: 10px 0; }
+          table { width: 100 %; border - collapse: collapse; }
+          .footer { font - size: 10px; margin - top: 20px; }
+          .row { display: flex; justify - content: space - between; margin - bottom: 2px; }
+      </style>
+        </head>
+        < body >
+        <div class="center" >
           ${settings.logo ? `<img src="${settings.logo}" style="max-height: 50px; margin-bottom: 5px;">` : ''}
-          <h2 style="margin: 0; font-size: 14px;">${settings.name}</h2>
-          <p style="margin: 2px 0;">RTN: ${settings.rtn}</p>
-          <p style="margin: 2px 0;">${settings.address}</p>
-          <p style="margin: 2px 0;">Tel: ${settings.phone}</p>
-          <div class="hr"></div>
-          <p class="bold" style="font-size: 14px;">${title}</p>
-          <p class="bold">NO. ${sale.folio}</p>
-          <p style="font-size: 10px;">${dateStr}</p>
-        </div>
+      <h2 style="margin: 0; font-size: 14px;" > ${settings.name} </h2>
+        < p style = "margin: 2px 0;" > RTN: ${settings.rtn} </p>
+          < p style = "margin: 2px 0;" > ${settings.address} </p>
+            < p style = "margin: 2px 0;" > Tel: ${settings.phone} </p>
+              < div class="hr" > </div>
+                < p class="bold" style = "font-size: 14px;" > ${title} </p>
+                  < p class="bold" > NO.${sale.folio} </p>
+                    < p style = "font-size: 10px;" > ${dateStr} </p>
+                      </div>
 
-        <div class="hr"></div>
-        <p><strong>Cliente:</strong> ${customer?.name || 'Consumidor Final'}</p>
-        ${customer?.rtn ? `<p><strong>RTN:</strong> ${customer.rtn}</p>` : ''}
-        
-        <div class="hr"></div>
+                      < div class="hr" > </div>
+                        < p > <strong>Cliente: </strong> ${customer?.name || 'Consumidor Final'}</p >
+                          ${customer?.rtn ? `<p><strong>RTN:</strong> ${customer.rtn}</p>` : ''}
+
+      <div class="hr" > </div>
         <table>
           ${itemsHtml}
-        </table>
+      </table>
 
-        <div class="hr"></div>
-        <div class="bold">
-          <div class="row"><span>Subtotal:</span><span>L ${sale.subtotal.toFixed(2)}</span></div>
-          <div class="row"><span>ISV (15%):</span><span>L ${sale.taxAmount.toFixed(2)}</span></div>
+        < div class="hr" > </div>
+          < div class="bold" >
+            <div class="row" > <span>Subtotal: </span><span>L ${sale.subtotal.toFixed(2)}</span > </div>
+              < div class="row" > <span>ISV(15 %): </span><span>L ${sale.taxAmount.toFixed(2)}</span > </div>
           ${sale.discount > 0 ? `<div class="row"><span>Descuento:</span><span>-L ${sale.discount.toFixed(2)}</span></div>` : ''}
-          
-          <div class="hr" style="border-top-style: solid;"></div>
-          <div class="row" style="font-size: 14px;"><span>TOTAL:</span><span>L ${sale.total.toFixed(2)}</span></div>
+
+      <div class="hr" style = "border-top-style: solid;" > </div>
+        < div class="row" style = "font-size: 14px;" > <span>TOTAL: </span><span>L ${sale.total.toFixed(2)}</span > </div>
           
           ${isOrder ? `
             <div class="hr"></div>
             <div class="row"><span>ANTICIPO:</span><span>L ${(sale.deposit || 0).toFixed(2)}</span></div>
             <div class="row" style="font-size: 14px;"><span>PENDIENTE:</span><span>L ${(sale.balance || 0).toFixed(2)}</span></div>
-          ` : ''}
-        </div>
+          ` : ''
+      }
+      </div>
 
-        <div class="hr"></div>
-        <p><strong>Pago:</strong> ${sale.paymentMethod}</p>
-        ${!isOrder && sale.paymentDetails?.cash ? `<p>Efectivo: L ${sale.paymentDetails.cash.toFixed(2)}</p>` : ''}
+        < div class="hr" > </div>
+          < p > <strong>Pago: </strong> ${sale.paymentMethod}</p >
+            ${!isOrder && sale.paymentDetails?.cash ? `<p>Efectivo: L ${sale.paymentDetails.cash.toFixed(2)}</p>` : ''}
         ${!isOrder && sale.paymentDetails?.cash && sale.paymentDetails.cash >= sale.total ? `<p>Cambio: L ${(sale.paymentDetails.cash - sale.total).toFixed(2)}</p>` : ''}
 
         ${isFiscal ? `
@@ -2120,20 +2114,21 @@ export class StorageService {
             <p><strong>Rango Atzr:</strong><br/>${settings.billingRangeStart} al ${settings.billingRangeEnd}</p>
             <p><strong>Fecha Límite:</strong> ${settings.billingDeadline}</p>
           </div>
-        ` : ''}
+        ` : ''
+      }
 
-        <div class="footer center">
-          <p class="bold">${settings.thanksMessage || '¡Gracias por su compra!'}</p>
-          <div style="font-size: 8px; margin-top: 5px; text-align: left;">
+      <div class="footer center" >
+        <p class="bold" > ${settings.thanksMessage || '¡Gracias por su compra!'} </p>
+          < div style = "font-size: 8px; margin-top: 5px; text-align: left;" >
             ${settings.warrantyPolicy ? `<p><strong>Garantía:</strong> ${settings.warrantyPolicy}</p>` : ''}
             ${settings.returnPolicy ? `<p><strong>Devoluciones:</strong> ${settings.returnPolicy}</p>` : ''}
+      </div>
+        < hr />
+        <p>${isFiscal ? 'ORIGINAL: CLIENTE / COPIA: EMISOR' : 'ESTE NO ES UN DOCUMENTO FISCAL'} </p>
           </div>
-          <hr/>
-          <p>${isFiscal ? 'ORIGINAL: CLIENTE / COPIA: EMISOR' : 'ESTE NO ES UN DOCUMENTO FISCAL'}</p>
-        </div>
-      </body>
-      </html>
-    `;
+          </body>
+          </html>
+            `;
   }
 
   async generateCreditContractHTML(sale: Sale, customer: Customer, settings: CompanySettings): Promise<string> {
@@ -2141,59 +2136,59 @@ export class StorageService {
     const amount = sale.total - (sale.paymentDetails?.credit || 0);
 
     return `
-      <html>
-      <head>
+          < html >
+          <head>
           <style>
-              body { font-family: 'Arial', sans-serif; line-height: 1.5; padding: 40px; color: #333; font-size: 12px; }
-              .header { text-align: center; margin-bottom: 30px; }
-              .logo { max-width: 100px; margin-bottom: 10px; }
-              h1 { text-size: 18px; margin-bottom: 5px; }
-              .section { margin-top: 20px; }
-              .bold { font-weight: bold; }
-              .signature-box { margin-top: 60px; display: flex; justify-content: space-between; }
-              .signature { border-top: 1px solid #000; width: 200px; text-align: center; padding-top: 5px; }
-              @page { size: letter; margin: 20mm; }
-          </style>
-      </head>
-      <body>
-          <div class="header">
-              ${settings.logo ? `<img src="${settings.logo}" class="logo" />` : ''}
-              <h1>CONTRATO DE VENTA AL CRÉDITO</h1>
-              <p>${settings.name} / RTN: ${settings.rtn}</p>
+          body { font - family: 'Arial', sans - serif; line - height: 1.5; padding: 40px; color: #333; font - size: 12px; }
+              .header { text - align: center; margin - bottom: 30px; }
+              .logo { max - width: 100px; margin - bottom: 10px; }
+              h1 { text - size: 18px; margin - bottom: 5px; }
+              .section { margin - top: 20px; }
+              .bold { font - weight: bold; }
+              .signature - box { margin - top: 60px; display: flex; justify - content: space - between; }
+              .signature { border - top: 1px solid #000; width: 200px; text - align: center; padding - top: 5px; }
+      @page { size: letter; margin: 20mm; }
+      </style>
+        </head>
+        < body >
+        <div class="header" >
+          ${settings.logo ? `<img src="${settings.logo}" class="logo" />` : ''}
+      <h1>CONTRATO DE VENTA AL CRÉDITO </h1>
+        < p > ${settings.name} / RTN: ${settings.rtn}</p >
           </div>
 
-          <p>En la ciudad de ${settings.legalCity || '________'}, a los ${today}, entre <strong>${settings.legalOwnerName || settings.name}</strong>, en adelante designado como EL VENDEDOR, y el Sr(a). <strong>${customer.name}</strong>, identificado con Identidad/RTN <strong>${customer.dni || customer.rtn || '________'}</strong>, en adelante designado como EL COMPRADOR, se conviene lo siguiente:</p>
+          < p > En la ciudad de ${settings.legalCity || '________'}, a los ${today}, entre < strong > ${settings.legalOwnerName || settings.name} </strong>, en adelante designado como EL VENDEDOR, y el Sr(a). <strong>${customer.name}</strong >, identificado con Identidad / RTN < strong > ${customer.dni || customer.rtn || '________'} </strong>, en adelante designado como EL COMPRADOR, se conviene lo siguiente:</p >
 
-          <div class="section">
-              <p class="bold text-lg">CLÁUSULAS:</p>
-              <p><strong>PRIMERA (Objeto):</strong> EL VENDEDOR vende a EL COMPRADOR los productos detallados en la factura/ticket No. <strong>${sale.folio}</strong> por un valor total de <strong>L ${sale.total.toFixed(2)}</strong>.</p>
-              
-              <p><strong>SEGUNDA (Condiciones de Pago):</strong> EL COMPRADOR se obliga a pagar el monto financiado de <strong>L ${(sale.total - (sale.deposit || 0)).toFixed(2)}</strong> en ${sale.paymentDetails?.credit ? 'cuotas mensuales' : 'el plazo estipulado'} según el plan de pagos adjunto.</p>
+            <div class="section" >
+              <p class="bold text-lg" > CLÁUSULAS: </p>
+                < p > <strong>PRIMERA(Objeto): </strong> EL VENDEDOR vende a EL COMPRADOR los productos detallados en la factura/ticket No. < strong > ${sale.folio} </strong> por un valor total de <strong>L ${sale.total.toFixed(2)}</strong >.</p>
 
-              <p><strong>TERCERA (Intereses):</strong> EL COMPRADOR acepta una tasa de interés mensual del <strong>${settings.defaultCreditRate}%</strong> sobre saldos pendientes.</p>
+                  < p > <strong>SEGUNDA(Condiciones de Pago): </strong> EL COMPRADOR se obliga a pagar el monto financiado de <strong>L ${(sale.total - (sale.deposit || 0)).toFixed(2)}</strong > en ${sale.paymentDetails?.credit ? 'cuotas mensuales' : 'el plazo estipulado'} según el plan de pagos adjunto.</p>
 
-              <p><strong>CUARTA (Incumplimiento):</strong> El atraso en el pago de una o más cuotas dará derecho a EL VENDEDOR a dar por vencido el plazo y exigir el pago total, además de aplicar los recargos por mora correspondientes.</p>
+                    < p > <strong>TERCERA(Intereses): </strong> EL COMPRADOR acepta una tasa de interés mensual del <strong>${settings.defaultCreditRate}%</strong > sobre saldos pendientes.</p>
 
-              <p><strong>QUINTA (Dominio):</strong> EL VENDEDOR se reserva el dominio de los artículos vendidos hasta que el pago total de la deuda sea cancelado.</p>
+                      < p > <strong>CUARTA(Incumplimiento): </strong> El atraso en el pago de una o más cuotas dará derecho a EL VENDEDOR a dar por vencido el plazo y exigir el pago total, además de aplicar los recargos por mora correspondientes.</p >
+
+                        <p><strong>QUINTA(Dominio): </strong> EL VENDEDOR se reserva el dominio de los artículos vendidos hasta que el pago total de la deuda sea cancelado.</p >
+                          </div>
+
+                          < div class="signature-box" >
+                            <div class="signature" >
+                              <p class="bold" > EL VENDEDOR </p>
+                                < p > ${settings.name} </p>
+                                  </div>
+                                  < div class="signature" >
+                                    <p class="bold" > EL COMPRADOR </p>
+                                      < p > ${customer.name} </p>
+                                        </div>
+                                        </div>
+
+                                        < div style = "margin-top: 40px; font-size: 10px; color: #666; text-align: center;" >
+                                          Documento generado el ${new Date().toLocaleString()} por Creativos Gift POS.
           </div>
-
-          <div class="signature-box">
-              <div class="signature">
-                  <p class="bold">EL VENDEDOR</p>
-                  <p>${settings.name}</p>
-              </div>
-              <div class="signature">
-                  <p class="bold">EL COMPRADOR</p>
-                  <p>${customer.name}</p>
-              </div>
-          </div>
-          
-          <div style="margin-top: 40px; font-size: 10px; color: #666; text-align: center;">
-              Documento generado el ${new Date().toLocaleString()} por Creativos Gift POS.
-          </div>
-      </body>
-      </html>
-    `;
+                                            </body>
+                                            </html>
+                                              `;
   }
 
   async generateCreditPagareHTML(sale: Sale, customer: Customer, settings: CompanySettings): Promise<string> {
@@ -2201,44 +2196,44 @@ export class StorageService {
     const amountFinanced = sale.total - (sale.deposit || 0);
 
     return `
-      <html>
-      <head>
-          <style>
-              body { font-family: 'Times New Roman', serif; line-height: 1.6; padding: 60px; color: #000; font-size: 14px; }
+                                            < html >
+                                            <head>
+                                            <style>
+                                            body { font - family: 'Times New Roman', serif; line - height: 1.6; padding: 60px; color: #000; font - size: 14px; }
               .container { border: 2px solid #000; padding: 40px; position: relative; }
-              h1 { text-align: center; text-decoration: underline; margin-bottom: 30px; font-size: 24px; }
-              .amount-box { position: absolute; top: 20px; right: 20px; font-weight: bold; border: 1px solid #000; padding: 5px 15px; }
-              .text { text-align: justify; }
-              .footer { margin-top: 100px; display: flex; flex-direction: column; align-items: center; }
-              .line { border-top: 1px solid #000; width: 300px; margin-bottom: 5px; }
-              @page { size: letter; margin: 30mm; }
-          </style>
-      </head>
-      <body>
-          <div class="container">
-              <div class="amount-box">POR L ${amountFinanced.toFixed(2)}</div>
-              <h1>PAGARÉ</h1>
-              
-              <div class="text">
-                  <p>Yo, <strong>${customer.name}</strong>, mayor de edad, con número de Identidad/RTN <strong>${customer.dni || customer.rtn || '________'}</strong>, por medio del presente documento, me obligo a pagar de forma incondicional a la orden de <strong>${settings.legalOwnerName || settings.name}</strong>, la suma de <strong>${amountFinanced.toFixed(2)} LEMPIRAS (L ${amountFinanced.toFixed(2)})</strong>.</p>
+              h1 { text - align: center; text - decoration: underline; margin - bottom: 30px; font - size: 24px; }
+              .amount - box { position: absolute; top: 20px; right: 20px; font - weight: bold; border: 1px solid #000; padding: 5px 15px; }
+              .text { text - align: justify; }
+              .footer { margin - top: 100px; display: flex; flex - direction: column; align - items: center; }
+              .line { border - top: 1px solid #000; width: 300px; margin - bottom: 5px; }
+      @page { size: letter; margin: 30mm; }
+      </style>
+        </head>
+        < body >
+        <div class="container" >
+          <div class="amount-box" > POR L ${amountFinanced.toFixed(2)} </div>
+            < h1 > PAGARÉ </h1>
 
-                  <p>Dicho pago se realizará en la ciudad de ${settings.legalCity || '________'}, según el plan de amortización estipulado en la Factura No. <strong>${sale.folio}</strong>. El incumplimiento de cualquier pago facultará al acreedor a exigir el total de la deuda restante.</p>
+            < div class="text" >
+              <p>Yo, <strong>${customer.name} </strong>, mayor de edad, con número de Identidad/RTN < strong > ${customer.dni || customer.rtn || '________'} </strong>, por medio del presente documento, me obligo a pagar de forma incondicional a la orden de <strong>${settings.legalOwnerName || settings.name}</strong >, la suma de < strong > ${amountFinanced.toFixed(2)} LEMPIRAS(L ${amountFinanced.toFixed(2)}) < /strong>.</p >
 
-                  <p>Acepto que cualquier saldo en mora devengará un interés adicional del <strong>${settings.defaultCreditRate}%</strong> mensual. En caso de acción judicial, renuncio expresamente a mi domicilio y me someto a los tribunales competentes que el acreedor elija.</p>
-              </div>
+                <p>Dicho pago se realizará en la ciudad de ${settings.legalCity || '________'}, según el plan de amortización estipulado en la Factura No. < strong > ${sale.folio} </strong>. El incumplimiento de cualquier pago facultará al acreedor a exigir el total de la deuda restante.</p >
 
-              <div class="footer">
-                  <p>En fe de lo cual, firmo el presente en ${settings.legalCity || '________'}, a los ${today}.</p>
-                  <div style="margin-top: 60px;">
-                      <div class="line"></div>
-                      <p><strong>HUELLA Y FIRMA DEL DEUDOR</strong></p>
-                      <p>${customer.name}</p>
-                  </div>
-              </div>
-          </div>
-      </body>
-      </html>
-    `;
+                  <p>Acepto que cualquier saldo en mora devengará un interés adicional del < strong > ${settings.defaultCreditRate}% </strong> mensual. En caso de acción judicial, renuncio expresamente a mi domicilio y me someto a los tribunales competentes que el acreedor elija.</p >
+                    </div>
+
+                    < div class="footer" >
+                      <p>En fe de lo cual, firmo el presente en ${settings.legalCity || '________'}, a los ${today}.</p>
+                        < div style = "margin-top: 60px;" >
+                          <div class="line" > </div>
+                            < p > <strong>HUELLA Y FIRMA DEL DEUDOR < /strong></p >
+                              <p>${customer.name} </p>
+                                </div>
+                                </div>
+                                </div>
+                                </body>
+                                </html>
+                                  `;
   }
 
   async generatePaymentPlanHTML(sale: Sale): Promise<string> {
@@ -2260,35 +2255,35 @@ export class StorageService {
     }
 
     return `
-      <html>
-      <head>
-          <style>
-              body { font-family: sans-serif; padding: 30px; }
-              table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-              th, td { border: 1px solid #ddd; padding: 12px; text-align: center; }
-              th { background-color: #f2f2f2; }
-              .header { text-align: center; margin-bottom: 20px; }
-              .folio { font-weight: bold; color: #4F46E5; }
-              @page { size: portrait; }
-          </style>
-      </head>
-      <body>
-          <div class="header">
-              <h1>Plan de Pagos</h1>
-              <p>Referencia Venta: <span class="folio">${sale.folio}</span></p>
-              <p>Fecha de Venta: ${new Date(sale.date).toLocaleDateString()}</p>
-          </div>
+                                < html >
+                                <head>
+                                <style>
+                                body { font - family: sans - serif; padding: 30px; }
+              table { width: 100 %; border - collapse: collapse; margin - top: 20px; }
+      th, td { border: 1px solid #ddd; padding: 12px; text - align: center; }
+              th { background - color: #f2f2f2; }
+              .header { text - align: center; margin - bottom: 20px; }
+              .folio { font - weight: bold; color: #4F46E5; }
+      @page { size: portrait; }
+      </style>
+        </head>
+        < body >
+        <div class="header" >
+          <h1>Plan de Pagos </h1>
+            < p > Referencia Venta: <span class="folio" > ${sale.folio} </span></p >
+              <p>Fecha de Venta: ${new Date(sale.date).toLocaleDateString()} </p>
+                </div>
 
-          <table>
-              <thead>
-                  <tr>
-                      <th>Cuota #</th>
-                      <th>Fecha de Vencimiento</th>
-                      <th>Monto a Pagar</th>
-                      <th>Estado</th>
-                  </tr>
-              </thead>
-              <tbody>
+                < table >
+                <thead>
+                <tr>
+                <th>Cuota # </th>
+                  < th > Fecha de Vencimiento </th>
+                    < th > Monto a Pagar </th>
+                      < th > Estado </th>
+                      </tr>
+                      </thead>
+                      <tbody>
                   ${installments.map(ins => `
                       <tr>
                           <td>${ins.num}</td>
@@ -2296,16 +2291,17 @@ export class StorageService {
                           <td>L ${ins.amount.toFixed(2)}</td>
                           <td>Pendiente</td>
                       </tr>
-                  `).join('')}
-              </tbody>
-          </table>
-          
-          <div style="margin-top: 30px; border-top: 1px dashed #ccc; padding-top: 10px; font-size: 12px;">
-              <p><strong>Nota:</strong> Los pagos deben realizarse en la fecha estipulada para evitar cargos por mora.</p>
-          </div>
-      </body>
-      </html>
-    `;
+                  `).join('')
+      }
+      </tbody>
+        </table>
+
+        < div style = "margin-top: 30px; border-top: 1px dashed #ccc; padding-top: 10px; font-size: 12px;" >
+          <p><strong>Nota: </strong> Los pagos deben realizarse en la fecha estipulada para evitar cargos por mora.</p >
+            </div>
+            </body>
+            </html>
+              `;
   }
 
   /**
@@ -2353,7 +2349,7 @@ export class StorageService {
           product.updatedAt = this.getLocalNowISO();
           await db_engine.products.put(product);
 
-          details.push(`${product.name}: ${oldStock} → ${expectedStock}`);
+          details.push(`${product.name}: ${oldStock} → ${expectedStock} `);
           fixed++;
         }
       }
@@ -2362,7 +2358,7 @@ export class StorageService {
       const settings = await this.getSettings();
       // Note: Full sync can be triggered manually from settings if needed
 
-      console.log(`✅ Reconciliación completada: ${fixed} productos corregidos`);
+      logger.log(`✅ Reconciliación completada: ${fixed} productos corregidos`);
       return { fixed, details };
     } catch (e: any) {
       console.error('❌ Error en reconciliación:', e);
@@ -2388,7 +2384,7 @@ export class StorageService {
       const { SupabaseService } = await import('./supabaseService');
       await SupabaseService.syncAll();
 
-      console.log(`☁️ Force push: ${products.length} productos subidos a la nube`);
+      logger.log(`☁️ Force push: ${products.length} productos subidos a la nube`);
       return { success: true, count: products.length };
     } catch (e: any) {
       console.error('❌ Error en force push:', e);
@@ -2409,14 +2405,14 @@ export class StorageService {
     for (const p of validProducts) {
       for (let i = 0; i < labelsPerProduct; i++) {
         labels.push(`
-          <div class="label">
-            ${settings.showLogoOnBarcode && settings.logo ? `<img src="${settings.logo}" class="logo" alt="logo">` : ''}
-            <p class="name">${p.name}</p>
-            <svg class="barcode"></svg>
-            <p class="code">${p.code}</p>
-            <p class="price">L ${p.price.toFixed(2)}</p>
-          </div>
-        `);
+        < div class="label" >
+          ${settings.showLogoOnBarcode && settings.logo ? `<img src="${settings.logo}" class="logo" alt="logo">` : ''}
+      <p class="name" > ${p.name} </p>
+        < svg class="barcode" > </svg>
+          < p class="code" > ${p.code} </p>
+            < p class="price" > L ${p.price.toFixed(2)} </p>
+              </div>
+                `);
       }
     }
 
@@ -2425,42 +2421,42 @@ export class StorageService {
     const logoSize = settings.barcodeLogoSize || 10;
 
     return `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3/dist/JsBarcode.all.min.js"></script>
-        <style>
-          @page { size: letter; margin: 10mm; }
-          body { font-family: sans-serif; display: flex; flex-wrap: wrap; gap: 5mm; justify-content: center; }
-          .label { width: ${bw}mm; height: ${bh}mm; border: 1px solid #ccc; padding: 2mm; box-sizing: border-box; text-align: center; display: flex; flex-direction: column; justify-content: center; align-items: center; page-break-inside: avoid; overflow: hidden; }
-          .label .logo { height: ${logoSize}mm; object-fit: contain; margin-bottom: 1mm; }
-          .label .name { font-size: 8px; font-weight: bold; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-          .label .barcode { width: 100%; max-height: ${bh * 0.4}mm; }
-          .label .code { font-size: 7px; margin: 0; color: #555; }
-          .label .price { font-size: 10px; font-weight: bold; margin: 0; color: #000; }
-        </style>
-      </head>
-      <body>
+              < !DOCTYPE html >
+                <html>
+                <head>
+                <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3/dist/JsBarcode.all.min.js" > </script>
+                  <style>
+      @page { size: letter; margin: 10mm; }
+          body { font - family: sans - serif; display: flex; flex - wrap: wrap; gap: 5mm; justify - content: center; }
+          .label { width: ${bw} mm; height: ${bh} mm; border: 1px solid #ccc; padding: 2mm; box - sizing: border - box; text - align: center; display: flex; flex - direction: column; justify - content: center; align - items: center; page -break-inside: avoid; overflow: hidden; }
+          .label.logo { height: ${logoSize} mm; object - fit: contain; margin - bottom: 1mm; }
+          .label.name { font - size: 8px; font - weight: bold; margin: 0; white - space: nowrap; overflow: hidden; text - overflow: ellipsis; max - width: 100 %; }
+          .label.barcode { width: 100 %; max - height: ${bh * 0.4} mm; }
+          .label.code { font - size: 7px; margin: 0; color: #555; }
+          .label.price { font - size: 10px; font - weight: bold; margin: 0; color: #000; }
+      </style>
+        </head>
+        <body>
         ${labels.join('')}
-        <script>
-          document.querySelectorAll('.label').forEach(lbl => {
-            const code = lbl.querySelector('.code')?.textContent || 'N/A';
-            const svg = lbl.querySelector('.barcode');
-            if (svg && code) {
-              JsBarcode(svg, code, { format: "CODE128", height: 30, displayValue: false, margin: 0 });
-            }
-          });
-          // Add print toolbar for preview
-          window.onload = () => {
-            const toolbar = document.createElement('div');
-            toolbar.id = 'print-toolbar';
-            toolbar.innerHTML = '<style>#print-toolbar{position:fixed;top:0;left:0;right:0;background:linear-gradient(135deg,#667eea,#764ba2);padding:12px 20px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 2px 10px rgba(0,0,0,0.2);z-index:9999}@media print{#print-toolbar{display:none!important}}body{padding-top:60px!important}</style><span style="color:white;font-weight:bold;font-size:14px">📋 Previsualización - Etiquetas</span><div style="display:flex;gap:10px"><button onclick="document.getElementById(\\'print-toolbar\\').style.display=\\'none\\';window.print();document.getElementById(\\'print-toolbar\\').style.display=\\'flex\\';" style="background:white;color:#667eea;border:none;padding:8px 20px;border-radius:6px;font-weight:bold;cursor:pointer">🖨️ Imprimir</button><button onclick="window.close();" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.3);padding:8px 16px;border-radius:6px;cursor:pointer">✕ Cerrar</button></div>';
-            document.body.insertBefore(toolbar, document.body.firstChild);
-          };
-        </script>
-      </body>
-      </html>
-    `;
+      <script>
+        document.querySelectorAll('.label').forEach(lbl => {
+          const code = lbl.querySelector('.code')?.textContent || 'N/A';
+          const svg = lbl.querySelector('.barcode');
+          if (svg && code) {
+            JsBarcode(svg, code, { format: "CODE128", height: 30, displayValue: false, margin: 0 });
+          }
+        });
+      // Add print toolbar for preview
+      window.onload = () => {
+        const toolbar = document.createElement('div');
+        toolbar.id = 'print-toolbar';
+        toolbar.innerHTML = '<style>#print-toolbar{position:fixed;top:0;left:0;right:0;background:linear-gradient(135deg,#667eea,#764ba2);padding:12px 20px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 2px 10px rgba(0,0,0,0.2);z-index:9999}@media print{#print-toolbar{display:none!important}}body{padding-top:60px!important}</style><span style="color:white;font-weight:bold;font-size:14px">📋 Previsualización - Etiquetas</span><div style="display:flex;gap:10px"><button onclick="document.getElementById(\\'print - toolbar\\').style.display=\\'none\\';window.print();document.getElementById(\\'print - toolbar\\').style.display=\\'flex\\';" style="background:white;color:#667eea;border:none;padding:8px 20px;border-radius:6px;font-weight:bold;cursor:pointer">🖨️ Imprimir</button><button onclick="window.close();" style="background:rgba(255,255,255,0.2);color:white;border:1px solid rgba(255,255,255,0.3);padding:8px 16px;border-radius:6px;cursor:pointer">✕ Cerrar</button></div>';
+        document.body.insertBefore(toolbar, document.body.firstChild);
+      };
+      </script>
+        </body>
+        </html>
+          `;
   }
 
   /**
@@ -2480,60 +2476,61 @@ export class StorageService {
     const productCards = productsToShow.map(p => {
       const cat = categories.find(c => c.id === p.categoryId);
       return `
-        <div class="product-card">
+        < div class="product-card" >
           ${p.image ? `<img src="${p.image}" alt="${p.name}" class="product-img">` : `<div class="product-img placeholder"><i class="fas fa-box"></i></div>`}
-          <h3>${p.name}</h3>
-          <p class="cat">${cat?.name || 'General'}</p>
-          <p class="price">L ${p.price.toFixed(2)}</p>
+      <h3>${p.name} </h3>
+        < p class="cat" > ${cat?.name || 'General'} </p>
+          < p class="price" > L ${p.price.toFixed(2)} </p>
           ${p.stock <= p.minStock ? '<span class="low-stock">¡Pocas unidades!</span>' : ''}
-        </div>
-      `;
+      </div>
+        `;
     }).join('');
 
     return `
-      <!DOCTYPE html>
-      <html lang="es">
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Catálogo - ${settings.name}</title>
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-        <style>
-          * { box-sizing: border-box; margin: 0; padding: 0; }
-          body { font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); min-height: 100vh; padding: 20px; }
-          .header { text-align: center; padding: 20px; margin-bottom: 20px; }
-          .header img { max-height: 80px; margin-bottom: 10px; }
-          .header h1 { font-size: 24px; color: #333; }
-          .header p { color: #666; font-size: 14px; }
-          .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 15px; max-width: 1200px; margin: 0 auto; }
-          .product-card { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.1); transition: transform 0.2s; }
-          .product-card:hover { transform: translateY(-5px); }
-          .product-img { width: 100%; height: 120px; object-fit: cover; background: #f0f0f0; display: flex; align-items: center; justify-content: center; color: #ccc; font-size: 30px; }
-          .product-img.placeholder { background: linear-gradient(135deg, #e0e0e0, #f5f5f5); }
-          .product-card h3 { font-size: 13px; padding: 10px 10px 0; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-          .product-card .cat { font-size: 10px; color: #888; padding: 0 10px; }
-          .product-card .price { font-size: 16px; font-weight: bold; color: #4F46E5; padding: 5px 10px 10px; }
-          .product-card .low-stock { display: block; background: #fee2e2; color: #ef4444; font-size: 9px; text-align: center; padding: 3px; font-weight: bold; }
-          .footer { text-align: center; margin-top: 30px; color: #888; font-size: 12px; }
-          .footer a { color: #25D366; text-decoration: none; font-weight: bold; }
-        </style>
+        < !DOCTYPE html >
+          <html lang="es" >
+            <head>
+            <meta charset="UTF-8" >
+              <meta name="viewport" content = "width=device-width, initial-scale=1.0" >
+                <title>Catálogo - ${settings.name} </title>
+                  < link rel = "stylesheet" href = "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" >
+                    <style>
+          * { box- sizing: border - box; margin: 0; padding: 0;
+    }
+          body { font - family: 'Segoe UI', sans - serif; background: linear - gradient(135deg, #f5f7fa 0 %, #c3cfe2 100 %); min - height: 100vh; padding: 20px; }
+          .header { text - align: center; padding: 20px; margin - bottom: 20px; }
+          .header img { max - height: 80px; margin - bottom: 10px; }
+          .header h1 { font - size: 24px; color: #333; }
+          .header p { color: #666; font - size: 14px; }
+          .grid { display: grid; grid - template - columns: repeat(auto - fill, minmax(160px, 1fr)); gap: 15px; max - width: 1200px; margin: 0 auto; }
+          .product - card { background: white; border - radius: 12px; overflow: hidden; box - shadow: 0 4px 15px rgba(0, 0, 0, 0.1); transition: transform 0.2s; }
+          .product - card:hover { transform: translateY(-5px); }
+          .product - img { width: 100 %; height: 120px; object - fit: cover; background: #f0f0f0; display: flex; align - items: center; justify - content: center; color: #ccc; font - size: 30px; }
+          .product - img.placeholder { background: linear - gradient(135deg, #e0e0e0, #f5f5f5); }
+          .product - card h3 { font - size: 13px; padding: 10px 10px 0; color: #333; white - space: nowrap; overflow: hidden; text - overflow: ellipsis; }
+          .product - card.cat { font - size: 10px; color: #888; padding: 0 10px; }
+          .product - card.price { font - size: 16px; font - weight: bold; color: #4F46E5; padding: 5px 10px 10px; }
+          .product - card.low - stock { display: block; background: #fee2e2; color: #ef4444; font - size: 9px; text - align: center; padding: 3px; font - weight: bold; }
+          .footer { text - align: center; margin - top: 30px; color: #888; font - size: 12px; }
+          .footer a { color: #25D366; text - decoration: none; font - weight: bold; }
+    </style>
       </head>
-      <body>
-        <div class="header">
-          ${settings.logo ? `<img src="${settings.logo}" alt="Logo">` : ''}
-          <h1>${settings.name}</h1>
-          <p>📍 ${settings.address} | 📞 ${settings.phone}</p>
+      < body >
+      <div class="header" >
+        ${settings.logo ? `<img src="${settings.logo}" alt="Logo">` : ''}
+    <h1>${settings.name} </h1>
+      <p>📍 ${settings.address} | 📞 ${settings.phone} </p>
         </div>
-        <div class="grid">
+        < div class="grid" >
           ${productCards}
-        </div>
-        <div class="footer">
-          <p>¿Interesado? <a href="https://wa.me/${settings.whatsappNumber?.replace(/\D/g, '')}"><i class="fab fa-whatsapp"></i> Escríbenos por WhatsApp</a></p>
-          <p style="margin-top: 10px;">Catálogo generado por ${settings.name}</p>
-        </div>
-      </body>
-      </html>
-    `;
+    </div>
+      < div class="footer" >
+        <p>¿Interesado ? <a href="https://wa.me/${settings.whatsappNumber?.replace(/\D/g, '')}" > <i class="fab fa-whatsapp" > </i> Escríbenos por WhatsApp</a > </p>
+          < p style = "margin-top: 10px;" > Catálogo generado por ${settings.name} </p>
+            </div>
+            </body>
+            </html>
+              `;
   }
   /**
    * PROFITABILITY REPORT

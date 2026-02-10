@@ -19,6 +19,8 @@ export const Credits: React.FC<CreditsProps> = ({ settings }) => {
     const [payMethod, setPayMethod] = useState<'Efectivo' | 'Tarjeta' | 'Transferencia'>('Efectivo');
     const [payRef, setPayRef] = useState('');
 
+    const [isSaving, setIsSaving] = useState(false);
+
     // Liquidation State
     const [liquidationModalOpen, setLiquidationModalOpen] = useState(false);
     const [liquidationDetails, setLiquidationDetails] = useState<any>(null);
@@ -339,7 +341,8 @@ export const Credits: React.FC<CreditsProps> = ({ settings }) => {
     };
 
     const handlePayment = async () => {
-        if (!selectedCredit) return;
+        if (!selectedCredit || isSaving) return;
+        setIsSaving(true);
         const amount = parseFloat(payAmount);
         const remaining = selectedCredit.totalAmount - selectedCredit.paidAmount;
 
@@ -368,6 +371,7 @@ export const Credits: React.FC<CreditsProps> = ({ settings }) => {
         setPayAmount('');
         setPayRef('');
         setPayMethod('Efectivo');
+        setIsSaving(false);
         showToast("Pago registrado y recibo generado.", "success");
     };
 
@@ -383,13 +387,15 @@ export const Credits: React.FC<CreditsProps> = ({ settings }) => {
     };
 
     const confirmLiquidation = async () => {
-        if (selectedCredit && liquidationDetails) {
+        if (selectedCredit && liquidationDetails && !isSaving) {
+            setIsSaving(true);
             await db.liquidateCredit(selectedCredit.id, {
                 finalAmount: liquidationDetails.remainingToPay,
                 savings: liquidationDetails.savings
             });
             setLiquidationModalOpen(false);
             refresh();
+            setIsSaving(false);
             showToast("Crédito liquidado exitosamente.", "success");
         }
     };
@@ -600,7 +606,7 @@ export const Credits: React.FC<CreditsProps> = ({ settings }) => {
                         </button>
                     </div>
 
-                    <Button className="w-full" onClick={handlePayment}>Confirmar Pago e Imprimir</Button>
+                    <Button className="w-full" onClick={handlePayment} disabled={isSaving}>{isSaving ? <><i className="fas fa-spinner fa-spin mr-2"></i>Procesando...</> : 'Confirmar Pago e Imprimir'}</Button>
                 </div>
             </Modal>
 
@@ -643,7 +649,7 @@ export const Credits: React.FC<CreditsProps> = ({ settings }) => {
 
                         <div className="flex gap-3">
                             <Button variant="secondary" className="flex-1" onClick={() => setLiquidationModalOpen(false)}>Cancelar</Button>
-                            <Button variant="success" className="flex-1" onClick={confirmLiquidation} icon="check-double">Confirmar Liquidación</Button>
+                            <Button variant="success" className="flex-1" onClick={confirmLiquidation} icon={isSaving ? undefined : "check-double"} disabled={isSaving}>{isSaving ? <><i className="fas fa-spinner fa-spin mr-2"></i>Procesando...</> : 'Confirmar Liquidación'}</Button>
                         </div>
                     </div>
                 )}

@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { db } from './services/storageService';
 import { SyncQueueService } from './services/syncQueueService';
+import { logger } from './services/logger';
 import { User, Product, Category, Customer, Sale, Branch, CreditAccount, Promotion, CompanySettings, Quote, Consumable, Expense } from './types';
 import { Layout } from './components/Layout';
 import { Dashboard } from './pages/Dashboard';
@@ -80,15 +81,15 @@ function App() {
           const { SupabaseService } = await import('./services/supabaseService');
 
           // Always pull on startup or manual sync
-          console.log("🔄 Sincronizando: Descargando cambios de la nube...");
+          logger.log("🔄 Sincronizando: Descargando cambios de la nube...");
           await SupabaseService.pullDelta();
 
           // Only push if requested
           if (shouldPushToCloud) {
             setIsSyncing(true);
-            console.log(`🔄 Sincronizando: Subiendo cambios (${forceFull ? 'FULL' : 'DELTA'})...`);
+            logger.log(`🔄 Sincronizando: Subiendo cambios (${forceFull ? 'FULL' : 'DELTA'})...`);
             await SupabaseService.syncAll(forceFull);
-            console.log("✅ Sincronización completa (Pull + Push).");
+            logger.log("✅ Sincronización completa (Pull + Push).");
 
             // Update last backup date
             const now = new Date().toISOString();
@@ -141,7 +142,7 @@ function App() {
 
     // 2. Process queue whenever network comes back online or app becomes visible
     const handleSyncTrigger = () => {
-      console.log("🌐 [App] Disparador de sincronización (Online/Focus), procesando cola...");
+      logger.log("🌐 [App] Disparador de sincronización (Online/Focus), procesando cola...");
       SyncQueueService.auditAndEnqueueUnsynced();
       SyncQueueService.processQueue();
     };
@@ -170,9 +171,9 @@ function App() {
   useEffect(() => {
     const initApp = async () => {
       try {
-        console.log("🛠️ App: Iniciando base de datos...");
+        logger.log("🛠️ App: Iniciando base de datos...");
         await db.init();
-        console.log("🛠️ App: Cargando datos locales...");
+        logger.log("🛠️ App: Cargando datos locales...");
         await refreshData(false);
 
         const storedUser = localStorage.getItem('creativos_gift_currentUser');
@@ -194,7 +195,7 @@ function App() {
       } catch (e) {
         console.error("❌ Error inicializando app:", e);
       } finally {
-        console.log("🛠️ App: Inicialización finalizada (loading -> false)");
+        logger.log("🛠️ App: Inicialización finalizada (loading -> false)");
         setLoading(false);
       }
     };
@@ -247,11 +248,11 @@ function App() {
       if (user) {
         // Guard: Only pull once per session to prevent duplicate data
         if (hasPulledFromCloud.current) {
-          console.log("⚡ Pull ya realizado esta sesión, omitiendo...");
+          logger.log("⚡ Pull ya realizado esta sesión, omitiendo...");
           return;
         }
 
-        console.log("🚀 Usuario ingresó al sistema. Descargando TODOS los datos de la nube...");
+        logger.log("🚀 Usuario ingresó al sistema. Descargando TODOS los datos de la nube...");
         const sett = await db.getSettings();
 
         // Solo sincronizar si Supabase está configurado
@@ -263,11 +264,11 @@ function App() {
             const { SupabaseService } = await import('./services/supabaseService');
 
             // 1. Pull changes from cloud
-            console.log("⬇️ Descargando cambios desde la nube (pullDelta)...");
+            logger.log("⬇️ Descargando cambios desde la nube (pullDelta)...");
             const changed = await SupabaseService.pullDelta();
 
             // 2. [SYNC ON STARTUP] Verify integrity
-            console.log("🔍 [StartupSync] Verificando integridad local vs remota...");
+            logger.log("🔍 [StartupSync] Verificando integridad local vs remota...");
             const remoteCounts = await SupabaseService.getRemoteCounts();
             const localData = await db.getAllData();
 
@@ -289,16 +290,16 @@ function App() {
             // Also check for any unsynced records via timestamp
             const unsyncedCount = await db.getUnsyncedCount();
             if (unsyncedCount > 0) {
-              console.log(`⚠️ [StartupSync] Se detectaron ${unsyncedCount} registros sin sincronizar.`);
+              logger.log(`⚠️ [StartupSync] Se detectaron ${unsyncedCount} registros sin sincronizar.`);
               needsPush = true;
             }
 
             if (needsPush) {
-              console.log("📤 [StartupSync] Realizando carga masiva de recuperación (FORCED FULL SYNC)...");
+              logger.log("📤 [StartupSync] Realizando carga masiva de recuperación (FORCED FULL SYNC)...");
               await SupabaseService.syncAll(true);
-              console.log("✅ [StartupSync] Recuperación completada.");
+              logger.log("✅ [StartupSync] Recuperación completada.");
             } else {
-              console.log("✅ [StartupSync] Integridad verificada. Local y Nube coinciden.");
+              logger.log("✅ [StartupSync] Integridad verificada. Local y Nube coinciden.");
             }
 
             // Update lastBackupDate on successful sync
@@ -335,7 +336,7 @@ function App() {
       try {
         const sett = await db.getSettings();
         if (!sett?.supabaseUrl || !sett?.supabaseKey) {
-          console.log('📡 [Realtime] Supabase no configurado');
+          logger.log('📡 [Realtime] Supabase no configurado');
           return;
         }
 
@@ -349,7 +350,7 @@ function App() {
         // --- SALES ---
         cleanupFunctions.push(onRealtimeChange('sales', (payload) => {
           const { action, data } = payload;
-          console.log(`📡 [Realtime:Sales] Action: ${action}`, data?.folio);
+          logger.log(`📡 [Realtime:Sales] Action: ${action}`, data?.folio);
 
           setSales(prevSales => {
             if (action === 'DELETE') {
@@ -373,7 +374,7 @@ function App() {
         // --- PRODUCTS ---
         cleanupFunctions.push(onRealtimeChange('products', (payload) => {
           const { action, data } = payload;
-          console.log(`📡 [Realtime:Products] Action: ${action}`, data?.name);
+          logger.log(`📡 [Realtime:Products] Action: ${action}`, data?.name);
 
           setProducts(prev => {
             if (action === 'DELETE') return prev.filter(p => p.id !== payload.id);
@@ -438,11 +439,11 @@ function App() {
 
         // --- SETTINGS ---
         cleanupFunctions.push(onRealtimeChange('settings', (newSettings) => {
-          console.log('📡 [Realtime:Settings] Global Update');
+          logger.log('📡 [Realtime:Settings] Global Update');
           setSettings(newSettings);
         }));
 
-        console.log('📡 [Realtime] Suscripción global iniciada (Sales, Products, Customers, Settings)');
+        logger.log('📡 [Realtime] Suscripción global iniciada (Sales, Products, Customers, Settings)');
       } catch (error) {
         console.warn('⚠️ [Realtime] Error al configurar:', error);
       }
@@ -454,7 +455,7 @@ function App() {
       cleanupFunctions.forEach(fn => fn());
       import('./services/realtimeService').then(({ unsubscribeFromRealtime }) => {
         unsubscribeFromRealtime();
-        console.log('📡 [Realtime] Suscripción terminada');
+        logger.log('📡 [Realtime] Suscripción terminada');
       });
     };
   }, [user?.id]);

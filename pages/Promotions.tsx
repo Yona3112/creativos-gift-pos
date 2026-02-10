@@ -13,6 +13,7 @@ export const Promotions: React.FC = () => {
 
     const [scopeType, setScopeType] = useState<'all' | 'category' | 'product'>('all');
     const [selectedItems, setSelectedItems] = useState<string[]>([]);
+    const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
         loadData();
@@ -31,6 +32,8 @@ export const Promotions: React.FC = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (isSaving) return;
+        setIsSaving(true);
 
         const updatedPromo: Partial<Promotion> = {
             ...formData,
@@ -39,9 +42,15 @@ export const Promotions: React.FC = () => {
             categoryIds: scopeType === 'category' ? selectedItems : undefined
         };
 
-        await db.savePromotion(updatedPromo as Promotion);
-        await loadData();
-        setIsModalOpen(false);
+        try {
+            await db.savePromotion(updatedPromo as Promotion);
+            await loadData();
+            setIsModalOpen(false);
+        } catch (error: any) {
+            console.error('Error al guardar promoción:', error);
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const handleEdit = (promo: Promotion) => {
@@ -60,9 +69,13 @@ export const Promotions: React.FC = () => {
     };
 
     const toggleActive = async (promo: Promotion) => {
-        const updated = { ...promo, active: !promo.active };
-        await db.savePromotion(updated);
-        await loadData();
+        try {
+            const updated = { ...promo, active: !promo.active };
+            await db.savePromotion(updated);
+            await loadData();
+        } catch (error: any) {
+            console.error('Error al cambiar estado:', error);
+        }
     };
 
     const handleItemSelection = (id: string) => {
@@ -220,7 +233,7 @@ export const Promotions: React.FC = () => {
                         <span className="text-sm text-gray-700">Promoción Activa Inmediatamente</span>
                     </div>
 
-                    <Button type="submit" className="w-full">Guardar Promoción</Button>
+                    <Button type="submit" className="w-full" disabled={isSaving}>{isSaving ? <><i className="fas fa-spinner fa-spin mr-2"></i>Guardando...</> : 'Guardar Promoción'}</Button>
                 </form>
             </Modal>
         </div>

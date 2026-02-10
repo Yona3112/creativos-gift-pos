@@ -26,6 +26,7 @@ export const Expenses: React.FC<ExpensesProps> = ({ user, onUpdate, settings }) 
     });
 
     const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; id: string }>({ open: false, id: '' });
+    const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => { load(); }, []);
 
@@ -40,12 +41,21 @@ export const Expenses: React.FC<ExpensesProps> = ({ user, onUpdate, settings }) 
             showToast("Sesión no válida. Por favor, reingrese.", "error");
             return;
         }
-        await db.saveExpense({ ...formData, userId: user.id } as Expense);
-        await load();
-        onUpdate();
-        setIsModalOpen(false);
-        setFormData({ categoryId: 'Otros', paymentMethod: 'Efectivo', amount: 0, description: '', date: getLocalTodayISO() });
-        showToast("Gasto registrado exitosamente.", "success");
+        if (isSaving) return;
+        setIsSaving(true);
+        try {
+            await db.saveExpense({ ...formData, userId: user.id } as Expense);
+            await load();
+            onUpdate();
+            setIsModalOpen(false);
+            setFormData({ categoryId: 'Otros', paymentMethod: 'Efectivo', amount: 0, description: '', date: getLocalTodayISO() });
+            showToast("Gasto registrado exitosamente.", "success");
+        } catch (error: any) {
+            console.error('Error al guardar gasto:', error);
+            showToast(error.message || 'Error al guardar el gasto', 'error');
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const handleDelete = async (id: string) => {
@@ -130,7 +140,7 @@ export const Expenses: React.FC<ExpensesProps> = ({ user, onUpdate, settings }) 
                             {['Efectivo', 'Tarjeta', 'Transferencia'].map(m => <option key={m} value={m}>{m}</option>)}
                         </select>
                     </div>
-                    <Button type="submit" className="w-full">Guardar Gasto</Button>
+                    <Button type="submit" className="w-full" disabled={isSaving}>{isSaving ? <><i className="fas fa-spinner fa-spin mr-2"></i>Guardando...</> : 'Guardar Gasto'}</Button>
                 </form>
             </Modal>
 

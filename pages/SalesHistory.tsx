@@ -41,6 +41,7 @@ export const SalesHistory: React.FC<SalesHistoryProps> = ({ sales, customers, us
     const [passwordError, setPasswordError] = useState('');
     const [refundType, setRefundType] = useState<'cash' | 'creditNote'>('creditNote');
     const [refundMethod, setRefundMethod] = useState<'Efectivo' | 'Tarjeta' | 'Transferencia'>('Efectivo');
+    const [isCancelling, setIsCancelling] = useState(false);
 
     // Refund confirm state
     const [refundConfirm, setRefundConfirm] = useState<{ open: boolean; id: string }>({ open: false, id: '' });
@@ -114,6 +115,7 @@ export const SalesHistory: React.FC<SalesHistoryProps> = ({ sales, customers, us
     };
 
     const handleConfirmCancel = async () => {
+        if (isCancelling) return;
         const correctPassword = settings.masterPassword || "admin123";
 
         if (adminPassword !== correctPassword) {
@@ -127,16 +129,24 @@ export const SalesHistory: React.FC<SalesHistoryProps> = ({ sales, customers, us
         }
 
         if (selectedSale) {
-            await db.cancelSale(selectedSale.id, user?.id || 'system', refundType, refundMethod);
-            const msg = refundType === 'cash'
-                ? `Venta anulada. Reembolso via ${refundMethod} registrado.`
-                : 'Venta anulada. Se ha generado una Nota de Crédito.';
-            showToast(msg, 'success');
-            onUpdate();
-            const cn = await db.getCreditNotes();
-            setCreditNotes(cn);
-            setCancelModalOpen(false);
-            setDetailsOpen(false);
+            setIsCancelling(true);
+            try {
+                await db.cancelSale(selectedSale.id, user?.id || 'system', refundType, refundMethod);
+                const msg = refundType === 'cash'
+                    ? `Venta anulada. Reembolso via ${refundMethod} registrado.`
+                    : 'Venta anulada. Se ha generado una Nota de Crédito.';
+                showToast(msg, 'success');
+                onUpdate();
+                const cn = await db.getCreditNotes();
+                setCreditNotes(cn);
+                setCancelModalOpen(false);
+                setDetailsOpen(false);
+            } catch (error: any) {
+                console.error('Error al anular venta:', error);
+                showToast(error.message || 'Error al anular la venta', 'error');
+            } finally {
+                setIsCancelling(false);
+            }
         }
     };
 
@@ -565,10 +575,10 @@ export const SalesHistory: React.FC<SalesHistoryProps> = ({ sales, customers, us
                         <Button
                             variant="danger"
                             onClick={handleConfirmCancel}
-                            disabled={isAnularDisabled}
+                            disabled={isAnularDisabled || isCancelling}
                             className="w-full py-4 text-lg"
                         >
-                            CONFIRMAR ANULACIÓN
+                            {isCancelling ? <><i className="fas fa-spinner fa-spin mr-2"></i>Procesando Anulación...</> : 'CONFIRMAR ANULACIÓN'}
                         </Button>
                         <Button variant="secondary" onClick={() => setCancelModalOpen(false)} className="w-full">
                             Regresar (Cancelar)

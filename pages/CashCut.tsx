@@ -40,8 +40,11 @@ export const CashCut: React.FC = () => {
   // Multiple Cut State
   const [forceNewCut, setForceNewCut] = useState(false);
   const [lastCutDate, setLastCutDate] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
 
   const loadData = async () => {
+    setIsLoading(true);
     const uncutData = await db.getUncutData();
     const { sales, creditPayments, cashExpenses, cashRefunds, lastCutDate: lastDate } = uncutData;
 
@@ -99,6 +102,7 @@ export const CashCut: React.FC = () => {
     const cutToday = cuts.find(c => c.date.startsWith(today));
     setTodayCutExists(!!cutToday);
     setTodayCutData(cutToday || null);
+    setIsLoading(false);
   };
 
   useEffect(() => {
@@ -122,6 +126,8 @@ export const CashCut: React.FC = () => {
   };
 
   const confirmCashCut = async () => {
+    if (isSaving) return;
+    setIsSaving(true);
     const cut: ICashCut = {
       id: `cut-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       date: new Date().toISOString(),
@@ -146,6 +152,7 @@ export const CashCut: React.FC = () => {
     setDenominations({ bill500: 0, bill200: 0, bill100: 0, bill50: 0, bill20: 0, bill10: 0, bill5: 0, bill2: 0, bill1: 0, coins: 0 });
     setCashCutConfirm(false);
     setForceNewCut(false);
+    setIsSaving(false);
     loadData(); // Reload to show in history
   };
 
@@ -311,6 +318,7 @@ export const CashCut: React.FC = () => {
     <div className="max-w-5xl mx-auto space-y-6 pb-10">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-800">Corte de Caja</h1>
+        {isLoading && <span className="text-sm text-gray-400 animate-pulse"><i className="fas fa-spinner fa-spin mr-1"></i>Cargando datos...</span>}
         <div className="text-right">
           <p className="text-xs text-gray-500 font-bold uppercase">Período del Corte</p>
           <p className="text-[10px] text-primary font-bold">
@@ -552,7 +560,7 @@ export const CashCut: React.FC = () => {
         cancelText="Cancelar"
         variant="warning"
         onConfirm={confirmCashCut}
-        onCancel={() => setCashCutConfirm(false)}
+        onCancel={() => { setCashCutConfirm(false); setIsSaving(false); }}
       />
 
       <Modal isOpen={revertModalOpen} onClose={() => setRevertModalOpen(false)} title="Revertir Corte de Caja" size="sm">

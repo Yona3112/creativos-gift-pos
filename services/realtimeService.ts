@@ -6,6 +6,7 @@
 
 import { db, db_engine } from './storageService';
 import { SyncQueueService } from './syncQueueService';
+import { logger } from './logger';
 import { Sale, Product, Customer, InventoryMovement, Quote, CreditAccount } from '../types';
 
 // Type for Realtime payload
@@ -54,7 +55,7 @@ function broadcastChange(table: string, payload: any) {
  */
 export async function subscribeToRealtime(): Promise<void> {
     if (isSubscribed) {
-        console.log('📡 [Realtime] Ya conectado.');
+        logger.log('📡 [Realtime] Ya conectado.');
         return;
     }
 
@@ -63,18 +64,18 @@ export async function subscribeToRealtime(): Promise<void> {
         const client = await SupabaseService.getClient();
 
         if (!client) {
-            console.warn('⚠️ [Realtime] Cliente Supabase no disponible');
+            logger.warn('⚠️ [Realtime] Cliente Supabase no disponible');
             return;
         }
 
-        console.log('🔌 [Realtime] Iniciando conexión multiplexada...');
+        logger.log('🔌 [Realtime] Iniciando conexión multiplexada...');
 
         // SINGLE CHANNEL for all tables (Efficient for Supabase Quotas)
         const channel = client.channel('global-app-changes');
 
         // 1. SALES / ORDERS
         channel.on('postgres_changes', { event: '*', schema: 'public', table: 'sales' }, async (payload: RealtimePayload<Sale>) => {
-            console.log(`📡 [RT:Sales] ${payload.eventType} ID: ${payload.new?.id || payload.old?.id}`);
+            logger.log(`📡 [RT:Sales] ${payload.eventType} ID: ${payload.new?.id || payload.old?.id}`);
             await handleGenericUpdate('sales', payload, db_engine.sales);
         });
 
@@ -96,14 +97,14 @@ export async function subscribeToRealtime(): Promise<void> {
 
         // 5. SETTINGS
         channel.on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, async (payload: RealtimePayload<any>) => {
-            console.log(`📡 [RT:Settings] Evento recibido: ${payload.eventType}`, payload.new);
+            logger.log(`📡 [RT:Settings] Evento recibido: ${payload.eventType}`, payload.new);
             if (payload.eventType === 'UPDATE' && payload.new) {
-                console.log(`📡 [RT:Settings] Guardando settings: themeColor=${payload.new.themeColor}, darkMode=${payload.new.darkMode}`);
+                logger.log(`📡 [RT:Settings] Guardando settings: themeColor=${payload.new.themeColor}, darkMode=${payload.new.darkMode}`);
                 await db.saveSettings(payload.new);
                 broadcastChange('settings', payload.new);
-                console.log(`✅ [RT:Settings] Settings propagados a la app`);
+                logger.log(`✅ [RT:Settings] Settings propagados a la app`);
             } else if (payload.eventType === 'INSERT' && payload.new) {
-                console.log(`📡 [RT:Settings] INSERT detectado, también guardando...`);
+                logger.log(`📡 [RT:Settings] INSERT detectado, también guardando...`);
                 await db.saveSettings(payload.new);
                 broadcastChange('settings', payload.new);
             }
@@ -149,7 +150,7 @@ export async function subscribeToRealtime(): Promise<void> {
                         sale.updatedAt = payload.new.created_at;
                         sale._synced = true; // It came from cloud via tracking
                         await db_engine.sales.put(sale);
-                        console.log(`🚚 [RT:Tracking] Pedido ${sale.folio} movido a ${sale.fulfillmentStatus}`);
+                        logger.log(`🚚 [RT:Tracking] Pedido ${sale.folio} movido a ${sale.fulfillmentStatus}`);
                         // Notify UI
                         broadcastChange('sales', { action: 'UPDATE', data: sale });
                     }
@@ -162,11 +163,11 @@ export async function subscribeToRealtime(): Promise<void> {
 
         globalSubscription = channel.subscribe(async (status: string) => {
             if (status === 'SUBSCRIBED') {
-                console.log('✅ [Realtime] Conectado y escuchando cambios (Multiplexado)');
+                logger.log('✅ [Realtime] Conectado y escuchando cambios (Multiplexado)');
                 isSubscribed = true;
                 retryCount = 0;
             } else if (status === 'CLOSED') {
-                console.log('❌ [Realtime] Desconectado');
+                logger.log('❌ [Realtime] Desconectado');
                 isSubscribed = false;
             } else if (status === 'CHANNEL_ERROR') {
                 isSubscribed = false;
@@ -176,7 +177,7 @@ export async function subscribeToRealtime(): Promise<void> {
                 if (retryCount <= maxRetries) {
                     const delay = Math.min(1000 * Math.pow(2, retryCount), 30000);
                     setTimeout(() => {
-                        console.log(`🔄 [Realtime] Reintentando conexión en ${delay}ms...`);
+                        logger.log(`🔄 [Realtime] Reintentando conexión en ${delay}ms...`);
                         subscribeToRealtime();
                     }, delay);
                 } else {
@@ -220,7 +221,7 @@ async function handleGenericUpdate(tableName: string, payload: RealtimePayload<a
         if (eventType === 'DELETE') {
             if (oldRecord && oldRecord.id) {
                 await dbTable.delete(oldRecord.id);
-                console.log(`🗑️ [RT:${tableName}] Eliminado: ${oldRecord.id}`);
+                logger.log(`🗑️ [RT:${tableName}] Eliminado: ${oldRecord.id}`);
                 broadcastChange(tableKey, { action: 'DELETE', id: oldRecord.id });
             }
             return;
@@ -228,14 +229,14 @@ async function handleGenericUpdate(tableName: string, payload: RealtimePayload<a
 
         // INSERT / UPDATE
         if (!newRecord || !isValidPayload(tableName, newRecord)) {
-            console.warn(`⚠️ [RT:${tableName}] Payload inválido ignorado:`, newRecord);
+            logger.warn(`⚠️ [RT:${tableName}] Payload inválido ignorado:`, newRecord);
             return;
         }
 
         // Conflict Protection: Don't overwrite if we have pending local changes for this specific ID
         const hasPending = await SyncQueueService.hasPendingChanges(tableName === 'inventoryHistory' ? 'inventory_history' : tableName, newRecord.id);
         if (hasPending) {
-            console.log(`🛡️ [RT:${tableName}] Ignorando update Cloud para ${newRecord.id} porque hay cambios locales pendientes.`);
+            logger.log(`🛡️ [RT:${tableName}] Ignorando update Cloud para ${newRecord.id} porque hay cambios locales pendientes.`);
             return;
         }
 
@@ -246,8 +247,30 @@ async function handleGenericUpdate(tableName: string, payload: RealtimePayload<a
         // Handle special fields
         if (tableName === 'sales' && !Array.isArray(newRecord.items)) newRecord.items = [];
 
+        // CRITICAL: Field-level protection for sales financial data
+        // Prevents balance regression from multi-device conflicts
+        if (tableName === 'sales' && newRecord.id) {
+            const existingSale = await dbTable.get(newRecord.id);
+            if (existingSale) {
+                const localPaid = (existingSale.balance === 0 || existingSale.balance === null) && existingSale.balancePaymentDate;
+                const cloudUnpaid = newRecord.balance && newRecord.balance > 0;
+
+                if (localPaid && cloudUnpaid) {
+                    // Local says PAID, cloud says UNPAID → protect local financial fields
+                    newRecord.balance = 0;
+                    newRecord.deposit = existingSale.deposit;
+                    newRecord.isOrder = existingSale.isOrder;
+                    newRecord.balancePaid = existingSale.balancePaid;
+                    newRecord.balancePaymentDate = existingSale.balancePaymentDate;
+                    newRecord.balancePaymentMethod = existingSale.balancePaymentMethod;
+                    newRecord.paymentDetails = existingSale.paymentDetails;
+                    logger.log(`🛡️ [RT:sales] Protegido balance=0 para ${existingSale.folio} (cloud quería revertir a balance=${newRecord.balance})`);
+                }
+            }
+        }
+
         await dbTable.put(newRecord);
-        console.log(`🔄 [RT:${tableName}] Sincronizado: ${newRecord.folio || newRecord.name || newRecord.id}`);
+        logger.log(`🔄 [RT:${tableName}] Sincronizado: ${newRecord.folio || newRecord.name || newRecord.id}`);
 
         broadcastChange(tableKey, { action: eventType, data: newRecord });
 
@@ -267,7 +290,7 @@ export async function unsubscribeFromRealtime(): Promise<void> {
     }
     globalSubscription = null;
     isSubscribed = false;
-    console.log('🔌 [Realtime] Desconectado manualmente');
+    logger.log('🔌 [Realtime] Desconectado manualmente');
 }
 
 /**

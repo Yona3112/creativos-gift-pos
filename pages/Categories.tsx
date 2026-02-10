@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Category, ICONS, CompanySettings, User, UserRole } from '../types';
 import { Card, Button, Input, Modal, ConfirmDialog, PasswordConfirmDialog, showToast } from '../components/UIComponents';
 import { db } from '../services/storageService';
+import { logger } from '../services/logger';
 
 interface CategoriesProps {
     categories: Category[];
@@ -78,7 +79,7 @@ export const Categories: React.FC<CategoriesProps> = ({ categories, onUpdate, se
                 });
                 setIsShareModalOpen(false);
             } catch (err) {
-                console.log('Share canceled', err);
+                logger.log('Share canceled', err);
             }
         } else {
             navigator.clipboard.writeText(text).then(() => {
@@ -305,7 +306,7 @@ export const Categories: React.FC<CategoriesProps> = ({ categories, onUpdate, se
                 });
                 setIsShareModalOpen(false);
             } catch (error) {
-                console.log("Error al compartir", error);
+                logger.log("Error al compartir", error);
                 downloadFile(file, fileName);
             }
         } else {

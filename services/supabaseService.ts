@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { db, db_engine } from './storageService';
+import { logger } from './logger';
 
 export class SupabaseService {
     private static client: any = null;
@@ -25,7 +26,7 @@ export class SupabaseService {
                     // Errores de Timeout o saturación (Reintentables)
                     if (error.code === 'PGRST002' || status === 503 || status === 502 || error.message?.includes('timeout') || error.code === '57014') {
                         const delay = Math.pow(2, attempt) * 1500 + (Math.random() * 1000);
-                        console.warn(`🔄 [${tableName}] Reintentando en ${Math.round(delay)}ms (Intento ${attempt + 1}/${maxRetries})...`);
+                        logger.warn(`🔄 [${tableName}] Reintentando en ${Math.round(delay)}ms (Intento ${attempt + 1}/${maxRetries})...`);
                         await new Promise(r => setTimeout(r, delay));
                         lastError = error;
                         continue;
@@ -51,7 +52,7 @@ export class SupabaseService {
                     (err.message && err.message.includes('unique constraint'));
 
                 if (isConflict) {
-                    console.log(`🛡️ [${tableName}] Conflicto detectado en catch. Deteniendo intentos.`);
+                    logger.log(`🛡️ [${tableName}] Conflicto detectado en catch. Deteniendo intentos.`);
                     throw { ...err, isConflict: true };
                 }
 
@@ -163,7 +164,7 @@ export class SupabaseService {
                     if (sd.productionImages) delete sd.productionImages;
                     cleaned.shippingDetails = sd;
                 } catch (e) {
-                    console.warn("⚠️ Falló limpieza de shippingDetails:", e);
+                    logger.warn("⚠️ Falló limpieza de shippingDetails:", e);
                 }
             }
         } else {
@@ -197,7 +198,7 @@ export class SupabaseService {
                 // Saneamiento Estricto Centralizado
                 const sanitizedChunk = chunk.map(record => this.sanitizeRecord(tableName, record));
 
-                console.log(`📦 [${tableName}] Enviando lote ${Math.floor(i / chunkSize) + 1} (${chunk.length} registros)...`);
+                logger.log(`📦 [${tableName}] Enviando lote ${Math.floor(i / chunkSize) + 1} (${chunk.length} registros)...`);
 
                 await this.requestWithRetry<any>(
                     () => client.from(this.getCloudTableName(tableName)).upsert(sanitizedChunk),
@@ -210,7 +211,7 @@ export class SupabaseService {
             } catch (err: any) {
                 // Handle batch conflict (extremely rare with individual upserts but possible in future)
                 if (err.isConflict || err.status === 409 || err.code === '23505') {
-                    console.warn(`⚠️ [${tableName}] Lote contiene conflictos. Saltando para permitir avance.`);
+                    logger.warn(`⚠️ [${tableName}] Lote contiene conflictos. Saltando para permitir avance.`);
                     continue;
                 }
                 console.error(`❌ [${tableName}] Lote fallido permanentemente. Deteniendo sincronización de esta tabla.`);
@@ -240,7 +241,7 @@ export class SupabaseService {
                         autoRefreshToken: true
                     }
                 });
-                console.log('✅ [Supabase] Cliente creado con soporte Realtime');
+                logger.log('✅ [Supabase] Cliente creado con soporte Realtime');
                 return this.client;
             } catch (e) {
                 console.error("Error al crear cliente Supabase desde env:", e);
@@ -262,7 +263,7 @@ export class SupabaseService {
                         autoRefreshToken: true
                     }
                 });
-                console.log('✅ [Supabase] Cliente creado desde settings con soporte Realtime');
+                logger.log('✅ [Supabase] Cliente creado desde settings con soporte Realtime');
                 return this.client;
             } catch (e) {
                 console.error("Error al crear cliente Supabase:", e);
@@ -323,13 +324,13 @@ export class SupabaseService {
                 return false;
             }
 
-            console.log(`📡 [Push] ${cloudTable} synced: ${record.id || record.folio || 'Record'}`);
+            logger.log(`📡 [Push] ${cloudTable} synced: ${record.id || record.folio || 'Record'}`);
             return true;
         } catch (err: any) {
             // Re-throw if it's a structural conflict we should handle
             if (err.status === 409 || err.code === '23505') throw err;
 
-            console.warn(`⚠️ [Push] Fallo crítico en ${tableName}:`, err);
+            logger.warn(`⚠️ [Push] Fallo crítico en ${tableName}:`, err);
             return false;
         }
     }
@@ -362,7 +363,7 @@ export class SupabaseService {
 
                 if (!error) counts[table] = count || 0;
             } catch (e) {
-                console.warn(`⚠️ [Counts] Fallo al contar ${table}:`, e);
+                logger.warn(`⚠️ [Counts] Fallo al contar ${table}:`, e);
             }
         }
         return counts;
@@ -381,10 +382,10 @@ export class SupabaseService {
             if (error) {
                 console.error(`❌ [Delete] Error eliminando en ${cloudTable}:`, error.message);
             } else {
-                console.log(`✅ Eliminado de ${cloudTable}: ${id}`);
+                logger.log(`✅ Eliminado de ${cloudTable}: ${id}`);
             }
         } catch (e) {
-            console.warn(`⚠️ Error en deleteFromTable(${tableName}):`, e);
+            logger.warn(`⚠️ Error en deleteFromTable(${tableName}):`, e);
         }
     }
 
@@ -410,7 +411,7 @@ export class SupabaseService {
             const { error: deleteError } = await client.from(tableName).delete().neq('id', '___impossible___');
             if (deleteError) throw deleteError;
 
-            console.log(`🗑️ Eliminados ${records.length} registros de ${tableName} en Supabase`);
+            logger.log(`🗑️ Eliminados ${records.length} registros de ${tableName} en Supabase`);
             return { success: true, count: records.length };
         } catch (e: any) {
             console.error(`❌ Error limpiando ${tableName}:`, e);
@@ -419,7 +420,7 @@ export class SupabaseService {
     }
 
     static async syncAll(forceFull: boolean = false) {
-        console.log(`🔄 Iniciando sincronización ${forceFull ? 'TOTAL' : 'INCREMENTAL'}...`);
+        logger.log(`🔄 Iniciando sincronización ${forceFull ? 'TOTAL' : 'INCREMENTAL'}...`);
         const client = await this.getClient();
         if (!client) {
             console.error("❌ Supabase no está configurado - no hay cliente");
@@ -473,12 +474,12 @@ export class SupabaseService {
                 });
 
                 if (recordsToSync.length === 0) {
-                    console.log(`⏭️ ${table.name}: sin cambios nuevos`);
+                    logger.log(`⏭️ ${table.name}: sin cambios nuevos`);
                     results[table.name] = 'Sin cambios';
                     continue;
                 }
 
-                console.log(`📤 Sincronizando ${table.name}: ${recordsToSync.length} registros...`);
+                logger.log(`📤 Sincronizando ${table.name}: ${recordsToSync.length} registros...`);
 
                 try {
                     // Small delay between tables to avoid overloading PostgREST
@@ -498,7 +499,7 @@ export class SupabaseService {
                                 successCount++;
                             } catch (err: any) {
                                 if (err.isConflict || err.status === 409 || err.code === '23505') {
-                                    console.log(`ℹ️ [users] Conclicto detectado para ${(user as any).email || 'id: ' + (user as any).id} (ya existe). Saltando.`);
+                                    logger.log(`ℹ️ [users] Conclicto detectado para ${(user as any).email || 'id: ' + (user as any).id} (ya existe). Saltando.`);
                                     successCount++; // Count as success to allow sync to proceed
                                 } else {
                                     allTablesSuccess = false;
@@ -575,7 +576,7 @@ export class SupabaseService {
             throw new Error(errorMsg);
         }
 
-        console.log("🏁 Sincronización completa sin errores críticos:", results);
+        logger.log("🏁 Sincronización completa sin errores críticos:", results);
         return results;
     }
 
@@ -638,7 +639,7 @@ export class SupabaseService {
         };
 
         // Debug: Log what settings we got from cloud
-        console.log("☁️ [pullAll] Settings from cloud:", {
+        logger.log("☁️ [pullAll] Settings from cloud:", {
             hasSettings: !!dexieData.settings,
             hasLogo: !!dexieData.settings?.logo,
             logoLength: dexieData.settings?.logo?.length || 0,
@@ -676,9 +677,9 @@ export class SupabaseService {
             const sevenDaysAgo = new Date();
             sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
             lastSync = db.getLocalNowISO(sevenDaysAgo);
-            console.log(`📥 PullDelta: Primera sincronización - usando últimos 7 días`);
+            logger.log(`📥 PullDelta: Primera sincronización - usando últimos 7 días`);
         } else {
-            console.log(`📥 PullDelta: Usando marca de tiempo: ${lastSync}`);
+            logger.log(`📥 PullDelta: Usando marca de tiempo: ${lastSync}`);
         }
 
         // CLOCK DRIFT PROTECTION: Aumentado a 60 min (1 hora) para máxima robustez.
@@ -719,7 +720,7 @@ export class SupabaseService {
 
                 // Si aún así falla la tabla de ventas por timeout, intentamos con solo 50 (último recurso)
                 if (data === null && table === 'sales') {
-                    console.warn("⚠️ Reintentando ventas con límite reducido (50 registros)...");
+                    logger.warn("⚠️ Reintentando ventas con límite reducido (50 registros)...");
                     const reducedData = await this.requestWithRetry<any[]>(
                         () => client.from(table).select(columns).gte('updatedAt', driftedSync).limit(50),
                         table
@@ -734,14 +735,14 @@ export class SupabaseService {
                 if (data && data.length > 0) {
                     results[table] = data;
                     totalChanges += data.length;
-                    console.log(`📥 ${table}: ${data.length} cambios detectados desde ${driftedSync}`);
+                    logger.log(`📥 ${table}: ${data.length} cambios detectados desde ${driftedSync}`);
                 } else if (data === null) {
                     // Si la tabla falló permanentemente (null), salimos del loop para no saturar más el gateway
-                    console.warn(`🛑 [pullDelta] Abortando sincronización parcial por saturación en tabla ${table}`);
+                    logger.warn(`🛑 [pullDelta] Abortando sincronización parcial por saturación en tabla ${table}`);
                     break;
                 }
             } catch (err) {
-                console.warn(`⚠️ Excepción en pullDelta para tabla ${table}:`, err);
+                logger.warn(`⚠️ Excepción en pullDelta para tabla ${table}:`, err);
             }
         }
 
@@ -797,10 +798,10 @@ export class SupabaseService {
                             delete cloudData.deviceId;
 
                             await table.update('main', cloudData);
-                            console.log("⚙️ [Settings] Ajustes actualizados desde nube (vía mergeDelta)");
+                            logger.log("⚙️ [Settings] Ajustes actualizados desde nube (vía mergeDelta)");
                         } else {
                             await table.put(cloudData);
-                            console.log("⚙️ [Settings] Ajustes inicializados desde nube (vía mergeDelta)");
+                            logger.log("⚙️ [Settings] Ajustes inicializados desde nube (vía mergeDelta)");
                         }
                         continue;
                     }
@@ -811,6 +812,26 @@ export class SupabaseService {
 
                     // Saneamiento estricto centralizado al recibir de la nube
                     const sanitizedItem = this.sanitizeRecord(map.dexie, item);
+
+                    // CRITICAL: Field-level protection for sales financial data
+                    // Prevents balance regression from multi-device conflicts (last-writer-wins)
+                    // Scenario: Device A pays order (balance=0), Device B updates status (pushes old balance>0)
+                    if (map.dexie === 'sales' && existing) {
+                        const localPaid = (existing.balance === 0 || existing.balance === null) && existing.balancePaymentDate;
+                        const cloudUnpaid = sanitizedItem.balance && sanitizedItem.balance > 0;
+
+                        if (localPaid && cloudUnpaid) {
+                            // Local says PAID, cloud says UNPAID → protect local financial fields
+                            sanitizedItem.balance = 0;
+                            sanitizedItem.deposit = existing.deposit;
+                            sanitizedItem.isOrder = existing.isOrder;
+                            sanitizedItem.balancePaid = existing.balancePaid;
+                            sanitizedItem.balancePaymentDate = existing.balancePaymentDate;
+                            sanitizedItem.balancePaymentMethod = existing.balancePaymentMethod;
+                            sanitizedItem.paymentDetails = existing.paymentDetails;
+                            logger.log(`🛡️ [sales] Protegido balance=0 para ${existing.folio} (cloud quería revertir a balance=${item.balance})`);
+                        }
+                    }
 
                     if (existing) {
                         const remoteU = sanitizedItem.updatedAt ? new Date(sanitizedItem.updatedAt).getTime() : 0;
@@ -827,16 +848,16 @@ export class SupabaseService {
                             await table.put(sanitizedItem);
 
                             if (map.dexie === 'sales') {
-                                console.log(`✅ [sales] Actualizado desde nube: ${sanitizedItem.folio || sanitizedItem.id} (${sanitizedItem.fulfillmentStatus})`);
+                                logger.log(`✅ [sales] Actualizado desde nube: ${sanitizedItem.folio || sanitizedItem.id} (${sanitizedItem.fulfillmentStatus})`);
                             }
                         } else {
-                            console.log(`🔒 [${map.dexie}] Conflicto: Se conserva cambio local (unsynced) de ${existing.id}`);
+                            logger.log(`🔒 [${map.dexie}] Conflicto: Se conserva cambio local (unsynced) de ${existing.id}`);
                         }
                     } else {
                         sanitizedItem._synced = true;
                         await table.put(sanitizedItem);
                         if (map.dexie === 'sales') {
-                            console.log(`🆕 [sales] Nuevo desde nube: ${sanitizedItem.folio || sanitizedItem.id} → ${sanitizedItem.fulfillmentStatus || 'N/A'}`);
+                            logger.log(`🆕 [sales] Nuevo desde nube: ${sanitizedItem.folio || sanitizedItem.id} → ${sanitizedItem.fulfillmentStatus || 'N/A'}`);
                         }
                     }
                 }

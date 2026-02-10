@@ -11,6 +11,7 @@ export const Branches: React.FC = () => {
     const [deleteConfirm, setDeleteConfirm] = useState(false);
     const [isAdmin, setIsAdmin] = useState(false);
     const [masterPassword, setMasterPassword] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
         const loadData = async () => {
@@ -29,9 +30,17 @@ export const Branches: React.FC = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        await db.saveBranch({ ...formData, active: formData.active ?? true } as Branch);
-        setBranches(await db.getBranches());
-        setIsModalOpen(false);
+        if (isSaving) return;
+        setIsSaving(true);
+        try {
+            await db.saveBranch({ ...formData, active: formData.active ?? true } as Branch);
+            setBranches(await db.getBranches());
+            setIsModalOpen(false);
+        } catch (error: any) {
+            console.error('Error al guardar sucursal:', error);
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const handleDelete = async () => {
@@ -98,7 +107,7 @@ export const Branches: React.FC = () => {
                     </div>
                     <div className="flex gap-3 pt-4 border-t">
                         {formData.id && <Button type="button" variant="danger" onClick={handleDelete}><i className="fas fa-trash mr-2"></i>Eliminar</Button>}
-                        <Button type="submit" className="flex-1"><i className="fas fa-save mr-2"></i>{formData.id ? 'Guardar Cambios' : 'Crear Sucursal'}</Button>
+                        <Button type="submit" className="flex-1" disabled={isSaving}><i className="fas fa-save mr-2"></i>{isSaving ? 'Guardando...' : formData.id ? 'Guardar Cambios' : 'Crear Sucursal'}</Button>
                     </div>
                 </form>
             </Modal>

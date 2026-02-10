@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Product, Customer, Category, CartItem, Sale, User, PaymentDetails, Quote, LoyaltyLevel, FulfillmentStatus, CompanySettings } from '../types';
 import { Button, Input, Modal, Badge, Alert, showToast } from '../components/UIComponents';
 import { db } from '../services/storageService';
+import { logger } from '../services/logger';
 
 interface POSProps {
     products: Product[];
@@ -323,7 +324,7 @@ export const POS: React.FC<POSProps> = ({
                 oscillator.start();
                 oscillator.stop(audioContext.currentTime + 0.2);
             }
-        } catch (e) { console.log('Audio not supported'); }
+        } catch (e) { logger.log('Audio not supported'); }
     };
 
     const addToCart = (product: Product) => {
@@ -1144,6 +1145,7 @@ export const POS: React.FC<POSProps> = ({
                     <Input label="Nombre Completo" value={newCustomerData.name} onChange={e => setNewCustomerData({ ...newCustomerData, name: e.target.value })} required />
                     <Input label="Teléfono" value={newCustomerData.phone} onChange={e => setNewCustomerData({ ...newCustomerData, phone: e.target.value })} required />
                     <Input label="RTN (Opcional)" value={newCustomerData.rtn} onChange={e => setNewCustomerData({ ...newCustomerData, rtn: e.target.value })} />
+                    <Input label="Dirección" value={newCustomerData.address || ''} onChange={e => setNewCustomerData({ ...newCustomerData, address: e.target.value })} placeholder="Colonia, Calle..." />
                     <Button className="w-full" onClick={handleSaveCustomer}>Registrar y Seleccionar</Button>
                 </div>
             </Modal>
