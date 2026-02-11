@@ -631,7 +631,7 @@ function App() {
       case 'salesHistory': return <SalesHistory sales={sales} customers={customers} users={users} onUpdate={() => refreshData(true)} user={user} branchId={currentBranch?.id} onLoadQuote={(quote) => { setQuoteToLoad(quote); setPage('pos'); }} settings={safeSettings} />;
       case 'customers': return <Customers customers={customers} onUpdate={() => refreshData(true)} user={user} settings={safeSettings} />;
       case 'credits': return <Credits settings={safeSettings} onUpdate={() => refreshData(true)} />;
-      case 'reports': return <Reports sales={sales} products={products} customers={customers} categories={categories} />;
+      case 'reports': return <Reports sales={sales} products={products} customers={customers} categories={categories} onRefresh={() => refreshData(true)} />;
       case 'sarBooks': return <SARBooks />;
       case 'settings': return <Settings onUpdate={() => refreshData(true)} />;
       case 'cashCut': return <CashCut onUpdate={() => refreshData(true)} />;

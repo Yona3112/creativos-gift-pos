@@ -14,9 +14,10 @@ interface ReportsProps {
     products: Product[];
     customers: Customer[];
     categories: Category[];
+    onRefresh?: () => void;
 }
 
-export const Reports: React.FC<ReportsProps> = ({ sales: allSales, products: allProducts, customers: allCustomers, categories: allCategories }) => {
+export const Reports: React.FC<ReportsProps> = ({ sales: allSales, products: allProducts, customers: allCustomers, categories: allCategories, onRefresh }) => {
     // Helper para fechas locales
     const getLocalDate = (date?: Date) => {
         if (!date) return db.getLocalTodayISO();
@@ -32,14 +33,14 @@ export const Reports: React.FC<ReportsProps> = ({ sales: allSales, products: all
     const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'customers' | 'cashflow'>('overview');
     const [credits, setCredits] = useState<CreditAccount[]>([]);
 
-    // Load credits for cash flow report
+    // Load credits for cash flow report — refresh whenever sales change
     useEffect(() => {
         const loadCredits = async () => {
             const c = await db.getCredits();
             setCredits(c);
         };
         loadCredits();
-    }, []);
+    }, [allSales]);
 
     // 1. FILTRADO DE VENTAS POR RANGO
     const filteredSales = useMemo(() => {
@@ -50,8 +51,11 @@ export const Reports: React.FC<ReportsProps> = ({ sales: allSales, products: all
     }, [allSales, startDate, endDate]);
 
     // 2. CÁLCULO DE MÉTRICAS (KPIs)
+    // Fix: Separar ventas cobradas vs pedidos pendientes
     const stats = useMemo(() => {
         let totalSales = 0;
+        let totalCollected = 0; // Dinero realmente recibido
+        let totalPendingBalance = 0; // Saldos pendientes de pedidos
         let totalCost = 0;
         let totalTax = 0;
         let totalDiscount = 0;
@@ -61,12 +65,22 @@ export const Reports: React.FC<ReportsProps> = ({ sales: allSales, products: all
             totalTax += (s.taxAmount || 0);
             totalDiscount += (s.discount || 0);
 
+            // Calcular lo realmente cobrado
+            if (s.isOrder && (s.balance || 0) > 0 && s.fulfillmentStatus !== 'delivered') {
+                // Pedido con saldo pendiente: solo contar el depósito
+                totalCollected += (s.deposit || 0);
+                totalPendingBalance += (s.balance || 0);
+            } else {
+                // Venta completa o pedido ya entregado/liquidado
+                totalCollected += (s.total || 0);
+            }
+
             (s.items || []).forEach(item => {
                 totalCost += ((item.cost || 0) * (item.quantity || 0));
             });
         });
 
-        const netRevenue = Number((totalSales - totalTax).toFixed(2));
+        const netRevenue = Number((totalCollected - totalTax).toFixed(2));
         let totalProfit = Number((netRevenue - totalCost).toFixed(2));
 
         // Fix: If there are no sales, utility should be 0 (requested by user)
@@ -74,10 +88,12 @@ export const Reports: React.FC<ReportsProps> = ({ sales: allSales, products: all
             totalProfit = 0;
         }
 
-        const ticketAverage = filteredSales.length > 0 ? Number((totalSales / filteredSales.length).toFixed(2)) : 0;
+        const ticketAverage = filteredSales.length > 0 ? Number((totalCollected / filteredSales.length).toFixed(2)) : 0;
 
         return {
             totalSales: Number(totalSales.toFixed(2)),
+            totalCollected: Number(totalCollected.toFixed(2)),
+            totalPendingBalance: Number(totalPendingBalance.toFixed(2)),
             totalProfit: Number(totalProfit.toFixed(2)),
             ticketAverage,
             count: filteredSales.length,
@@ -109,10 +125,15 @@ export const Reports: React.FC<ReportsProps> = ({ sales: allSales, products: all
     }, [filteredSales, startDate, endDate]);
 
     // 4. DATOS DE RENTABILIDAD POR PRODUCTO
+    // Fix: Distribuir descuento global proporcionalmente entre items
     const productPerformance = useMemo(() => {
         const map: Record<string, any> = {};
 
         filteredSales.forEach(sale => {
+            // Calcular ratio de descuento para distribuir proporcionalmente
+            const saleItemsTotal = (sale.items || []).reduce((sum, i) => sum + i.price * i.quantity, 0);
+            const discountRatio = saleItemsTotal > 0 ? (sale.discount || 0) / saleItemsTotal : 0;
+
             (sale.items || []).forEach(item => {
                 const id = item.id;
                 if (!map[id]) {
@@ -123,8 +144,10 @@ export const Reports: React.FC<ReportsProps> = ({ sales: allSales, products: all
                         cost: 0
                     };
                 }
+                const grossRevenue = item.price * item.quantity;
+                const itemDiscount = grossRevenue * discountRatio;
                 map[id].qty += item.quantity;
-                map[id].revenue += (item.price * item.quantity);
+                map[id].revenue += (grossRevenue - itemDiscount); // Ingreso neto después de descuento
                 map[id].cost += (item.cost || 0) * item.quantity;
             });
         });
@@ -177,6 +200,13 @@ export const Reports: React.FC<ReportsProps> = ({ sales: allSales, products: all
         link.click();
     };
 
+    // Manual refresh handler
+    const handleRefresh = () => {
+        if (onRefresh) onRefresh();
+        // Also reload credits immediately
+        db.getCredits().then(c => setCredits(c));
+    };
+
     return (
         <div className="space-y-6 pb-20">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -184,20 +214,32 @@ export const Reports: React.FC<ReportsProps> = ({ sales: allSales, products: all
                     <h1 className="text-3xl font-black text-gray-800 tracking-tight">Reportes</h1>
                     <p className="text-gray-500 font-medium">Análisis de tu negocio</p>
                 </div>
-                <div className="flex items-center gap-2 bg-white p-2 rounded-2xl shadow-sm border border-gray-100">
-                    <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-40 border-0 bg-transparent" />
-                    <span className="text-gray-400 font-bold">al</span>
-                    <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-40 border-0 bg-transparent" />
+                <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 bg-white p-2 rounded-2xl shadow-sm border border-gray-100">
+                        <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-40 border-0 bg-transparent" />
+                        <span className="text-gray-400 font-bold">al</span>
+                        <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-40 border-0 bg-transparent" />
+                    </div>
+                    <Button variant="secondary" size="sm" onClick={handleRefresh} icon="sync-alt">Actualizar</Button>
                 </div>
             </div>
 
             {/* KPIs */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard title="Ventas Brutas" value={`L ${stats.totalSales.toLocaleString()}`} icon="chart-line" color="bg-indigo-600" />
-                <StatCard title="Utilidad Neta Est." value={`L ${stats.totalProfit.toLocaleString()}`} icon="coins" color="bg-green-600" />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                <StatCard title="Ventas Totales" value={`L ${stats.totalSales.toLocaleString()}`} icon="chart-line" color="bg-indigo-600" />
+                <StatCard title="Cobrado" value={`L ${stats.totalCollected.toLocaleString()}`} icon="hand-holding-usd" color="bg-green-600" />
+                <StatCard title="Utilidad Neta Est." value={`L ${stats.totalProfit.toLocaleString()}`} icon="coins" color="bg-emerald-600" />
                 <StatCard title="Ticket Promedio" value={`L ${stats.ticketAverage.toFixed(2)}`} icon="tag" color="bg-orange-500" />
                 <StatCard title="Transacciones" value={stats.count} icon="receipt" color="bg-purple-600" />
             </div>
+            {stats.totalPendingBalance > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-center gap-3">
+                    <i className="fas fa-exclamation-triangle text-amber-500"></i>
+                    <span className="text-sm text-amber-800 font-medium">
+                        <strong>L {stats.totalPendingBalance.toLocaleString()}</strong> en saldos pendientes de pedidos (no incluido en "Cobrado")
+                    </span>
+                </div>
+            )}
 
             {/* TABS NAVEGACIÓN */}
             <div className="flex flex-wrap bg-gray-200 p-1 rounded-2xl w-fit gap-1">
@@ -375,12 +417,18 @@ export const Reports: React.FC<ReportsProps> = ({ sales: allSales, products: all
                         const creditPaymentsByCard = creditPayments.filter(p => p.method === 'Tarjeta').reduce((sum, p) => sum + p.amount, 0);
                         const creditPaymentsByTransfer = creditPayments.filter(p => p.method === 'Transferencia').reduce((sum, p) => sum + p.amount, 0);
 
-                        // Sales breakdown
-                        const salesByCash = filteredSales.filter(s => s.paymentMethod === 'Efectivo').reduce((sum, s) => sum + s.total, 0) +
+                        // Sales breakdown — use deposit for orders with pending balance
+                        const getCollected = (s: Sale) => {
+                            if (s.isOrder && (s.balance || 0) > 0 && s.fulfillmentStatus !== 'delivered') {
+                                return s.deposit || 0;
+                            }
+                            return s.total || 0;
+                        };
+                        const salesByCash = filteredSales.filter(s => s.paymentMethod === 'Efectivo').reduce((sum, s) => sum + getCollected(s), 0) +
                             filteredSales.filter(s => s.paymentMethod === 'Mixto').reduce((sum, s) => sum + (s.paymentDetails?.cash || 0), 0);
-                        const salesByCard = filteredSales.filter(s => s.paymentMethod === 'Tarjeta').reduce((sum, s) => sum + s.total, 0) +
+                        const salesByCard = filteredSales.filter(s => s.paymentMethod === 'Tarjeta').reduce((sum, s) => sum + getCollected(s), 0) +
                             filteredSales.filter(s => s.paymentMethod === 'Mixto').reduce((sum, s) => sum + (s.paymentDetails?.card || 0), 0);
-                        const salesByTransfer = filteredSales.filter(s => s.paymentMethod === 'Transferencia').reduce((sum, s) => sum + s.total, 0) +
+                        const salesByTransfer = filteredSales.filter(s => s.paymentMethod === 'Transferencia').reduce((sum, s) => sum + getCollected(s), 0) +
                             filteredSales.filter(s => s.paymentMethod === 'Mixto').reduce((sum, s) => sum + (s.paymentDetails?.transfer || 0), 0);
                         const salesByCredit = filteredSales.filter(s => s.paymentMethod === 'Crédito').reduce((sum, s) => sum + s.total, 0);
 

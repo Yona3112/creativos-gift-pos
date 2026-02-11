@@ -1686,8 +1686,6 @@ export class StorageService {
     if (!cut.date) cut.date = this.getLocalNowISO();
     cut.updatedAt = this.getLocalNowISO();
     await db_engine.cashCuts.put(cut);
-    const settings = await this.getSettings();
-    await db_engine.cashCuts.put(cut);
     this.pushToCloud('cash_cuts', cut);
   }
 

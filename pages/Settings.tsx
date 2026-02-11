@@ -609,7 +609,7 @@ const SettingsContent: React.FC<SettingsProps> = ({ onUpdate }) => {
                   {/* Botón de Forzar Subida eliminado para evitar conflictos con Realtime */}
                 </div>
                 <p className="text-[10px] text-gray-400 mt-2 text-center">
-                  💡 Usa "Reconciliar" primero, luego "Forzar Subida" si el problema persiste
+                  💡 Usa "Reconciliar" si el stock no coincide entre dispositivos
                 </p>
               </div>
 

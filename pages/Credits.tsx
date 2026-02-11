@@ -349,6 +349,7 @@ export const Credits: React.FC<CreditsProps> = ({ settings }) => {
         // Use a small epsilon for floating point comparison validation
         if (isNaN(amount) || amount <= 0 || amount > (remaining + 0.01)) {
             showToast(`Monto inválido. Saldo pendiente: L ${remaining.toFixed(2)}`, "error");
+            setIsSaving(false);
             return;
         }
 
