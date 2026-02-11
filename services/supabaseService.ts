@@ -137,7 +137,7 @@ export class SupabaseService {
                 'id', 'sale_id', 'status', 'user_id', 'details', 'created_at'
             ],
             price_history: [
-                'newCost', 'userId', 'updatedAt'
+                'id', 'productId', 'oldPrice', 'newPrice', 'oldCost', 'newCost', 'date', 'userId', 'updatedAt'
             ],
             sale_attachments: [
                 'id', 'sale_id', 'file_type', 'file_name', 'file_data', 'category', 'created_at'
