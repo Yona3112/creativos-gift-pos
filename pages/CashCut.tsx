@@ -201,6 +201,7 @@ export const CashCut: React.FC = () => {
       <!DOCTYPE html>
       <html>
       <head>
+        <meta charset="UTF-8">
         <style>
           @page { margin: 5mm; }
           body { 

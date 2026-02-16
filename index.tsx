@@ -28,6 +28,8 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   handleReset = () => {
     if (window.confirm("¿Estás seguro? Esto borrará los datos locales del navegador para corregir el error. Si tienes respaldo en Supabase, podrás bajarlos después.")) {
       localStorage.clear();
+      // Also clear the IndexedDB (Dexie) database so stale data doesn't persist
+      indexedDB.deleteDatabase('CreativosGiftPOS');
       window.location.reload();
     }
   };

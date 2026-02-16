@@ -92,6 +92,7 @@ export const Credits: React.FC<CreditsProps> = ({ settings }) => {
         const html = `
             <html>
             <head>
+                <meta charset="UTF-8">
                 <title>Recibo de Abono</title>
                 <style>
                     body { font-family: "Courier New", monospace; font-size: 11px; margin: 0; padding: 10px; width: ${settings.printerSize}; }

@@ -281,6 +281,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, 
         <!DOCTYPE html>
         <html>
         <head>
+            <meta charset="UTF-8">
             <style>
                 @page { margin: 5mm; }
                 body { 
