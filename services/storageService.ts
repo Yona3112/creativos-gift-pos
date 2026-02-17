@@ -1791,7 +1791,7 @@ export class StorageService {
     const allExpenses = await db_engine.expenses.toArray();
     const uncutExpensesList = allExpenses.filter(e => {
       // Use updatedAt if available, fallback to date
-      const expTime = e.updatedAt ? new Date(e.updatedAt).getTime() : new Date(e.date + 'T12:00:00').getTime();
+      const expTime = new Date(e.date + 'T12:00:00').getTime();
       return expTime > lastCutTime;
     });
 
@@ -1803,7 +1803,7 @@ export class StorageService {
     const allCN = await db_engine.creditNotes.toArray();
     const cashRefunds = allCN
       .filter(nc => {
-        const ncTime = nc.updatedAt ? new Date(nc.updatedAt).getTime() : new Date(nc.date).getTime();
+        const ncTime = new Date(nc.date).getTime();
         // @ts-ignore
         return ncTime > lastCutTime && nc.status === 'used' && (nc.refundMethod === 'Efectivo' || !nc.refundMethod) && nc.reason === 'Devolución Directa';
       })
