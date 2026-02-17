@@ -614,21 +614,28 @@ const SettingsContent: React.FC<SettingsProps> = ({ onUpdate }) => {
                     onClick={async () => {
                       if (window.confirm("⚠️ ¿Restaurar TODOS los datos transaccionales desde la nube?\n\nEsto BORRARÁ las ventas, gastos, notas de crédito, cortes de caja y cotizaciones LOCALES y los reemplazará con lo que hay en Supabase.\n\nÚsalo si ves datos fantasma que no deberían existir.")) {
                         try {
-                          setSyncStatus({ type: 'info', message: 'Limpiando datos locales...' });
-                          showToast("Limpiando datos locales...", "info");
+                          // 1. Clear Local Data FIRST (Kill the source)
+                          setSyncStatus({ type: 'info', message: '1/3 Limpiando dispositivo...' });
+                          // showToast("1/3 Limpiando dispositivo...", "info");
                           await db.clearTransactionalData();
 
-                          setSyncStatus({ type: 'info', message: 'Descargando datos limpios de la nube...' });
-                          showToast("Descargando datos de la nube...", "info");
+                          // 2. Clear known bad data from Cloud (Ensure target is clean)
+                          setSyncStatus({ type: 'info', message: '2/3 Eliminando registros corruptos en nube...' });
+                          // showToast("2/3 Limpiando nube...", "info");
+                          await SupabaseService.fixConsistencyIssues();
+
+                          // 3. Pull clean data (Download valid state)
+                          setSyncStatus({ type: 'info', message: '3/3 Descargando datos limpios...' });
+                          showToast("Descargando...", "info");
                           const pulled = await SupabaseService.pullAll();
 
                           if (pulled) {
-                            showToast("✅ Datos restaurados desde la nube exitosamente", "success");
-                            setSyncStatus({ type: 'success', message: 'Restauración desde nube completada. Recargando...' });
+                            showToast("✅ Datos restaurados exitosamente", "success");
+                            setSyncStatus({ type: 'success', message: 'Restauración completada. Recargando...' });
                             setTimeout(() => window.location.reload(), 1500);
                           } else {
                             showToast("⚠️ No se encontraron datos en la nube", "warning");
-                            setSyncStatus({ type: 'danger', message: 'No se encontraron datos en la nube para restaurar.' });
+                            setSyncStatus({ type: 'danger', message: 'No se encontraron datos.' });
                           }
                         } catch (e: any) {
                           console.error("Cloud Reset Error:", e);

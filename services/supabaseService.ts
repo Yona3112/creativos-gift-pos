@@ -867,4 +867,45 @@ export class SupabaseService {
             }
         }
     }
+
+    /**
+     * EMERGENCY FIX: Explicitly deletes known phantom records that keep reappearing
+     * because local devices push them back to the cloud.
+     */
+    static async fixConsistencyIssues() {
+        const client = await this.getClient();
+        if (!client) return;
+
+        logger.log("🚑 Ejecutando corrección de consistencia (Emergency Fix)...");
+
+        // 1. Delete Phantom Cash Cut (Feb 9, -490)
+        await this.deleteFromTable('cash_cuts', 'cut-1770611368038-1qig9');
+
+        // 2. Delete Phantom Expense (8000 Lps, Alquiler)
+        await this.deleteFromTable('expenses', 'exp-1768971598829-x6ksqt5');
+
+        // 3. Delete Duplicate Credit Notes for Sale T-000031
+        // These are the "Anulación de Venta" duplicates that cause the refund loop
+        await this.deleteFromTable('credit_notes', '1770021645219');
+        await this.deleteFromTable('credit_notes', '1770018288358');
+
+        // 4. Ensure Sale T-000031 is CANCELLED (not active)
+        // We use a new timestamp to beat any local "active" state
+        const { error: saleError } = await client
+            .from('sales')
+            .update({ status: 'cancelled', updatedAt: new Date().toISOString() })
+            .eq('id', 'sale-1770014099527-ox2s2');
+
+        if (saleError) console.error("Error fixing sale status:", saleError);
+
+        // 5. Ensure the VALID Credit Note (DEV-T-000031) has old date
+        // So it doesn't appear in today's cash cut
+        await client
+            .from('credit_notes')
+            .update({ updatedAt: '2026-02-02T07:00:16+00:00' })
+            .eq('id', '1770015616079');
+
+        logger.log("✅ Corrección de consistencia completada.");
+    }
 }
+
