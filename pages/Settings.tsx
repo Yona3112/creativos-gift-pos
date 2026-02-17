@@ -607,9 +607,45 @@ const SettingsContent: React.FC<SettingsProps> = ({ onUpdate }) => {
                     Reconciliar Stock
                   </Button>
                   {/* Botón de Forzar Subida eliminado para evitar conflictos con Realtime */}
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="text-xs"
+                    onClick={async () => {
+                      if (window.confirm("⚠️ ¿Restaurar TODOS los datos transaccionales desde la nube?\n\nEsto BORRARÁ las ventas, gastos, notas de crédito, cortes de caja y cotizaciones LOCALES y los reemplazará con lo que hay en Supabase.\n\nÚsalo si ves datos fantasma que no deberían existir.")) {
+                        try {
+                          setSyncStatus({ type: 'info', message: 'Limpiando datos locales...' });
+                          showToast("Limpiando datos locales...", "info");
+                          await db.clearTransactionalData();
+
+                          setSyncStatus({ type: 'info', message: 'Descargando datos limpios de la nube...' });
+                          showToast("Descargando datos de la nube...", "info");
+                          const pulled = await SupabaseService.pullAll();
+
+                          if (pulled) {
+                            showToast("✅ Datos restaurados desde la nube exitosamente", "success");
+                            setSyncStatus({ type: 'success', message: 'Restauración desde nube completada. Recargando...' });
+                            setTimeout(() => window.location.reload(), 1500);
+                          } else {
+                            showToast("⚠️ No se encontraron datos en la nube", "warning");
+                            setSyncStatus({ type: 'danger', message: 'No se encontraron datos en la nube para restaurar.' });
+                          }
+                        } catch (e: any) {
+                          console.error("Cloud Reset Error:", e);
+                          showToast("Error al restaurar: " + e.message, "error");
+                          setSyncStatus({ type: 'danger', message: 'Error: ' + e.message });
+                        }
+                      }
+                    }}
+                  >
+                    ☁️ Restaurar desde Nube
+                  </Button>
                 </div>
                 <p className="text-[10px] text-gray-400 mt-2 text-center">
                   💡 Usa "Reconciliar" si el stock no coincide entre dispositivos
+                </p>
+                <p className="text-[10px] text-red-400 mt-1 text-center">
+                  ☁️ Usa "Restaurar desde Nube" si ves datos fantasma (gastos/cortes que no deberían existir)
                 </p>
               </div>
 
