@@ -7,7 +7,7 @@ interface OrderCardProps {
     categories: Category[];
     customers: Customer[];
     onEdit: (order: Sale) => void;
-
+    onPrint: (order: Sale) => void;
     isProcessing?: boolean;
 }
 
@@ -16,7 +16,7 @@ export const OrderCard: React.FC<OrderCardProps> = ({
     categories,
     customers,
     onEdit,
-
+    onPrint,
     isProcessing
 }) => {
     const [previewImage, setPreviewImage] = React.useState<string | null>(null);
@@ -147,10 +147,10 @@ export const OrderCard: React.FC<OrderCardProps> = ({
                 <div className="flex items-center gap-1.5 text-gray-500 mr-6">
                     {order.deliveryDate && (
                         <div className={`text-[10px] font-black px-1.5 py-0.5 rounded-lg flex items-center gap-1 ${new Date(order.deliveryDate).toDateString() === new Date().toDateString()
-                                ? 'bg-red-100 text-red-700 animate-pulse'
-                                : new Date(order.deliveryDate) < new Date()
-                                    ? 'bg-black text-white'
-                                    : 'bg-blue-100 text-blue-700'
+                            ? 'bg-red-100 text-red-700 animate-pulse'
+                            : new Date(order.deliveryDate) < new Date()
+                                ? 'bg-black text-white'
+                                : 'bg-blue-100 text-blue-700'
                             }`}>
                             <i className="fas fa-calendar-day"></i>
                             {new Date(order.deliveryDate).toLocaleDateString()}
@@ -222,7 +222,14 @@ export const OrderCard: React.FC<OrderCardProps> = ({
                         L {(order.balance || 0).toFixed(2)}
                     </p>
                 </div>
-                <div className="flex flex-col items-end">
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onPrint(order); }}
+                        className="w-7 h-7 flex items-center justify-center rounded-lg bg-gray-100 hover:bg-indigo-100 text-gray-500 hover:text-indigo-600 transition-all"
+                        title="Imprimir orden de producción"
+                    >
+                        <i className="fas fa-print text-[10px]"></i>
+                    </button>
                     {getStatusBadge(order.fulfillmentStatus)}
                 </div>
             </div>

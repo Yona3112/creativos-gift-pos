@@ -2116,13 +2116,20 @@ export class StorageService {
         <meta charset="UTF-8">
         <style>
           @page { margin: 0; }
-          body { font-family: 'Courier New', Courier, monospace; font-size: 12px; width: ${settings.printerSize === '58mm' ? '180px' : '280px'}; margin: 0 auto; color: #000; padding: 10px; }
+          body { font-family: 'Courier New', Courier, monospace; font-size: 13px; font-weight: bold; width: ${settings.printerSize === '58mm' ? '180px' : '280px'}; margin: 0 auto; color: #000; padding: 10px; -webkit-text-stroke: 0.3px #000; }
           .center { text-align: center; }
-          .bold { font-weight: bold; }
-          .hr { border-top: 1px dashed #000; margin: 10px 0; }
+          .bold { font-weight: 900; -webkit-text-stroke: 0.5px #000; }
+          .hr { border-top: 1.5px dashed #000; margin: 10px 0; }
           table { width: 100%; border-collapse: collapse; }
-          .footer { font-size: 10px; margin-top: 20px; }
+          td { font-weight: bold; }
+          .footer { font-size: 11px; margin-top: 20px; font-weight: bold; }
           .row { display: flex; justify-content: space-between; margin-bottom: 2px; }
+          strong { font-weight: 900; -webkit-text-stroke: 0.4px #000; }
+          p { font-weight: bold; }
+          @media print {
+            * { -webkit-text-stroke: 0.4px #000 !important; color: #000 !important; }
+            body, p, td, span, div { font-weight: 900 !important; }
+          }
         </style>
       </head>
       <body>

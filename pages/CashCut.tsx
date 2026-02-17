@@ -206,21 +206,32 @@ export const CashCut: React.FC = () => {
           @page { margin: 5mm; }
           body { 
             font-family: 'Courier New', monospace; 
-            font-size: 11px; 
+            font-size: 12px; 
+            font-weight: bold;
+            -webkit-text-stroke: 0.3px #000;
             width: ${s.printerSize === '58mm' ? '48mm' : '72mm'}; 
             margin: 0 auto; 
             padding: 5px; 
           }
           .center { text-align: center; }
-          .bold { font-weight: bold; }
-          .hr { border-top: 1px dashed #333; margin: 8px 0; }
-          .row { display: flex; justify-content: space-between; margin: 2px 0; }
+          .bold { font-weight: 900; -webkit-text-stroke: 0.5px #000; }
+          .hr { border-top: 1.5px dashed #000; margin: 8px 0; }
+          .row { display: flex; justify-content: space-between; margin: 2px 0; font-weight: bold; }
           .section { margin: 8px 0; }
-          .section-title { font-weight: bold; background: #f0f0f0; padding: 3px 5px; margin-bottom: 5px; }
-          .big { font-size: 14px; font-weight: bold; }
+          .section-title { font-weight: 900; background: #f0f0f0; padding: 3px 5px; margin-bottom: 5px; -webkit-text-stroke: 0.4px #000; }
+          .big { font-size: 14px; font-weight: 900; -webkit-text-stroke: 0.5px #000; }
           .diff-ok { color: green; }
           .diff-over { color: blue; }
           .diff-short { color: red; }
+          span, div, p { font-weight: bold; }
+          strong { font-weight: 900; -webkit-text-stroke: 0.4px #000; }
+          @media print {
+            * { -webkit-text-stroke: 0.4px #000 !important; color: #000 !important; }
+            body, p, td, span, div { font-weight: 900 !important; }
+            .diff-ok { color: green !important; }
+            .diff-over { color: blue !important; }
+            .diff-short { color: red !important; }
+          }
         </style>
       </head>
       <body>
@@ -305,7 +316,11 @@ export const CashCut: React.FC = () => {
           </div>
         </div>
         <style>
-          @media print { #print-toolbar { display: none !important; } }
+          @media print { 
+            #print-toolbar { display: none !important; } 
+            * { -webkit-text-stroke: 0.4px #000 !important; }
+            body, p, td, span, div { font-weight: 900 !important; }
+          }
           body { padding-top: 60px; }
         </style>
       `;

@@ -131,6 +131,148 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
 
     const getCustomerName = (order: Sale) => order.customerName || customers.find(c => c.id === order.customerId)?.name || 'Consumidor Final';
 
+    const handlePrintOrder = async (order: Sale) => {
+        try {
+            const s = settings || await db.getSettings();
+            if (!s) { showToast('No se pudo cargar configuración', 'error'); return; }
+
+            const customerName = getCustomerName(order);
+            const customer = customers.find(c => c.id === order.customerId);
+            const statusLabels: Record<string, string> = {
+                pending: '🟡 PENDIENTE',
+                design: '🎨 DISEÑO',
+                printing: '🖨️ IMPRESIÓN',
+                qc: '🔍 CONTROL CALIDAD',
+                production: '🛠️ EN PRODUCCIÓN',
+                ready: '📦 LISTO',
+                shipped: '🚚 ENVIADO',
+                delivered: '🏁 ENTREGADO'
+            };
+            const statusText = statusLabels[order.fulfillmentStatus || 'pending'] || order.fulfillmentStatus;
+
+            const html = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <style>
+                    @page { margin: 5mm; }
+                    body {
+                        font-family: 'Courier New', monospace;
+                        font-size: 12px;
+                        font-weight: bold;
+                        -webkit-text-stroke: 0.3px #000;
+                        width: ${s.printerSize === '58mm' ? '48mm' : '72mm'};
+                        margin: 0 auto;
+                        padding: 5px;
+                    }
+                    .center { text-align: center; }
+                    .bold { font-weight: 900; -webkit-text-stroke: 0.5px #000; }
+                    .hr { border-top: 1.5px dashed #000; margin: 8px 0; }
+                    .title { font-size: 14px; font-weight: 900; -webkit-text-stroke: 0.5px #000; }
+                    .section-title { font-weight: 900; background: #333; color: white; padding: 3px 5px; margin: 8px 0 5px 0; font-size: 11px; text-align: center; border-radius: 2px; -webkit-text-stroke: 0.3px white; }
+                    .row { display: flex; justify-content: space-between; margin: 2px 0; font-weight: bold; }
+                    .item-row { margin: 5px 0; padding: 4px; border: 1px solid #000; border-radius: 3px; }
+                    .item-name { font-weight: 900; font-size: 13px; -webkit-text-stroke: 0.4px #000; }
+                    .item-qty { font-weight: 900; font-size: 14px; -webkit-text-stroke: 0.5px #000; }
+                    .item-notes { font-style: italic; font-size: 10px; margin-top: 2px; padding: 2px 4px; background: #f0f0f0; border-radius: 2px; }
+                    .status-box { font-size: 13px; font-weight: 900; text-align: center; padding: 5px; border: 2px solid #000; border-radius: 4px; margin: 5px 0; -webkit-text-stroke: 0.4px #000; }
+                    .balance-box { font-size: 14px; font-weight: 900; text-align: center; padding: 5px; margin: 5px 0; -webkit-text-stroke: 0.5px #000; }
+                    strong { font-weight: 900; -webkit-text-stroke: 0.4px #000; }
+                    @media print {
+                        * { -webkit-text-stroke: 0.4px #000 !important; color: #000 !important; }
+                        body, p, td, span, div { font-weight: 900 !important; }
+                        .section-title { color: white !important; -webkit-text-stroke: 0.3px white !important; }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="center">
+                    <div class="title">${s.name}</div>
+                    <div class="bold">ORDEN DE PRODUCCIÓN</div>
+                </div>
+                <div class="hr"></div>
+
+                <div class="row">
+                    <span><strong>FOLIO:</strong></span>
+                    <span class="bold">${order.folio}</span>
+                </div>
+                <div class="row">
+                    <span><strong>CLIENTE:</strong></span>
+                    <span class="bold">${customerName}</span>
+                </div>
+                ${customer?.phone ? `<div class="row"><span><strong>TEL:</strong></span><span>${customer.phone}</span></div>` : ''}
+                <div class="row">
+                    <span><strong>FECHA:</strong></span>
+                    <span>${new Date(order.date).toLocaleDateString('es-HN')}</span>
+                </div>
+                ${order.deliveryDate ? `
+                <div class="row">
+                    <span><strong>ENTREGA:</strong></span>
+                    <span class="bold">${new Date(order.deliveryDate + 'T12:00:00').toLocaleDateString('es-HN', { weekday: 'short', day: 'numeric', month: 'short' })}</span>
+                </div>
+                ` : ''}
+
+                <div class="status-box">${statusText}</div>
+
+                <div class="section-title">DETALLE DE PRODUCTOS</div>
+
+                ${(order.items || []).map(item => `
+                    <div class="item-row">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span class="item-name">${item.name}</span>
+                            <span class="item-qty">${item.quantity}x</span>
+                        </div>
+                        ${item.notes ? `<div class="item-notes">📝 ${item.notes}</div>` : ''}
+                    </div>
+                `).join('')}
+
+                <div class="hr"></div>
+
+                <div class="row">
+                    <span><strong>TOTAL:</strong></span>
+                    <span class="bold">L ${order.total.toFixed(2)}</span>
+                </div>
+                <div class="row">
+                    <span><strong>ANTICIPO:</strong></span>
+                    <span>L ${(order.deposit || 0).toFixed(2)}</span>
+                </div>
+                ${(order.balance || 0) > 0 ? `
+                <div class="balance-box" style="border: 2px solid #000; border-radius: 4px;">
+                    SALDO PENDIENTE: L ${order.balance!.toFixed(2)}
+                </div>
+                ` : `
+                <div class="balance-box" style="color: green;">✅ PAGADO</div>
+                `}
+
+                ${order.shippingDetails?.notes ? `
+                <div class="section-title">NOTAS</div>
+                <div style="font-size: 11px; padding: 3px;">${order.shippingDetails.notes}</div>
+                ` : ''}
+
+                ${order.shippingDetails?.address ? `
+                <div class="section-title">DIRECCIÓN</div>
+                <div style="font-size: 10px; padding: 3px;">${order.shippingDetails.address}</div>
+                ` : ''}
+
+                <div class="hr"></div>
+                <div class="center" style="font-size: 9px; margin-top: 5px;">
+                    <p>Impreso: ${new Date().toLocaleString('es-HN')}</p>
+                    <p style="font-weight: 900;">— CONTROL DE PRODUCCIÓN —</p>
+                </div>
+            </body>
+            </html>
+            `;
+
+            const { PrinterService } = await import('../services/printerService');
+            PrinterService.printHTML(html, `Producción - ${order.folio}`);
+        } catch (err) {
+            console.error('Error printing order:', err);
+            showToast('Error al imprimir orden', 'error');
+        }
+    };
+
+
     const handleQuickStatusUpdate = async (order: Sale, direction: 'next' | 'prev') => {
         const workflow: FulfillmentStatus[] = ['pending', 'design', 'printing', 'qc', 'production', 'ready', 'shipped', 'delivered'];
         const currentIndex = workflow.indexOf(order.fulfillmentStatus || 'pending');
@@ -626,6 +768,7 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                 categories={categories}
                 customers={customers}
                 onEditOrder={handleEditOrder}
+                onPrintOrder={handlePrintOrder}
                 processingOrderIds={processingOrderIds}
             />
 

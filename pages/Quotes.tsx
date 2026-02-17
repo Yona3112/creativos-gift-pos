@@ -79,7 +79,8 @@ export const Quotes: React.FC<QuotesProps> = ({ products, customers, user, branc
                 <head>
                     <title>Cotización - ${settings.name}</title>
                     <style>
-                        body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 40px; color: #333; line-height: 1.6; }
+                        body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 40px; color: #000; line-height: 1.6; font-weight: bold; -webkit-text-stroke: 0.2px #000; }
+                        @media print { * { -webkit-text-stroke: 0.4px #000 !important; color: #000 !important; } body, p, td, th, span, div { font-weight: 900 !important; } #print-toolbar { display: none !important; } }
                         .header { display: flex; justify-content: space-between; border-bottom: 2px solid #eee; padding-bottom: 20px; margin-bottom: 30px; }
                         .company-info h1 { margin: 0 0 5px 0; color: #2c3e50; font-size: 24px; }
                         .company-info p { margin: 2px 0; font-size: 12px; color: #666; }
@@ -185,7 +186,7 @@ export const Quotes: React.FC<QuotesProps> = ({ products, customers, user, branc
             printToolbar.innerHTML = `
               <style>
                 #print-toolbar { position: fixed; top: 0; left: 0; right: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 10px rgba(0,0,0,0.2); z-index: 9999; }
-                @media print { #print-toolbar { display: none !important; } }
+                @media print { #print-toolbar { display: none !important; } * { -webkit-text-stroke: 0.4px #000 !important; } body, p, td, th, span, div { font-weight: 900 !important; } }
                 body { padding-top: 60px !important; }
               </style>
               <span style="color: white; font-weight: bold; font-size: 14px;">📋 Previsualización - Cotización</span>

@@ -286,14 +286,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, 
                 @page { margin: 5mm; }
                 body { 
                     font-family: 'Courier New', monospace; 
-                    font-size: 11px; 
+                    font-size: 12px; 
+                    font-weight: bold;
+                    -webkit-text-stroke: 0.3px #000;
                     width: ${s.printerSize === '58mm' ? '48mm' : '72mm'}; 
                     margin: 0 auto; 
                     padding: 5px; 
                 }
                 .center { text-align: center; }
-                .bold { font-weight: bold; }
-                .hr { border-top: 1px dashed #333; margin: 8px 0; }
+                .bold { font-weight: 900; -webkit-text-stroke: 0.5px #000; }
+                .hr { border-top: 1.5px dashed #000; margin: 8px 0; }
                 .date-header { 
                     background: #333; 
                     color: white; 
@@ -301,15 +303,23 @@ export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, 
                     padding: 4px; 
                     margin: 15px 0 5px 0;
                     font-size: 12px;
+                    font-weight: 900;
                     border-radius: 2px;
+                    -webkit-text-stroke: 0.3px white;
                 }
-                .order-section { margin: 8px 0; border: 1px solid #ddd; padding: 5px; border-radius: 4px; }
-                .order-header { font-weight: bold; font-size: 13px; margin-bottom: 2px; border-bottom: 1px dotted #ccc; }
-                .customer-info { font-size: 10px; color: #444; margin-bottom: 4px; }
-                .item-row { margin: 2px 0; display: flex; align-items: flex-start; }
-                .item-qty { font-weight: bold; margin-right: 5px; min-width: 15px; }
-                .item-notes { font-style: italic; font-size: 9px; color: #555; margin-left: 20px; margin-bottom: 2px; }
-                .balance-box { margin-top: 3px; font-weight: bold; text-align: right; font-size: 10px; }
+                .order-section { margin: 8px 0; border: 1.5px solid #000; padding: 5px; border-radius: 4px; }
+                .order-header { font-weight: 900; font-size: 13px; margin-bottom: 2px; border-bottom: 1.5px dotted #000; -webkit-text-stroke: 0.4px #000; }
+                .customer-info { font-size: 10px; color: #000; margin-bottom: 4px; font-weight: bold; }
+                .item-row { margin: 2px 0; display: flex; align-items: flex-start; font-weight: bold; }
+                .item-qty { font-weight: 900; margin-right: 5px; min-width: 15px; -webkit-text-stroke: 0.4px #000; }
+                .item-notes { font-style: italic; font-size: 9px; color: #000; margin-left: 20px; margin-bottom: 2px; font-weight: bold; }
+                .balance-box { margin-top: 3px; font-weight: 900; text-align: right; font-size: 10px; -webkit-text-stroke: 0.4px #000; }
+                span, div, p { font-weight: bold; }
+                @media print {
+                    * { -webkit-text-stroke: 0.4px #000 !important; color: #000 !important; }
+                    body, p, td, span, div { font-weight: 900 !important; }
+                    .date-header { color: white !important; -webkit-text-stroke: 0.3px white !important; }
+                }
             </style>
         </head>
         <body>
