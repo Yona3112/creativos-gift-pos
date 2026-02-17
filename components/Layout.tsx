@@ -135,11 +135,20 @@ export const Layout: React.FC<LayoutProps> = ({
             <button
               key={item.id}
               onClick={() => { onNavigate(item.id); setSidebarOpen(false); }}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${activePage === item.id ? 'bg-primary text-white shadow-lg' : 'text-gray-500 hover:bg-gray-50'}`}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-bold tracking-tight transition-all relative group
+                ${activePage === item.id
+                  ? 'bg-primary text-white shadow-lg shadow-primary/25 translate-x-1'
+                  : 'text-gray-600 hover:bg-primary/5 hover:text-primary'}`}
             >
-              <i className={`fas fa-${item.icon} w-5`}></i> {item.label}
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all
+                ${activePage === item.id ? 'bg-white/20 scale-110 shadow-sm' : 'bg-gray-100 group-hover:bg-primary/10 text-gray-500 group-hover:text-primary'}`}>
+                <i className={`fas fa-${item.icon} text-sm`}></i>
+              </div>
+              <span className="flex-1 text-left truncate whitespace-nowrap">
+                {item.label}
+              </span>
               {badges[item.id] > 0 && (
-                <span className="ml-auto bg-red-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full min-w-[18px] text-center shadow-sm animate-bounce-subtle">
+                <span className="bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full min-w-[20px] text-center shadow-lg border border-white/20">
                   {badges[item.id]}
                 </span>
               )}
