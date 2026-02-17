@@ -65,7 +65,8 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
         isLocalDelivery: boolean;
         sharePhone: string;
         address: string;
-    }>({ status: 'pending', shippingCompany: '', tracking: '', notes: '', guideFile: '', guideFileType: '', guideFileName: '', productionImages: [], isLocalDelivery: false, sharePhone: '', address: '' });
+        designAssets: any[]; // Feature: Design Asset Vault
+    }>({ status: 'pending', shippingCompany: '', tracking: '', notes: '', guideFile: '', guideFileType: '', guideFileName: '', productionImages: [], isLocalDelivery: false, sharePhone: '', address: '', designAssets: [] });
 
     // Admin Password Modal State
     const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
@@ -359,7 +360,8 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
             productionImages: order.shippingDetails?.productionImages || [],
             isLocalDelivery: order.shippingDetails?.isLocalDelivery || false,
             sharePhone: customers.find(c => c.id === order.customerId)?.phone || '',
-            address: order.shippingDetails?.address || customers.find(c => c.id === order.customerId)?.address || ''
+            address: order.shippingDetails?.address || customers.find(c => c.id === order.customerId)?.address || '',
+            designAssets: order.designAssets || []
         });
 
         // Open modal IMMEDIATELY - no waiting
@@ -385,6 +387,7 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
 
                 const guide = attachments.find((a: any) => a.category === 'guide' || a.category === 'general');
                 const prodImgs = attachments.filter((a: any) => a.category === 'production');
+                const designFiles = attachments.filter((a: any) => a.category === 'design' || a.category === 'reference');
 
                 setEditForm(prev => ({
                     ...prev,
@@ -393,7 +396,8 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                     guideFileName: (!prev.guideFileName) && guide ? guide.file_name : prev.guideFileName,
                     productionImages: prev.productionImages.length === 0 && prodImgs.length > 0
                         ? prodImgs.map((a: any) => a.file_data)
-                        : prev.productionImages
+                        : prev.productionImages,
+                    designAssets: prev.designAssets.length === 0 ? designFiles : prev.designAssets
                 }));
             } catch (e) {
                 console.error("Error loading attachments:", e);
@@ -527,6 +531,65 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
         }));
     };
 
+    const handleDesignAssetUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+
+        showToast(`Subiendo ${files.length} archivo(s)...`, 'info');
+
+        try {
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                let fileData = '';
+                const isPdf = file.type === 'application/pdf';
+                const isImage = file.type.startsWith('image/');
+                const isVector = /\.(ai|eps|svg|afdesign|cdr|psd)$/i.test(file.name);
+
+                if (isPdf || isVector) {
+                    fileData = await new Promise<string>((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => resolve(ev.target?.result as string);
+                        reader.readAsDataURL(file);
+                    });
+                } else if (isImage) {
+                    fileData = await db.compressImage(file);
+                } else {
+                    // Fallback for unknown types
+                    fileData = await new Promise<string>((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => resolve(ev.target?.result as string);
+                        reader.readAsDataURL(file);
+                    });
+                }
+
+                const newAsset = {
+                    id: 'temp-' + Date.now() + Math.random(),
+                    file_data: fileData,
+                    file_name: file.name,
+                    file_type: isPdf ? 'pdf' : (isImage ? 'image' : 'vector'),
+                    category: 'design'
+                };
+
+                // Save locally first
+                setEditForm(prev => ({
+                    ...prev,
+                    designAssets: [...prev.designAssets, newAsset]
+                }));
+
+                // Upload if order exists
+                if (selectedOrder) {
+                    // Vectors are treated as 'pdf' (document) type for upload purposes if 'image'/ 'pdf' are the only options in saveAttachment
+                    const uploadType = isImage ? 'image' : 'pdf';
+                    await db.saveAttachment(selectedOrder.id, fileData, uploadType, file.name, 'design');
+                }
+            }
+            showToast('Archivos de diseño subidos correctamente', 'success');
+        } catch (err) {
+            console.error("Design upload error:", err);
+            showToast('Error al subir archivos de diseño', 'error');
+        }
+    };
+
     const handleSaveUpdate = async () => {
         if (!selectedOrder) return;
         setProcessingOrderIds(prev => [...prev, selectedOrder.id]);
@@ -623,6 +686,55 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
             showToast(e.message || 'Error al actualizar pedido', 'error');
         } finally {
             setProcessingOrderIds(prev => prev.filter(id => id !== selectedOrder?.id));
+        }
+    };
+
+    const handleStatusCycle = async (order: Sale, nextStatus: FulfillmentStatus) => {
+        // Prevent accidental moves to shipped/delivered if missing info
+        if (['shipped', 'delivered'].includes(nextStatus)) {
+            // Check if we have shipping details
+            if (!order.shippingDetails?.guideFile && !order.shippingDetails?.isLocalDelivery) {
+                showToast('Para marcar como Enviado/Entregado, por favor edita el pedido y agrega guía o marca entrega local.', 'warning');
+                handleEditOrder(order);
+                return;
+            }
+        }
+
+        if (window.confirm(`¿Mover pedido ${order.folio} a estado "${nextStatus.toUpperCase()}"?`)) {
+            setProcessingOrderIds(prev => [...prev, order.id]);
+            try {
+                await db.updateSaleStatus(order.id, nextStatus, order.shippingDetails);
+                showToast(`Pedido movido a ${nextStatus}`, 'success');
+
+                // Notification Logic
+                const customer = customers.find(c => c.id === order.customerId);
+                if (customer?.phone) {
+                    const statusLabels: Record<string, string> = {
+                        design: 'en etapa de Diseño 🎨',
+                        printing: 'siendo impreso 🖨️',
+                        production: 'en mesa de producción 🛠️',
+                        qc: 'en control de calidad (QC) ✅',
+                        ready: 'listo para entrega/envío 🎁',
+                        shipped: 'enviado a su destino 🚚',
+                        delivered: 'entregado con éxito 💖'
+                    };
+
+                    if (statusLabels[nextStatus]) {
+                        const message = `¡Hola ${customer.name}! 👋\nLe informamos que su pedido *${order.folio}* está ${statusLabels[nextStatus]}.\n\nGracias por su preferencia en *Creativos Gift*. ✨`;
+
+                        if (window.confirm(`¿Desea notificar al cliente vía WhatsApp?`)) {
+                            const win = window.open(`https://wa.me/504${customer.phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`, '_blank');
+                            if (win) win.focus();
+                        }
+                    }
+                }
+
+                if (onUpdate) onUpdate();
+            } catch (e: any) {
+                showToast(e.message || 'Error al actualizar estado', 'error');
+            } finally {
+                setProcessingOrderIds(prev => prev.filter(id => id !== order.id));
+            }
         }
     };
 
@@ -792,6 +904,7 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                 customers={customers}
                 onEditOrder={handleEditOrder}
                 onPrintOrder={handlePrintOrder}
+                onUpdateStatus={handleStatusCycle}
                 processingOrderIds={processingOrderIds}
             />
 
@@ -1131,6 +1244,65 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
                             )}
                         </div>
                     )}
+
+                    {/* DESIGN ASSETS SECTION */}
+                    <div className="bg-violet-50 p-4 rounded-xl border border-violet-100 space-y-3">
+                        <h4 className="font-bold text-violet-900 text-sm uppercase flex items-center gap-2">
+                            <i className="fas fa-layer-group"></i> Archivos de Diseño (Vault)
+                            <span className="text-[10px] font-normal text-violet-600 ml-auto">{editForm.designAssets?.length || 0} archivos</span>
+                        </h4>
+
+                        <div className="grid grid-cols-2 gap-2">
+                            {(editForm.designAssets || []).map((asset, idx) => (
+                                <div key={idx} className="flex items-center gap-2 bg-white p-2 rounded-lg border border-violet-200 shadow-sm relative group overflow-hidden">
+                                    <div className={`w-8 h-8 flex items-center justify-center rounded bg-violet-100 text-violet-600 flex-shrink-0`}>
+                                        <i className={`fas fa-${asset.file_type === 'pdf' ? 'file-pdf' : asset.file_type === 'image' ? 'image' : 'file-archive'}`}></i>
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-[10px] font-bold text-gray-700 truncate" title={asset.file_name}>{asset.file_name}</p>
+                                        <button
+                                            className="text-[9px] text-violet-500 hover:underline flex items-center gap-1"
+                                            onClick={() => {
+                                                const link = document.createElement('a');
+                                                link.href = asset.file_data;
+                                                link.download = asset.file_name;
+                                                document.body.appendChild(link);
+                                                link.click();
+                                                document.body.removeChild(link);
+                                            }}
+                                        >
+                                            <i className="fas fa-download"></i> Descargar
+                                        </button>
+                                    </div>
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setEditForm(prev => ({
+                                                ...prev,
+                                                designAssets: prev.designAssets.filter((_, i) => i !== idx)
+                                            }));
+                                        }}
+                                        className="absolute top-1 right-1 w-5 h-5 bg-red-400 text-white rounded-full text-[10px] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center shadow-md z-10 hover:bg-red-500"
+                                    >
+                                        <i className="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            ))}
+
+                            <label className="flex flex-col items-center justify-center h-16 border-2 border-dashed border-violet-300 rounded-lg cursor-pointer hover:bg-violet-100 transition-colors bg-white/50">
+                                <i className="fas fa-cloud-upload-alt text-violet-400"></i>
+                                <span className="text-[9px] text-violet-600 font-bold mt-1">Subir Diseño(s)</span>
+                                <input
+                                    type="file"
+                                    className="hidden"
+                                    accept=".pdf,image/*,.ai,.eps,.svg,.cdr,.afdesign,.psd"
+                                    multiple
+                                    onChange={handleDesignAssetUpload}
+                                />
+                            </label>
+                        </div>
+                        <p className="text-[10px] text-violet-600">Archivos fuente, vectores o aprobaciones de diseño.</p>
+                    </div>
 
                     {/* Sección de Imágenes de Producción */}
                     <div className="bg-amber-50 p-4 rounded-xl border border-amber-100 space-y-3">

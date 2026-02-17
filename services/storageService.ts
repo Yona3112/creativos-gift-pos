@@ -851,10 +851,21 @@ export class StorageService {
         const customer = await db_engine.customers.get(newSale.customerId);
         if (customer) {
           customer.totalSpent += newSale.total;
+
+          // Calculate points/coins earned
           if (settings.moneyPerPoint > 0) {
-            customer.points += Math.floor(newSale.total / settings.moneyPerPoint);
+            const earned = Math.floor(newSale.total / settings.moneyPerPoint);
+            customer.points = (customer.points || 0) + earned;
+            // Sync Gift Coins too (Feature 5)
+            customer.giftCoins = (customer.giftCoins || 0) + earned;
           }
-          if (newSale.pointsUsed) customer.points = Math.max(0, customer.points - newSale.pointsUsed);
+
+          // Deduct points/coins used
+          if (newSale.pointsUsed) {
+            customer.points = Math.max(0, (customer.points || 0) - newSale.pointsUsed);
+            customer.giftCoins = Math.max(0, (customer.giftCoins || 0) - newSale.pointsUsed);
+          }
+
           await db_engine.customers.put(customer);
         }
       }
@@ -1189,7 +1200,7 @@ export class StorageService {
 
   // --- ATTACHMENTS (High Egress Fix) ---
   // These methods interact directly with Supabase to avoid syncing heavy data via Realtime
-  async saveAttachment(saleId: string, fileData: string, type: 'image' | 'pdf', fileName?: string, category: 'guide' | 'production' | 'general' = 'general') {
+  async saveAttachment(saleId: string, fileData: string, type: 'image' | 'pdf', fileName?: string, category: 'guide' | 'production' | 'general' | 'design' | 'reference' = 'general') {
     // 1. Save locally in a separate collection if desired, or just cloud depending on strategy.
     // For this fix, we prioritize CLOUD storage to keep local DB light, 
     // BUT we need local access too. Let's use Dexie for cache but NOT sync it via the main channel.

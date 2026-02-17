@@ -8,6 +8,7 @@ interface OrderCardProps {
     customers: Customer[];
     onEdit: (order: Sale) => void;
     onPrint: (order: Sale) => void;
+    onUpdateStatus?: (order: Sale, nextStatus: FulfillmentStatus) => void;
     isProcessing?: boolean;
 }
 
@@ -17,6 +18,7 @@ export const OrderCard: React.FC<OrderCardProps> = ({
     customers,
     onEdit,
     onPrint,
+    onUpdateStatus,
     isProcessing
 }) => {
     const [previewImage, setPreviewImage] = React.useState<string | null>(null);
@@ -107,6 +109,31 @@ export const OrderCard: React.FC<OrderCardProps> = ({
     // If _synced is true, it came from cloud or was successfully pushed
     // If _synced is false, it's a local change waiting to push
     const isSynced = order._synced === true;
+
+    const nextStatuses: Record<string, FulfillmentStatus> = {
+        'pending': 'design',
+        'design': 'printing',
+        'printing': 'qc',
+        'qc': 'production',
+        'production': 'ready',
+        'ready': 'shipped',
+        'shipped': 'delivered'
+    };
+
+    const getNextStatusLabel = (status: string) => {
+        const labels: Record<string, string> = {
+            'design': 'Diseño',
+            'printing': 'Impresión',
+            'qc': 'QC',
+            'production': 'Ensamble',
+            'ready': 'Listo',
+            'shipped': 'Enviar',
+            'delivered': 'Entregar'
+        };
+        return labels[status] || '';
+    };
+
+    const nextStatus = nextStatuses[order.fulfillmentStatus || 'pending'];
 
     return (
         <div
@@ -230,6 +257,15 @@ export const OrderCard: React.FC<OrderCardProps> = ({
                     >
                         <i className="fas fa-print text-[10px]"></i>
                     </button>
+                    {onUpdateStatus && nextStatus && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onUpdateStatus(order, nextStatus); }}
+                            className="w-7 h-7 flex items-center justify-center rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-all"
+                            title={`Mover a ${getNextStatusLabel(nextStatus)}`}
+                        >
+                            <i className="fas fa-arrow-right text-[10px]"></i>
+                        </button>
+                    )}
                     {getStatusBadge(order.fulfillmentStatus)}
                 </div>
             </div>

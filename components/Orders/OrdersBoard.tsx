@@ -8,6 +8,7 @@ interface OrdersBoardProps {
     customers: Customer[];
     onEditOrder: (order: Sale) => void;
     onPrintOrder: (order: Sale) => void;
+    onUpdateStatus: (order: Sale, nextStatus: FulfillmentStatus) => void;
     processingOrderIds: string[];
 }
 
@@ -17,6 +18,7 @@ export const OrdersBoard: React.FC<OrdersBoardProps> = ({
     customers,
     onEditOrder,
     onPrintOrder,
+    onUpdateStatus,
     processingOrderIds
 }) => {
     const columns: { id: FulfillmentStatus; label: string; color: string; icon: string }[] = [
@@ -72,6 +74,7 @@ export const OrdersBoard: React.FC<OrdersBoardProps> = ({
                                             customers={customers}
                                             onEdit={onEditOrder}
                                             onPrint={onPrintOrder}
+                                            onUpdateStatus={onUpdateStatus}
                                             isProcessing={processingOrderIds.includes(order.id)}
                                         />
                                     ))

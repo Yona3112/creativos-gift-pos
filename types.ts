@@ -48,6 +48,7 @@ export interface Product {
   updatedAt?: string;  // Timestamp for sync tracking (updated on stock changes)
   type?: 'standalone' | 'combo';
   comboItems?: ComboItem[];
+  showInCatalog?: boolean; // Feature 2: Digital Catalog toggle
   _synced?: boolean;
 }
 
@@ -137,9 +138,22 @@ export interface Customer {
   birthDate?: string;
   points: number;
   level: LoyaltyLevel;
-  totalSpent: number;
+  giftCoins?: number; // Feature 5: Virtual currency for loyalty
+  totalSpent?: number; // Total amount spent by the customer
   active?: boolean;
   updatedAt?: string;
+  _synced?: boolean;
+}
+
+export interface SaleAttachment {
+  id: string;
+  saleId: string;
+  type: 'design' | 'photo' | 'reference' | 'guide';
+  name: string;
+  url: string; // URL in Supabase Storage or base64
+  fileType: string;
+  size: number;
+  createdAt: string;
   _synced?: boolean;
 }
 
@@ -220,6 +234,7 @@ export interface Sale {
   eventDate?: string;     // ISO date of the event
   dedication?: string;    // AI-generated or manual dedication for cards
   fulfillmentHistory?: StatusHistoryEntry[]; // History of status changes
+  designAssets?: SaleAttachment[]; // Feature 4: Cloud design vault
   updatedAt?: string; // Timestamp for sync tracking
   createdAt?: string; // Precise creation timestamp
   _synced?: boolean;

@@ -195,7 +195,7 @@ export const Layout: React.FC<LayoutProps> = ({
             <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-white font-bold text-xs">{user?.name?.charAt(0) || '?'}</div>
           </div>
         </header>
-        <div className="flex-1 overflow-y-auto p-4 lg:p-8 relative">{children}</div>
+        <div key={activePage} className="flex-1 overflow-y-auto p-4 lg:p-8 relative animate-fade-in-up">{children}</div>
         {settings?.showFloatingWhatsapp && <WhatsAppButton phoneNumber={settings.whatsappNumber} />}
 
         {/* LOGO MODAL */}

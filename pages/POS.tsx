@@ -894,6 +894,11 @@ export const POS: React.FC<POSProps> = ({
                     <i className="fas fa-user text-primary"></i>
                     <span className={`truncate ${(!selectedCustomer && !isConsumidorFinal) ? 'text-red-500' : ''}`}>
                         {selectedCustomer?.name || (isConsumidorFinal ? 'Consumidor Final' : 'Seleccionar Cliente')}
+                        {selectedCustomer && (selectedCustomer.giftCoins || selectedCustomer.points || 0) > 0 && (
+                            <span className="ml-2 bg-purple-100 text-purple-700 text-[10px] font-black px-2 py-0.5 rounded-full flex items-center gap-1 inline-flex">
+                                <i className="fas fa-coins text-[8px]"></i> {selectedCustomer.giftCoins || selectedCustomer.points}
+                            </span>
+                        )}
                     </span>
                     <i className="fas fa-chevron-right text-gray-400 text-xs ml-auto"></i>
                 </button>
@@ -1015,6 +1020,78 @@ export const POS: React.FC<POSProps> = ({
                             ))}
                         </div>
                     </div>
+
+
+                    {/* GIFT COINS REDEMPTION */}
+                    {selectedCustomer && ((selectedCustomer.giftCoins || 0) > 0 || (selectedCustomer.points || 0) > 0) && (settings.pointValue || 0) > 0 && (
+                        <div className="bg-purple-50 p-4 rounded-xl border border-purple-200 mt-4 relative overflow-hidden">
+                            <i className="fas fa-coins absolute -right-4 -bottom-4 text-6xl text-purple-200/50 rotate-12"></i>
+                            <div className="flex items-center justify-between mb-3 relative z-10">
+                                <div className="flex items-center gap-2">
+                                    <div className="bg-purple-100 p-2 rounded-lg text-purple-600">
+                                        <i className="fas fa-gift"></i>
+                                    </div>
+                                    <div>
+                                        <p className="font-bold text-purple-900 text-sm leading-none">Canjear Gift Coins</p>
+                                        <p className="text-[10px] text-purple-600 font-medium">Tienes {selectedCustomer.giftCoins || selectedCustomer.points || 0} monedas disponibles</p>
+                                    </div>
+                                </div>
+                                <span className="text-xs font-bold text-white bg-purple-500 px-3 py-1 rounded-full shadow-sm">
+                                    1 Coin = L {settings.pointValue}
+                                </span>
+                            </div>
+
+                            <div className="flex gap-4 items-end relative z-10">
+                                <div className="flex-1">
+                                    <label className="text-[10px] font-bold text-purple-700 uppercase mb-1 block">Monedas a utilizar</label>
+                                    <Input
+                                        type="number"
+                                        placeholder="0"
+                                        value={pointsUsed > 0 ? pointsUsed.toString() : ''}
+                                        onChange={(e) => {
+                                            const val = parseInt(e.target.value) || 0;
+                                            const maxPoints = selectedCustomer.giftCoins || selectedCustomer.points || 0;
+                                            const maxMoney = totalWithTax / settings.pointValue; // Limit by total
+
+                                            // Limit by balance and by total amount (can't pay more than total)
+                                            const finalPoints = Math.min(val, maxPoints, Math.floor(maxMoney));
+
+                                            setPointsUsed(finalPoints);
+                                            setPointsDiscount(finalPoints * settings.pointValue);
+                                        }}
+                                        className="bg-white border-purple-200 focus:border-purple-500 text-purple-900 font-bold"
+                                    />
+                                    <div className="flex justify-between mt-1">
+                                        <button
+                                            onClick={() => {
+                                                const maxPoints = selectedCustomer.giftCoins || selectedCustomer.points || 0;
+                                                const maxMoney = totalWithTax / settings.pointValue;
+                                                const finalPoints = Math.min(maxPoints, Math.floor(maxMoney));
+                                                setPointsUsed(finalPoints);
+                                                setPointsDiscount(finalPoints * settings.pointValue);
+                                            }}
+                                            className="text-[10px] font-bold text-purple-600 underline hover:text-purple-800"
+                                        >
+                                            Usar Máximo
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setPointsUsed(0);
+                                                setPointsDiscount(0);
+                                            }}
+                                            className="text-[10px] font-bold text-red-400 hover:text-red-600"
+                                        >
+                                            Limpiar
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="text-right bg-white/50 p-2 rounded-lg min-w-[100px]">
+                                    <p className="text-[10px] font-bold text-gray-500 uppercase">Descuento</p>
+                                    <p className="text-xl font-black text-purple-600">- L {pointsDiscount.toFixed(2)}</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Credit Note Usage Section */}
                     <div className="bg-blue-50 p-4 rounded-xl border border-blue-200">
@@ -1253,10 +1330,10 @@ export const POS: React.FC<POSProps> = ({
                         </Button>
                     </div>
                 </div>
-            </Modal>
+            </Modal >
 
             {/* MODAL ÍTEM MANUAL */}
-            <Modal isOpen={isManualModalOpen} onClose={() => setIsManualModalOpen(false)} title="Producto / Servicio Manual">
+            < Modal isOpen={isManualModalOpen} onClose={() => setIsManualModalOpen(false)} title="Producto / Servicio Manual" >
                 <div className="space-y-4">
                     {manualError && <Alert variant="danger">{manualError}</Alert>}
                     <Input
@@ -1425,10 +1502,10 @@ export const POS: React.FC<POSProps> = ({
                         <Button className="flex-1" onClick={handleSaveQuote} icon="save">Guardar Cotización</Button>
                     </div>
                 </div>
-            </Modal>
+            </Modal >
 
             {/* Modal de Éxito de Cotización */}
-            <Modal isOpen={isQuoteSuccessModalOpen} onClose={() => setIsQuoteSuccessModalOpen(false)} title="Cotización Guardada" size="sm">
+            < Modal isOpen={isQuoteSuccessModalOpen} onClose={() => setIsQuoteSuccessModalOpen(false)} title="Cotización Guardada" size="sm" >
                 <div className="text-center py-6">
                     <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">
                         <i className="fas fa-check text-4xl text-green-500"></i>
@@ -1438,7 +1515,7 @@ export const POS: React.FC<POSProps> = ({
                     <p className="text-2xl font-mono font-black text-primary mb-6">{savedQuoteFolio}</p>
                     <Button onClick={() => setIsQuoteSuccessModalOpen(false)} className="w-full" icon="check">Entendido</Button>
                 </div>
-            </Modal>
-        </div>
+            </Modal >
+        </div >
     );
 };
