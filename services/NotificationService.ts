@@ -329,11 +329,17 @@ export class NotificationService {
         });
 
         const suggestions = products
-            .filter(p => p.active !== false && p.stock <= p.minStock)
+            .filter(p => p.active !== false)
             .map(p => {
                 const totalSold = salesMap.get(p.id) || 0;
                 const avgDailySales = totalSold / 30;
                 const daysOfStock = avgDailySales > 0 ? p.stock / avgDailySales : p.stock > 0 ? 999 : 0;
+
+                // Thresholds: stock <= minStock OR will run out in <= 10 days
+                const isUnderMin = p.stock <= p.minStock;
+                const isRunningOutSoon = daysOfStock <= 10 && avgDailySales > 0;
+
+                if (!isUnderMin && !isRunningOutSoon) return null;
 
                 // Suggest enough to cover 30 days + buffer to reach 2x minStock
                 const targetStock = Math.max(p.minStock * 2, Math.ceil(avgDailySales * 30));
@@ -341,7 +347,7 @@ export class NotificationService {
 
                 let urgency: 'critical' | 'low' | 'normal' = 'normal';
                 if (p.stock === 0) urgency = 'critical';
-                else if (daysOfStock <= 7) urgency = 'low';
+                else if (daysOfStock <= 3 || isUnderMin) urgency = 'low';
 
                 return {
                     productId: p.id,
@@ -355,9 +361,9 @@ export class NotificationService {
                     daysOfStock: Number(daysOfStock.toFixed(1))
                 };
             })
-            .sort((a, b) => {
-                // Sort by urgency then by days of stock
-                const urgencyOrder = { critical: 0, low: 1, normal: 2 };
+            .filter(s => s !== null)
+            .sort((a: any, b: any) => {
+                const urgencyOrder: Record<string, number> = { critical: 0, low: 1, normal: 2 };
                 if (urgencyOrder[a.urgency] !== urgencyOrder[b.urgency]) {
                     return urgencyOrder[a.urgency] - urgencyOrder[b.urgency];
                 }

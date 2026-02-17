@@ -21,6 +21,7 @@ import { Expenses } from './pages/Expenses';
 import { InventoryHistory } from './pages/InventoryHistory';
 import { Credits } from './pages/Credits';
 import { SARBooks } from './pages/SARBooks';
+import { ProductionCalendar } from './pages/ProductionCalendar';
 // Fix: Added Card to the imported components from UIComponents
 import { Button, Input, Card, useNotifications, ToastContainer, showToast } from './components/UIComponents';
 
@@ -112,6 +113,19 @@ function App() {
       db.getCredits(), db.getPromotions(), db.getConsumables(),
       db.getSettings(), db.getExpenses()
     ]);
+
+    // Check Sync Health
+    if (sett.supabaseUrl && sett.supabaseKey) {
+      try {
+        const { SupabaseService } = await import('./services/supabaseService');
+        const health = await SupabaseService.checkSyncHealth();
+        if (health.status === 'critical') {
+          showToast(`⚠️ Sincronización atrasada (${health.minutesAgo} min). Intente sincronizar manualmente.`, "warning");
+        }
+      } catch (e) {
+        console.warn("Failed to check sync health", e);
+      }
+    }
 
     // Pull settings from cloud to ensure multi-device consistency
     const cloudSettings = await db.pullSettingsFromCloud();
@@ -489,14 +503,15 @@ function App() {
   };
 
   // Calculate Badges
+  const todayStr = new Date().toISOString().split('T')[0];
   const badges = {
-    // orders: REMOVED as per user request (buggy) - moved to Notification Bell
     credits: (credits || []).filter(c => {
       if (c.status === 'paid' || c.status === 'cancelled') return false;
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      const today = new Date(); today.setHours(0, 0, 0, 0);
       return new Date(c.dueDate) < today;
-    }).length
+    }).length,
+    calendar: sales.filter(s => s.status === 'active' && s.isOrder && s.deliveryDate === todayStr && s.fulfillmentStatus !== 'delivered').length,
+    products: products.filter(p => p.active !== false && p.stock <= (p.minStock || 0)).length
   };
 
   // Calculate Alerts for Notification Bell
@@ -623,11 +638,12 @@ function App() {
     const safeSettings = settings || ({} as CompanySettings);
 
     switch (page) {
-      case 'dashboard': return <Dashboard products={products} sales={sales} credits={credits} customers={customers} consumables={consumables} onNavigate={navigateTo} />;
+      case 'dashboard': return <Dashboard products={products} sales={sales} credits={credits} customers={customers} consumables={consumables} expenses={expenses} onNavigate={navigateTo} />;
+      case 'calendar': return <ProductionCalendar sales={sales} onNavigate={navigateTo} />;
       case 'pos': return <POS products={products} customers={customers} categories={categories} user={user} branchId={currentBranch?.id || ''} onSaleComplete={() => refreshData(true)} loadedQuote={quoteToLoad} onQuoteProcessed={() => setQuoteToLoad(null)} onRefreshData={() => refreshData(true)} settings={safeSettings} onNavigate={navigateTo} />;
       case 'expenses': return <Expenses user={user} onUpdate={() => refreshData(true)} settings={safeSettings} />;
       case 'inventoryHistory': return <InventoryHistory products={products} users={users} />;
-      case 'products': return <Products products={products} categories={categories} users={users} onUpdate={() => refreshData(true)} initialFilter={pageParams?.filter} initialTab={pageParams?.tab} settings={safeSettings} user={user} />;
+      case 'products': return <Products products={products} sales={sales} categories={categories} users={users} onUpdate={() => refreshData(true)} initialFilter={pageParams?.filter} initialTab={pageParams?.tab} settings={safeSettings} user={user} />;
       case 'salesHistory': return <SalesHistory sales={sales} customers={customers} users={users} onUpdate={() => refreshData(true)} user={user} branchId={currentBranch?.id} onLoadQuote={(quote) => { setQuoteToLoad(quote); setPage('pos'); }} settings={safeSettings} />;
       case 'customers': return <Customers customers={customers} onUpdate={() => refreshData(true)} user={user} settings={safeSettings} />;
       case 'credits': return <Credits settings={safeSettings} onUpdate={() => refreshData(true)} />;
@@ -639,7 +655,7 @@ function App() {
       case 'promotions': return <Promotions onUpdate={() => refreshData(true)} />;
       case 'users': return <Users onUpdate={() => refreshData(true)} />;
       case 'branches': return <Branches onUpdate={() => refreshData(true)} />;
-      default: return <Dashboard products={products} sales={sales} credits={credits} customers={customers} consumables={consumables} onNavigate={navigateTo} />;
+      default: return <Dashboard products={products} sales={sales} credits={credits} customers={customers} consumables={consumables} expenses={expenses} onNavigate={navigateTo} />;
     }
   };
 

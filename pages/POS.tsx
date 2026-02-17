@@ -4,6 +4,7 @@ import { Product, Customer, Category, CartItem, Sale, User, PaymentDetails, Quot
 import { Button, Input, Modal, Badge, Alert, showToast } from '../components/UIComponents';
 import { db } from '../services/storageService';
 import { logger } from '../services/logger';
+import { GeminiService } from '../services/geminiService';
 
 interface POSProps {
     products: Product[];
@@ -55,6 +56,11 @@ export const POS: React.FC<POSProps> = ({
     const [creditNoteMax, setCreditNoteMax] = useState<number>(0);
     const [depositAmount, setDepositAmount] = useState<string>('');
     const [deliveryDate, setDeliveryDate] = useState<string>('');
+    const [eventOccasion, setEventOccasion] = useState<string>('');
+    const [eventDate, setEventDate] = useState<string>('');
+    const [dedication, setDedication] = useState<string>('');
+    const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+    const [aiDedicationTone, setAiDedicationTone] = useState<'emotional' | 'funny' | 'formal' | 'short'>('emotional');
 
     const [isNewCustomerModalOpen, setIsNewCustomerModalOpen] = useState(false);
     const [newCustomerData, setNewCustomerData] = useState<Partial<Customer>>({ name: '', phone: '', rtn: '', type: 'Natural' });
@@ -332,7 +338,7 @@ export const POS: React.FC<POSProps> = ({
         const existing = cart.find(item => item.id === product.id);
 
         // Verificación de stock para productos registrados (no manuales)
-        if (!product.id.startsWith('manual-')) {
+        if (!product.id.startsWith('manual-') && (product as any).type !== 'combo') {
             const currentQty = existing ? existing.quantity : 0;
             if (currentQty >= product.stock) {
                 playBeep('error');
@@ -446,6 +452,10 @@ export const POS: React.FC<POSProps> = ({
                 documentType,
                 fulfillmentStatus: (isImmediateDelivery ? 'delivered' : 'pending') as FulfillmentStatus,
                 total,
+                cost: marginAnalysis.totalCost, // Feature 5: Net Profit tracking
+                eventOccasion,
+                eventDate,
+                dedication,
                 pointsMonetaryValue: pointsDiscount > 0 ? pointsDiscount : undefined,
                 pointsUsed: pointsUsed > 0 ? pointsUsed : undefined,
                 isOrder,
@@ -495,6 +505,35 @@ export const POS: React.FC<POSProps> = ({
             showToast(e.message || "Error al procesar venta", "error");
         } finally {
             setIsProcessing(false);
+        }
+    };
+
+    const handleGenerateDedication = async () => {
+        if (!settings.geminiApiKey) {
+            showToast("Configure su API Key de Gemini en Ajustes para usar esta función.", "warning");
+            return;
+        }
+
+        if (!eventOccasion) {
+            showToast("Seleccione una ocasión primero para personalizar el mensaje.", "info");
+            return;
+        }
+
+        setIsGeneratingAI(true);
+        try {
+            const result = await GeminiService.generateDedication(
+                eventOccasion,
+                isConsumidorFinal ? "Familiar/Amigo" : (selectedCustomer?.name || "Cliente"),
+                user?.name || "Creativos Gift",
+                aiDedicationTone,
+                settings
+            );
+            setDedication(result);
+            showToast("¡Dedicatoria generada con éxito!", "success");
+        } catch (error: any) {
+            showToast("Error al generar dedicatoria: " + error.message, "error");
+        } finally {
+            setIsGeneratingAI(false);
         }
     };
 
@@ -708,13 +747,26 @@ export const POS: React.FC<POSProps> = ({
                                         <button
                                             key={c.id}
                                             onClick={() => { setSelectedCustomer(c); setIsConsumidorFinal(false); setShowCustomerDropdown(false); setCustomerSearch(''); }}
-                                            className="w-full p-3 text-left text-sm hover:bg-primary/5 flex justify-between items-center"
+                                            className="w-full p-3 text-left text-sm hover:bg-gray-50 flex justify-between items-center border-b border-gray-50 last:border-0 group transition-colors"
                                         >
-                                            <div>
-                                                <span className="font-bold text-gray-800">{c.name}</span>
-                                                {c.phone && <span className="text-[10px] text-gray-400 ml-2">{c.phone}</span>}
+                                            <div className="flex items-center gap-3">
+                                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-xs shadow-sm
+                                                    ${c.level === 'PLATINUM' ? 'bg-purple-500' :
+                                                        c.level === 'GOLD' ? 'bg-yellow-500' :
+                                                            c.level === 'SILVER' ? 'bg-gray-400' : 'bg-orange-700'}`}>
+                                                    {c.name.substring(0, 1)}
+                                                </div>
+                                                <div>
+                                                    <p className="font-black text-gray-800 leading-none group-hover:text-primary transition-colors">{c.name}</p>
+                                                    <p className="text-[10px] text-gray-400 font-bold mt-1 uppercase tracking-tighter">
+                                                        {c.phone || 'Sin número'} • <span className="text-primary/70">{c.level || 'BRONZE'}</span>
+                                                    </p>
+                                                </div>
                                             </div>
-                                            <span className="text-[10px] text-primary font-bold">L {(c.totalSpent || 0).toFixed(0)}</span>
+                                            <div className="text-right">
+                                                <p className="text-xs font-black text-gray-800 leading-none">L {(c.totalSpent || 0).toLocaleString()}</p>
+                                                <p className="text-[9px] text-gray-400 font-bold uppercase mt-0.5">Total</p>
+                                            </div>
                                         </button>
                                     ))}
                                     {getFilteredCustomers().length === 0 && customerSearch && (
@@ -726,27 +778,48 @@ export const POS: React.FC<POSProps> = ({
                         <Button variant="secondary" onClick={() => setIsNewCustomerModalOpen(true)}><i className="fas fa-user-plus"></i></Button>
                     </div>
                     {selectedCustomer && (
-                        <div className="flex flex-col gap-2 p-2 bg-primary/5 rounded-xl border border-primary/10">
+                        <div className="flex flex-col gap-2 p-3 bg-white rounded-2xl border border-primary/20 shadow-sm animate-pop-in">
                             <div className="flex justify-between items-center">
-                                <span className="text-xs font-bold text-primary">
-                                    {selectedCustomer ? `Puntos: ${selectedCustomer.points}` : 'Cliente Seleccionado'}
-                                </span>
-                                <Badge variant="info" className="text-[10px]">{selectedCustomer?.level || 'General'}</Badge>
-                            </div>
-                            {selectedCustomer.points > 0 && (
                                 <div className="flex items-center gap-2">
-                                    <Input
-                                        type="number"
-                                        placeholder="Usar puntos"
-                                        className="!py-1 !px-2 text-xs"
-                                        value={pointsUsed || ''}
-                                        onChange={e => {
-                                            const val = Math.min(selectedCustomer.points, parseInt(e.target.value) || 0);
-                                            setPointsUsed(val);
-                                            setPointsDiscount(val * (settings.pointValue || 0.1));
-                                        }}
-                                    />
-                                    <span className="text-[10px] font-bold text-gray-500 min-w-fit">-L {pointsDiscount.toFixed(2)}</span>
+                                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-white font-bold text-xs shadow-sm
+                                        ${selectedCustomer.level === 'PLATINUM' ? 'bg-purple-500 shadow-purple-200' :
+                                            selectedCustomer.level === 'GOLD' ? 'bg-yellow-500 shadow-yellow-200' :
+                                                selectedCustomer.level === 'SILVER' ? 'bg-gray-400 shadow-gray-200' : 'bg-orange-700 shadow-orange-200'}`}>
+                                        {selectedCustomer.name.substring(0, 1)}
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-black text-gray-800 leading-none">{selectedCustomer.name}</p>
+                                        <p className="text-[9px] text-primary/70 font-bold uppercase tracking-widest mt-0.5">{selectedCustomer.level || 'BRONZE'}</p>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-[10px] font-black text-primary leading-none">{selectedCustomer.points} PTS</p>
+                                    <p className="text-[9px] text-gray-400 font-bold mt-0.5">Disponibles</p>
+                                </div>
+                            </div>
+
+                            {selectedCustomer.points > 0 && (
+                                <div className="flex items-center gap-2 mt-1 p-2 bg-gray-50 rounded-xl border border-gray-100">
+                                    <div className="flex-1">
+                                        <p className="text-[9px] font-black text-gray-500 uppercase px-1 mb-1">Canjear Puntos</p>
+                                        <div className="flex items-center gap-2">
+                                            <Input
+                                                type="number"
+                                                placeholder="0"
+                                                className="!py-1 !px-2 !h-7 text-xs font-black !bg-white"
+                                                value={pointsUsed || ''}
+                                                onChange={e => {
+                                                    const val = Math.min(selectedCustomer.points, parseInt(e.target.value) || 0);
+                                                    setPointsUsed(val);
+                                                    setPointsDiscount(val * (settings.pointValue || 0.1));
+                                                }}
+                                            />
+                                            <span className="text-[11px] font-black text-green-600 min-w-fit">- L {pointsDiscount.toFixed(2)}</span>
+                                        </div>
+                                    </div>
+                                    <Button variant="ghost" size="xs" className="h-7 w-7 !p-0 text-red-400" onClick={() => { setPointsUsed(0); setPointsDiscount(0); }}>
+                                        <i className="fas fa-times"></i>
+                                    </Button>
                                 </div>
                             )}
                         </div>
@@ -998,6 +1071,85 @@ export const POS: React.FC<POSProps> = ({
                         )}
                     </div>
 
+                    {/* CRM Section: Special Occasion Reminder */}
+                    <div className="bg-indigo-50/50 p-4 rounded-xl border border-indigo-100">
+                        <div className="flex items-center gap-2 mb-3">
+                            <i className="fas fa-magic text-indigo-600"></i>
+                            <span className="font-bold text-indigo-800 text-sm">Ocasión Especial e Inteligencia CRM</span>
+                            <Badge variant="info" className="text-[8px] px-1 py-0 uppercase">Premium</Badge>
+                        </div>
+                        <p className="text-[10px] text-indigo-400 mb-2 font-medium">Captura estos datos para que el sistema te sugiera ventas proactivas el próximo año.</p>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Motivo / Ocasión</label>
+                                <select
+                                    className="w-full p-2.5 rounded-xl bg-white text-xs font-bold border-gray-100 border outline-none text-gray-700"
+                                    value={eventOccasion}
+                                    onChange={e => setEventOccasion(e.target.value)}
+                                >
+                                    <option value="">-- No aplica --</option>
+                                    <option value="Cumpleaños">Cumpleaños</option>
+                                    <option value="Aniversario">Aniversario</option>
+                                    <option value="Boda">Boda</option>
+                                    <option value="Baby Shower">Baby Shower</option>
+                                    <option value="Graduación">Graduación</option>
+                                    <option value="Día de las Madres">Día de las Madres</option>
+                                    <option value="Día del Padre">Día del Padre</option>
+                                    <option value="San Valentín">San Valentín</option>
+                                    <option value="Inauguración">Inauguración</option>
+                                    <option value="Otro">Otro</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Fecha del Evento</label>
+                                <Input
+                                    type="date"
+                                    value={eventDate}
+                                    onChange={e => setEventDate(e.target.value)}
+                                    className="w-full !p-2 text-xs"
+                                />
+                            </div>
+                        </div>
+
+                        {/* IA Dedication Section */}
+                        <div className="mt-4 p-3 bg-indigo-50/50 rounded-2xl border border-indigo-100/50">
+                            <div className="flex items-center justify-between mb-2">
+                                <label className="text-[10px] font-black text-indigo-900 uppercase tracking-wider flex items-center gap-2">
+                                    <i className="fas fa-magic"></i> Dedicatoria para Tarjeta (IA)
+                                </label>
+                                <div className="flex gap-1 overflow-x-auto no-scrollbar">
+                                    {(['emotional', 'funny', 'formal', 'short'] as const).map(tone => (
+                                        <button
+                                            key={tone}
+                                            onClick={() => setAiDedicationTone(tone)}
+                                            className={`text-[8px] px-2 py-0.5 rounded-full font-bold transition-all border
+                                                ${aiDedicationTone === tone ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-600 border-indigo-100 hover:bg-indigo-50'}`}
+                                        >
+                                            {tone === 'emotional' ? 'Emotivo' : tone === 'funny' ? 'Divertido' : tone === 'formal' ? 'Formal' : 'Corto'}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="relative">
+                                <textarea
+                                    className="w-full p-3 rounded-xl bg-white/80 text-xs border border-indigo-100 outline-none focus:border-indigo-400 min-h-[80px] transition-all resize-none"
+                                    placeholder="Escribe aquí o usa la IA para generar una dedicatoria..."
+                                    value={dedication}
+                                    onChange={e => setDedication(e.target.value)}
+                                ></textarea>
+                                <button
+                                    onClick={handleGenerateDedication}
+                                    disabled={isGeneratingAI}
+                                    className={`absolute bottom-2 right-2 w-8 h-8 rounded-full flex items-center justify-center text-white shadow-lg transition-all
+                                        ${isGeneratingAI ? 'bg-gray-400' : 'bg-indigo-600 hover:bg-indigo-700 active:scale-90'}`}
+                                    title="Generar con IA"
+                                >
+                                    <i className={`fas ${isGeneratingAI ? 'fa-circle-notch fa-spin' : 'fa-magic'} text-xs`}></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
                     <div className="bg-gray-50 p-4 rounded-2xl space-y-4">
                         {paymentMethod === 'Efectivo' && (
                             <div className="grid grid-cols-2 gap-4">
@@ -1154,10 +1306,10 @@ export const POS: React.FC<POSProps> = ({
                         </Button>
                     </div>
                 </div>
-            </Modal>
+            </Modal >
 
             {/* MODAL NUEVO CLIENTE */}
-            <Modal isOpen={isNewCustomerModalOpen} onClose={() => setIsNewCustomerModalOpen(false)} title="Nuevo Cliente">
+            < Modal isOpen={isNewCustomerModalOpen} onClose={() => setIsNewCustomerModalOpen(false)} title="Nuevo Cliente" >
                 <div className="space-y-4">
                     <Input label="Nombre Completo" value={newCustomerData.name} onChange={e => setNewCustomerData({ ...newCustomerData, name: e.target.value })} required />
                     <Input label="Teléfono" value={newCustomerData.phone} onChange={e => setNewCustomerData({ ...newCustomerData, phone: e.target.value })} required />
@@ -1165,10 +1317,10 @@ export const POS: React.FC<POSProps> = ({
                     <Input label="Dirección" value={newCustomerData.address || ''} onChange={e => setNewCustomerData({ ...newCustomerData, address: e.target.value })} placeholder="Colonia, Calle..." />
                     <Button className="w-full" onClick={handleSaveCustomer}>Registrar y Seleccionar</Button>
                 </div>
-            </Modal>
+            </Modal >
 
             {/* MODAL DE ÉXITO Y RECOLECCIÓN/IMPRESIÓN */}
-            <Modal isOpen={isSuccessModalOpen} onClose={() => setIsSuccessModalOpen(false)} title="¡Venta Exitosa!" size="sm">
+            < Modal isOpen={isSuccessModalOpen} onClose={() => setIsSuccessModalOpen(false)} title="¡Venta Exitosa!" size="sm" >
                 <div className="text-center space-y-6 py-4">
                     <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-4xl mx-auto mb-4 animate-bounce">
                         <i className="fas fa-check"></i>
@@ -1239,10 +1391,10 @@ export const POS: React.FC<POSProps> = ({
                         </div>
                     </div>
                 </div>
-            </Modal>
+            </Modal >
 
             {/* MODAL CREAR COTIZACIÓN */}
-            <Modal isOpen={isQuoteModalOpen} onClose={() => setIsQuoteModalOpen(false)} title="Guardar Cotización" size="sm">
+            < Modal isOpen={isQuoteModalOpen} onClose={() => setIsQuoteModalOpen(false)} title="Guardar Cotización" size="sm" >
                 <div className="space-y-4">
                     <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
                         <p className="text-xs text-blue-600 font-bold uppercase mb-1">Resumen</p>

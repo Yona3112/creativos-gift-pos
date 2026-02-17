@@ -571,7 +571,25 @@ export class StorageService {
   }
 
   async updateStock(items: { id: string, quantity: number }[], type: MovementType, userId: string, refId?: string) {
+    // 1. Expand combos into a flat list of individual products
+    const flatItems: { id: string, quantity: number }[] = [];
+
     for (const item of items) {
+      const p = await db_engine.products.get(item.id);
+      if (p && (p as any).type === 'combo' && (p as any).comboItems) {
+        for (const ci of (p as any).comboItems) {
+          flatItems.push({
+            id: ci.productId,
+            quantity: ci.quantity * item.quantity
+          });
+        }
+      } else {
+        flatItems.push({ id: item.id, quantity: item.quantity });
+      }
+    }
+
+    // 2. Process flat list
+    for (const item of flatItems) {
       const p = await db_engine.products.get(item.id);
       if (p) {
         const prev = p.stock;
@@ -701,6 +719,10 @@ export class StorageService {
 
   async createSale(data: Partial<Sale> & { creditData?: any }): Promise<Sale> {
     return await db_engine.transaction('rw', [db_engine.sales, db_engine.products, db_engine.inventoryHistory, db_engine.customers, db_engine.settings, db_engine.credits], async () => {
+      if (!data.items || data.items.length === 0) {
+        throw new Error('No se puede crear una venta sin productos. Por favor agruegue al menos uno.');
+      }
+
       const settings = await this.getSettings();
       let folio = '';
       if (data.documentType === 'FACTURA') {
@@ -818,16 +840,12 @@ export class StorageService {
         }
       }
 
-      // Actualizar Stock y Kardex
-      // MOVED TO DATABASE TRIGGER (Supabase) to prevent race conditions
-      /*
       await this.updateStock(
         (newSale.items || []).filter(i => !i.id.startsWith('manual-')),
         'SALE',
         newSale.userId,
         newSale.folio
       );
-      */
 
       if (newSale.customerId) {
         const customer = await db_engine.customers.get(newSale.customerId);
@@ -972,23 +990,31 @@ export class StorageService {
           }
         }
 
-        // Revertir Stock en Kardex
+        // Revertir Stock en Kardex (Soporta Combos)
         for (const item of sale.items) {
           if (!item.id.startsWith('manual-')) {
-            const p = await db_engine.products.get(item.id);
-            if (p) {
-              const prev = p.stock;
-              p.stock += item.quantity;
-              await db_engine.products.put(p);
-              await this.recordMovement({
-                productId: item.id,
-                type: 'CANCELLATION',
-                quantity: item.quantity,
-                previousStock: prev,
-                newStock: p.stock,
-                reason: `Anulación de venta ${sale.folio}`,
-                userId
-              });
+            const pOrig = await db_engine.products.get(item.id);
+            const components = (pOrig && (pOrig as any).type === 'combo' && (pOrig as any).comboItems)
+              ? (pOrig as any).comboItems.map((ci: any) => ({ id: ci.productId, quantity: ci.quantity * item.quantity }))
+              : [{ id: item.id, quantity: item.quantity }];
+
+            for (const comp of components) {
+              const p = await db_engine.products.get(comp.id);
+              if (p) {
+                const prev = p.stock;
+                p.stock += comp.quantity;
+                p.updatedAt = this.getLocalNowISO(); // Ensure sync
+                await db_engine.products.put(p);
+                await this.recordMovement({
+                  productId: comp.id,
+                  type: 'CANCELLATION',
+                  quantity: comp.quantity,
+                  previousStock: prev,
+                  newStock: p.stock,
+                  reason: `Anulación de venta ${sale.folio}`,
+                  userId
+                });
+              }
             }
           }
         }

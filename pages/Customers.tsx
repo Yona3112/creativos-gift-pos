@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Customer, LoyaltyLevel, User, UserRole, CompanySettings, Sale, CreditAccount } from '../types';
 import { Button, Input, Modal, Badge, Pagination, useDebounce, Alert, PasswordConfirmDialog, showToast } from '../components/UIComponents';
 import { db } from '../services/storageService';
+import { GeminiService } from '../services/geminiService';
 
 interface CustomersProps {
   customers: Customer[];
@@ -23,7 +24,12 @@ export const Customers: React.FC<CustomersProps> = ({ customers, onUpdate, user,
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customerSales, setCustomerSales] = useState<Sale[]>([]);
   const [customerCredits, setCustomerCredits] = useState<CreditAccount[]>([]);
-  const [activeTab, setActiveTab] = useState<'profile' | 'sales' | 'credits'>('profile');
+  const [isCampaignModalOpen, setIsCampaignModalOpen] = useState(false);
+  const [campaignTarget, setCampaignTarget] = useState<'all' | 'platinum' | 'inactive'>('all');
+  const [campaignMessage, setCampaignMessage] = useState('');
+  const [campaignType, setCampaignType] = useState<'promo' | 'loyalty' | 'recovery'>('promo');
+  const [isGeneratingCampaign, setIsGeneratingCampaign] = useState(false);
+  const [activeTab, setActiveTab] = useState<'profile' | 'sales' | 'credits' | 'crm'>('profile');
 
   // Search & Pagination
   const [searchTerm, setSearchTerm] = useState('');
@@ -143,6 +149,39 @@ export const Customers: React.FC<CustomersProps> = ({ customers, onUpdate, user,
     currentPage * ITEMS_PER_PAGE
   );
 
+  const campaignRecipients = useMemo(() => {
+    return customers.filter(c => {
+      if (c.active === false || !c.phone) return false;
+      if (campaignTarget === 'platinum') return c.level === LoyaltyLevel.PLATINUM;
+      if (campaignTarget === 'inactive') {
+        const sixtyDaysAgo = new Date();
+        sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+        return (c.totalSpent || 0) > 0 && (!c.lastPurchaseDate || new Date(c.lastPurchaseDate) < sixtyDaysAgo);
+      }
+      return true;
+    });
+  }, [customers, campaignTarget]);
+
+  const handleGenerateCampaign = async () => {
+    if (!settings?.geminiApiKey) {
+      showToast("Configure Gemini API Key en Ajustes primero.", "warning");
+      return;
+    }
+    setIsGeneratingCampaign(true);
+    try {
+      const response = await GeminiService.generateCampaignMessage(
+        campaignType,
+        settings
+      );
+      setCampaignMessage(response);
+      showToast("Campaña generada. Personalízala y envía.", "success");
+    } catch (e) {
+      showToast("Error al generar campaña.", "error");
+    } finally {
+      setIsGeneratingCampaign(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
@@ -159,6 +198,7 @@ export const Customers: React.FC<CustomersProps> = ({ customers, onUpdate, user,
             icon="search"
           />
           <Button onClick={openNewModal} icon="plus">Nuevo</Button>
+          <Button variant="secondary" onClick={() => setIsCampaignModalOpen(true)} icon="bullhorn">Campañas IA</Button>
         </div>
       </div>
 
@@ -312,7 +352,7 @@ export const Customers: React.FC<CustomersProps> = ({ customers, onUpdate, user,
 
             {/* Tabs Navigation */}
             <div className="flex border-b mb-4">
-              {['profile', 'sales', 'credits'].map(tab => (
+              {['profile', 'sales', 'credits', 'crm'].map(tab => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab as any)}
@@ -322,6 +362,7 @@ export const Customers: React.FC<CustomersProps> = ({ customers, onUpdate, user,
                   {tab === 'profile' && 'Perfil y Datos'}
                   {tab === 'sales' && 'Historial Compras'}
                   {tab === 'credits' && 'Créditos'}
+                  {tab === 'crm' && 'CRM / Eventos'}
                 </button>
               ))}
             </div>
@@ -392,6 +433,51 @@ export const Customers: React.FC<CustomersProps> = ({ customers, onUpdate, user,
                   )}
                 </div>
               )}
+
+              {activeTab === 'crm' && (
+                <div className="space-y-4">
+                  <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100 mb-4">
+                    <h4 className="text-indigo-900 font-black text-sm mb-1 flex items-center gap-2">
+                      <i className="fas fa-magic"></i> Inteligencia de Eventos
+                    </h4>
+                    <p className="text-indigo-600 text-xs">A continuación se muestran las ocasiones especiales registradas para este cliente basadas en sus pedidos.</p>
+                  </div>
+
+                  {customerSales.filter(s => s.eventOccasion && s.eventDate).length === 0 ? (
+                    <div className="text-center py-10 text-gray-400">No hay eventos especiales registrados.</div>
+                  ) : (
+                    customerSales.filter(s => s.eventOccasion && s.eventDate).map((sale, idx) => (
+                      <div key={idx} className="flex justify-between items-center p-4 bg-white border border-gray-100 rounded-2xl shadow-sm hover:border-indigo-200 transition-all">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center">
+                            <i className="fas fa-gift"></i>
+                          </div>
+                          <div>
+                            <div className="font-black text-gray-800">{sale.eventOccasion}</div>
+                            <div className="text-xs text-gray-500">
+                              {new Date(sale.eventDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'long' })}
+                            </div>
+                          </div>
+                        </div>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="text-[10px] h-8 bg-indigo-50 text-indigo-600 border-none font-black hover:bg-indigo-600 hover:text-white"
+                          onClick={() => {
+                            const message = `Hola ${selectedCustomer.name}! 👋 En Creativos Gift recordamos que pronto celebras un(a) *${sale.eventOccasion}*. ¿Te gustaría ver opciones de regalos personalizados? ✨`;
+                            openWhatsApp(selectedCustomer.phone, selectedCustomer.name);
+                            // Note: openWhatsApp doesn't accept a custom message currently but we could enhance it
+                            const cleanPhone = selectedCustomer.phone.replace(/\D/g, '');
+                            window.open(`https://wa.me/504${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
+                          }}
+                        >
+                          Saludar
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -414,6 +500,77 @@ export const Customers: React.FC<CustomersProps> = ({ customers, onUpdate, user,
         }}
         onCancel={() => setArchiveConfirm({ open: false, id: '', name: '' })}
       />
+
+      {/* Campaign Modal */}
+      <Modal isOpen={isCampaignModalOpen} onClose={() => setIsCampaignModalOpen(false)} title="Campañas de Marketing Proactivas (IA)" size="lg">
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-3">
+              <label className="block text-xs font-bold text-gray-500 uppercase">1. Seleccionar Segmento</label>
+              <div className="grid grid-cols-1 gap-2">
+                {(['all', 'platinum', 'inactive'] as const).map(target => (
+                  <button
+                    key={target}
+                    onClick={() => setCampaignTarget(target)}
+                    className={`p-3 rounded-xl border-2 text-left transition-all ${campaignTarget === target ? 'border-primary bg-primary/5 text-primary' : 'border-gray-100 text-gray-600'}`}
+                  >
+                    <p className="font-bold text-sm">
+                      {target === 'all' && 'Todos los Clientes'}
+                      {target === 'platinum' && 'Sólo Clientes Platino'}
+                      {target === 'inactive' && 'Clientes Inactivos (+60 días)'}
+                    </p>
+                    <p className="text-[10px] opacity-70">
+                      {target === 'all' && 'Toda tu base de datos con teléfono'}
+                      {target === 'platinum' && 'Tus clientes más leales y VIP'}
+                      {target === 'inactive' && 'Vuelve a conectar con quienes ya te compraron'}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-3">
+              <label className="block text-xs font-bold text-gray-500 uppercase">2. Tipo de Campaña (IA)</label>
+              <select className="w-full p-3 rounded-xl border border-gray-200" value={campaignType} onChange={e => setCampaignType(e.target.value as any)}>
+                <option value="promo">💥 Promoción de Temporada</option>
+                <option value="loyalty">🎁 Fidelización y Regalos</option>
+                <option value="recovery">🔙 Recuperación de Clientes</option>
+              </select>
+              <Button onClick={handleGenerateCampaign} disabled={isGeneratingCampaign} className="w-full" icon={isGeneratingCampaign ? "circle-notch" : "magic"} variant="primary">
+                {isGeneratingCampaign ? 'Generando...' : 'Generar Mensaje IA'}
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-xs font-bold text-gray-500 uppercase">3. Personalizar y Enviar ({campaignRecipients.length} destinatarios)</label>
+            <textarea
+              className="w-full p-4 rounded-xl bg-gray-50 border border-gray-200 text-sm min-h-[120px] outline-none focus:border-primary transition-all"
+              value={campaignMessage}
+              onChange={e => setCampaignMessage(e.target.value)}
+              placeholder="El mensaje generado aparecerá aquí..."
+            ></textarea>
+            <div className="max-h-[200px] overflow-y-auto border border-gray-100 rounded-xl">
+              {campaignRecipients.map(recipient => (
+                <div key={recipient.id} className="flex items-center justify-between p-3 border-b border-gray-50 last:border-0 hover:bg-gray-50">
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-gray-800">{recipient.name}</span>
+                    <span className="text-[10px] text-gray-500">{recipient.phone}</span>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="success"
+                    onClick={() => {
+                      const msg = campaignMessage.replace('[Nombre]', recipient.name.split(' ')[0]);
+                      window.open(`https://wa.me/504${recipient.phone.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
+                    }}
+                    icon="whatsapp"
+                  > Enviar</Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

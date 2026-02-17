@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { Product, Category, User, UserRole, CompanySettings } from '../types';
+import { Product, Category, User, UserRole, CompanySettings, ComboItem, Sale } from '../types';
 import { Button, Input, Card, Modal, useDebounce, Pagination, PasswordConfirmDialog, showToast } from '../components/UIComponents';
 import { db } from '../services/storageService';
 import { GoogleGenAI } from "@google/genai";
@@ -14,6 +14,7 @@ import { InventoryAudit } from './InventoryAudit';
 
 interface ProductsProps {
     products: Product[];
+    sales: Sale[];
     categories: Category[];
     users: User[];
     onUpdate: () => void;
@@ -25,9 +26,9 @@ interface ProductsProps {
 
 const ITEMS_PER_PAGE = 8;
 
-export const Products: React.FC<ProductsProps> = ({ products, categories, users, onUpdate, initialFilter, initialTab, settings, user }) => {
+export const Products: React.FC<ProductsProps> = ({ products, sales, categories, users, onUpdate, initialFilter, initialTab, settings, user }) => {
     const isAdmin = user?.role === UserRole.ADMIN;
-    const [activeTab, setActiveTab] = useState<'products' | 'categories' | 'consumables' | 'suppliers' | 'kardex' | 'prices' | 'audit'>('products');
+    const [activeTab, setActiveTab] = useState<'products' | 'categories' | 'consumables' | 'suppliers' | 'kardex' | 'prices' | 'audit' | 'intelligence'>('products');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
     const [formData, setFormData] = useState<Partial<Product>>({});
@@ -44,6 +45,22 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
     useEffect(() => {
         if (initialFilter === 'lowStock') setFilterCategory('lowStock');
         if (initialTab === 'consumables') setActiveTab('consumables');
+
+        // Combo item selection listener
+        const handleAddComboItem = (e: any) => {
+            const productId = e.detail.id;
+            setFormData(prev => {
+                const existing = (prev.comboItems || []).find(ci => ci.productId === productId);
+                if (existing) return prev;
+                return {
+                    ...prev,
+                    comboItems: [...(prev.comboItems || []), { productId, quantity: 1 }]
+                };
+            });
+        };
+
+        window.addEventListener('add-combo-item', handleAddComboItem);
+        return () => window.removeEventListener('add-combo-item', handleAddComboItem);
     }, [initialFilter, initialTab]);
 
     const openModal = async (product?: Product) => {
@@ -133,6 +150,35 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
             }
         }
     };
+
+    const inventoryIntelligence = useMemo(() => {
+        const last30Days = new Date();
+        last30Days.setDate(last30Days.getDate() - 30);
+
+        const recentSales = sales.filter(s => new Date(s.date) >= last30Days && s.status === 'active');
+
+        return products.map(product => {
+            const productSales = recentSales.reduce((acc, sale) => {
+                const item = sale.items.find(i => i.id === product.id);
+                return acc + (item ? item.quantity : 0);
+            }, 0);
+
+            const velocity = productSales / 30; // units per day
+            const runway = velocity > 0 ? product.stock / velocity : 999;
+
+            return {
+                ...product,
+                velocity: velocity.toFixed(2),
+                runway: runway === 999 ? '∞' : Math.floor(runway).toString(),
+                priority: runway < 7 ? 'HIGH' : runway < 15 ? 'MEDIUM' : 'LOW',
+                suggestedPurchase: runway < 15 ? Math.ceil(velocity * 30 - product.stock) : 0
+            };
+        }).filter(p => p.priority !== 'LOW' || parseFloat(p.velocity) > 0)
+            .sort((a, b) => {
+                if (a.priority === b.priority) return parseFloat(b.velocity) - parseFloat(a.velocity);
+                return a.priority === 'HIGH' ? -1 : 1;
+            });
+    }, [products, sales]);
 
     const filteredProducts = useMemo(() => {
         const lower = debouncedSearch.toLowerCase();
@@ -598,6 +644,7 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
                 <div className="flex bg-white p-1 rounded-xl border shadow-sm overflow-x-auto max-w-full">
                     {[
                         { id: 'products', label: 'Productos', icon: 'box' },
+                        { id: 'intelligence', label: 'Inteligencia', icon: 'brain' },
                         { id: 'kardex', label: 'Movimientos', icon: 'history' },
                         { id: 'audit', label: 'Conteo Físico', icon: 'clipboard-check' },
                         { id: 'prices', label: 'Historial Precios', icon: 'dollar-sign' },
@@ -607,7 +654,7 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
                         <button
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id as any)}
-                            className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${activeTab === tab.id ? 'bg-primary text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+                            className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap ${activeTab === tab.id ? 'bg-primary text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}
                         >
                             <i className={`fas fa-${tab.icon}`}></i> {tab.label}
                         </button>
@@ -682,8 +729,141 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
             {activeTab === 'consumables' && <Consumables onUpdate={onUpdate} />}
             {activeTab === 'suppliers' && <Suppliers />}
 
+            {activeTab === 'intelligence' && (
+                <div className="space-y-6 animate-fade-in">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="bg-gradient-to-br from-indigo-600 to-indigo-700 rounded-3xl p-6 text-white shadow-xl shadow-indigo-100 flex flex-col justify-between">
+                            <div>
+                                <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center mb-4 backdrop-blur-sm">
+                                    <i className="fas fa-chart-line text-2xl"></i>
+                                </div>
+                                <h3 className="font-black text-xl mb-1">Rotación Predictiva</h3>
+                                <p className="text-white/70 text-xs font-medium">Analizamos tus ventas de los últimos 30 días para predecir cuándo te quedarás sin stock.</p>
+                            </div>
+                            <div className="mt-8 flex items-baseline gap-2">
+                                <span className="text-4xl font-black">{inventoryIntelligence.filter(p => p.priority === 'HIGH').length}</span>
+                                <span className="text-sm font-bold text-white/60">Críticos</span>
+                            </div>
+                        </div>
+
+                        <Card className="md:col-span-2 border-indigo-100 bg-indigo-50/30">
+                            <div className="flex items-center gap-4 mb-4">
+                                <div className="w-10 h-10 bg-indigo-600 text-white rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200">
+                                    <i className="fas fa-magic"></i>
+                                </div>
+                                <div>
+                                    <h4 className="font-black text-gray-800">Sugerencias de Compra Inteligentes</h4>
+                                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Optimización basada en velocidad de venta</p>
+                                </div>
+                            </div>
+                            <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                                {inventoryIntelligence.length === 0 ? (
+                                    <div className="text-center py-10 text-gray-400 italic">No hay suficientes datos para predicciones.</div>
+                                ) : (
+                                    inventoryIntelligence.slice(0, 10).map(item => (
+                                        <div key={item.id} className="bg-white p-3 rounded-2xl border border-gray-100 flex items-center justify-between hover:shadow-md transition-all group">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center text-gray-400">
+                                                    {item.image ? <img src={item.image} className="w-full h-full object-cover rounded-lg" /> : <i className="fas fa-box text-xs"></i>}
+                                                </div>
+                                                <div>
+                                                    <p className="font-black text-gray-800 text-xs truncate max-w-[150px]">{item.name}</p>
+                                                    <p className="text-[9px] text-gray-400 font-bold">Venta: {item.velocity} uni/día</p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-4">
+                                                <div className="text-right">
+                                                    <p className={`text-[10px] font-black ${item.priority === 'HIGH' ? 'text-red-500' : 'text-yellow-600'}`}>
+                                                        {item.runway === '∞' ? 'Stock OK' : `Quedan ≈ ${item.runway} días`}
+                                                    </p>
+                                                    <p className="text-[9px] text-gray-400 font-bold">Autonomía</p>
+                                                </div>
+                                                <div className="bg-indigo-50 px-3 py-1.5 rounded-xl text-center min-w-[80px]">
+                                                    <p className="text-indigo-600 font-black text-xs">+{item.suggestedPurchase}</p>
+                                                    <p className="text-[8px] text-indigo-400 font-bold uppercase">Sugerido</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </Card>
+                    </div>
+
+                    <div className="bg-white rounded-3xl border p-6 space-y-4">
+                        <div className="flex justify-between items-center">
+                            <h3 className="font-black text-gray-800 flex items-center gap-2">
+                                <i className="fas fa-list-ol text-indigo-500"></i> Análisis Detallado de Inventario
+                            </h3>
+                            <div className="flex items-center gap-2">
+                                <span className="flex items-center gap-1.5 text-[10px] font-bold text-gray-400">
+                                    <span className="w-2 h-2 rounded-full bg-red-500"></span> Urgente
+                                </span>
+                                <span className="flex items-center gap-1.5 text-[10px] font-bold text-gray-400">
+                                    <span className="w-2 h-2 rounded-full bg-yellow-400"></span> Preventivo
+                                </span>
+                            </div>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm text-left">
+                                <thead className="text-gray-400 font-bold uppercase text-[10px] tracking-widest border-b">
+                                    <tr>
+                                        <th className="px-3 py-2">Producto</th>
+                                        <th className="px-3 py-2 text-center">Stock Actual</th>
+                                        <th className="px-3 py-2 text-center">Min. Sugerido</th>
+                                        <th className="px-3 py-2 text-center">Velocidad</th>
+                                        <th className="px-3 py-2 text-right">Compra Recomendada</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y">
+                                    {inventoryIntelligence.map(item => (
+                                        <tr key={item.id} className="hover:bg-gray-50 transition-colors">
+                                            <td className="px-3 py-3">
+                                                <p className="font-black text-gray-800 text-[13px]">{item.name}</p>
+                                                <p className="text-[10px] text-gray-400 font-mono">{item.code}</p>
+                                            </td>
+                                            <td className="px-3 py-3 text-center">
+                                                <span className={`px-2 py-1 rounded-lg font-black text-xs ${parseInt(item.runway) < 7 ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
+                                                    {item.stock}
+                                                </span>
+                                            </td>
+                                            <td className="px-3 py-3 text-center font-bold text-gray-500">{item.minStock}</td>
+                                            <td className="px-3 py-3 text-center text-xs font-bold text-indigo-600">{item.velocity} uds/día</td>
+                                            <td className="px-3 py-3 text-right">
+                                                <span className="bg-indigo-600 text-white px-3 py-1 rounded-full font-black text-xs shadow-md shadow-indigo-100">
+                                                    Pedir {item.suggestedPurchase}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {activeTab === 'suppliers' && <Suppliers />}
+
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={formData.id ? "Editar Producto" : "Nuevo Producto"} size="lg">
                 <form onSubmit={handleSubmit} className="space-y-3">
+                    <div className="flex bg-gray-100 p-1 rounded-xl mb-4">
+                        <button
+                            type="button"
+                            onClick={() => setFormData({ ...formData, type: 'standalone' })}
+                            className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${(!formData.type || formData.type === 'standalone') ? 'bg-white shadow-sm text-primary' : 'text-gray-500'}`}
+                        >
+                            Producto Individual
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setFormData({ ...formData, type: 'combo', stock: 0 })}
+                            className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${formData.type === 'combo' ? 'bg-white shadow-sm text-primary' : 'text-gray-500'}`}
+                        >
+                            Combo / Kit (Bundle)
+                        </button>
+                    </div>
+
                     <div className="flex gap-4 items-start">
                         <div className="relative w-24 h-24 bg-gray-50 rounded-2xl border-2 border-dashed flex items-center justify-center overflow-hidden cursor-pointer" onClick={() => fileInputRef.current?.click()}>
                             {isCompressing ? <div className="text-center"><i className="fas fa-spinner fa-spin text-primary text-lg"></i><p className="text-[8px] text-gray-400 mt-1">Comprimiendo...</p></div> : formData.image ? <img src={formData.image} className="w-full h-full object-cover" /> : <i className="fas fa-camera text-xl text-gray-300"></i>}
@@ -742,6 +922,81 @@ export const Products: React.FC<ProductsProps> = ({ products, categories, users,
                             setFormData({ ...formData, cost: isNaN(val) ? 0 : val });
                         }} required />
                     </div>
+
+                    {formData.type === 'combo' && (
+                        <div className="bg-primary/5 p-4 rounded-xl border border-primary/20 space-y-3">
+                            <h3 className="text-xs font-black text-primary uppercase tracking-widest flex items-center gap-2">
+                                <i className="fas fa-layer-group"></i> Productos en este Combo
+                            </h3>
+                            <div className="space-y-2">
+                                {(formData.comboItems || []).map((item, idx) => {
+                                    const p = products.find(prod => prod.id === item.productId);
+                                    return (
+                                        <div key={idx} className="flex items-center gap-2 bg-white p-2 rounded-lg border text-sm">
+                                            <span className="flex-1 font-bold truncate">{p?.name || 'Producto Desconocido'}</span>
+                                            <div className="flex items-center border rounded-lg">
+                                                <button type="button" onClick={() => {
+                                                    const newItems = [...(formData.comboItems || [])];
+                                                    newItems[idx].quantity = Math.max(1, newItems[idx].quantity - 1);
+                                                    setFormData({ ...formData, comboItems: newItems });
+                                                }} className="px-2 py-1 text-gray-500 hover:text-primary">-</button>
+                                                <span className="px-2 font-black w-8 text-center">{item.quantity}</span>
+                                                <button type="button" onClick={() => {
+                                                    const newItems = [...(formData.comboItems || [])];
+                                                    newItems[idx].quantity += 1;
+                                                    setFormData({ ...formData, comboItems: newItems });
+                                                }} className="px-2 py-1 text-gray-500 hover:text-primary">+</button>
+                                            </div>
+                                            <button type="button" onClick={() => {
+                                                const newItems = (formData.comboItems || []).filter((_, i) => i !== idx);
+                                                setFormData({ ...formData, comboItems: newItems });
+                                            }} className="text-red-400 hover:text-red-600 p-1">
+                                                <i className="fas fa-times"></i>
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            <div className="relative group">
+                                <Input
+                                    placeholder="Buscar producto a incluir..."
+                                    icon="search"
+                                    className="bg-white"
+                                    onChange={(e) => {
+                                        const term = e.target.value.toLowerCase();
+                                        const results = products.filter(p =>
+                                            p.type !== 'combo' &&
+                                            (p.name.toLowerCase().includes(term) || p.code.toLowerCase().includes(term))
+                                        ).slice(0, 5);
+                                        // Simple dropdown logic (manual UI)
+                                        const dropdown = document.getElementById('combo-search-results');
+                                        if (dropdown) {
+                                            dropdown.innerHTML = results.map(r => `
+                                                <button type="button" onclick="window.addComboItem('${r.id}')" class="w-full text-left p-2 hover:bg-primary/10 text-xs font-bold border-b last:border-0 truncate flex justify-between">
+                                                    <span>${r.name}</span>
+                                                    <span class="text-gray-400">L ${r.price}</span>
+                                                </button>
+                                            `).join('');
+                                            dropdown.style.display = results.length > 0 ? 'block' : 'none';
+                                        }
+                                    }}
+                                />
+                                <div id="combo-search-results" className="absolute top-full left-0 right-0 bg-white border rounded-xl shadow-xl z-[100] mt-1 hidden max-h-40 overflow-y-auto"></div>
+                            </div>
+                            <script>
+                                {`
+                                    window.addComboItem = (id) => {
+                                        const event = new CustomEvent('add-combo-item', { detail: { id } });
+                                        window.dispatchEvent(event);
+                                        const dropdown = document.getElementById('combo-search-results');
+                                        if (dropdown) dropdown.style.display = 'none';
+                                    }
+                                `}
+                            </script>
+                        </div>
+                    )}
+
 
                     <div className="grid grid-cols-2 gap-3">
                         <div>

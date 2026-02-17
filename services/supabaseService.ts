@@ -869,6 +869,32 @@ export class SupabaseService {
     }
 
     /**
+     * Checks the health of the synchronization process.
+     * Returns a status based on the time elapsed since the last successful sync.
+     */
+    static async checkSyncHealth(): Promise<{ status: 'healthy' | 'warning' | 'critical'; lastSync: string | null; minutesAgo: number }> {
+        const settings = await db.getSettings();
+        if (!settings.lastCloudSync) {
+            return { status: 'warning', lastSync: null, minutesAgo: Infinity };
+        }
+
+        const lastSyncDate = new Date(settings.lastCloudSync);
+        const now = new Date();
+        const diffMs = now.getTime() - lastSyncDate.getTime();
+        const diffMins = Math.floor(diffMs / 60000);
+
+        let status: 'healthy' | 'warning' | 'critical' = 'healthy';
+        if (diffMins > 60) status = 'critical'; // More than 1 hour is critical for a real-time POS
+        else if (diffMins > 15) status = 'warning'; // More than 15 mins is a warning
+
+        return {
+            status,
+            lastSync: settings.lastCloudSync,
+            minutesAgo: diffMins
+        };
+    }
+
+    /**
      * EMERGENCY FIX: Explicitly deletes known phantom records that keep reappearing
      * because local devices push them back to the cloud.
      */

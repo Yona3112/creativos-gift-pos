@@ -592,6 +592,29 @@ export const Orders: React.FC<OrdersProps> = ({ sales: allSales, customers, cate
             await db.updateSaleStatus(selectedOrder.id, editForm.status, details);
             showToast(`Pedido actualizado: ${editForm.status}`, 'success');
 
+            // --- FEATURE: Status Notification ---
+            const customer = customers.find(c => c.id === selectedOrder.customerId);
+            if (customer?.phone && editForm.status !== (selectedOrder.fulfillmentStatus || 'pending')) {
+                const statusLabels: Record<string, string> = {
+                    design: 'en etapa de Diseño 🎨',
+                    printing: 'siendo impreso 🖨️',
+                    production: 'en mesa de producción 🛠️',
+                    qc: 'en control de calidad (QC) ✅',
+                    ready: 'listo para entrega/envío 🎁',
+                    shipped: 'enviado a su destino 🚚',
+                    delivered: 'entregado con éxito 💖'
+                };
+
+                if (statusLabels[editForm.status]) {
+                    const message = `¡Hola ${customer.name}! 👋\nLe informamos que su pedido *${selectedOrder.folio}* está ${statusLabels[editForm.status]}.\n\nGracias por su preferencia en *Creativos Gift*. ✨`;
+
+                    if (window.confirm(`¿Desea notificar al cliente vía WhatsApp sobre el estado "${editForm.status}"?`)) {
+                        const win = window.open(`https://wa.me/504${customer.phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`, '_blank');
+                        if (win) win.focus();
+                    }
+                }
+            }
+
             if (onUpdate) onUpdate(); // Refresh global state
 
         } catch (e: any) {

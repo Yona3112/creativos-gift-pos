@@ -25,6 +25,11 @@ export interface Branch {
   updatedAt?: string;
 }
 
+export interface ComboItem {
+  productId: string;
+  quantity: number;
+}
+
 export interface Product {
   id: string;
   code: string;
@@ -41,6 +46,8 @@ export interface Product {
   providerId?: string;
   active?: boolean;
   updatedAt?: string;  // Timestamp for sync tracking (updated on stock changes)
+  type?: 'standalone' | 'combo';
+  comboItems?: ComboItem[];
   _synced?: boolean;
 }
 
@@ -188,6 +195,7 @@ export interface Sale {
   taxAmount: number;
   discount: number;
   total: number;
+  cost?: number; // Total cost (COGS) for profitability analysis
   paymentMethod: 'Efectivo' | 'Tarjeta' | 'Transferencia' | 'Mixto' | 'Crédito';
   paymentDetails?: PaymentDetails;
   customerId?: string;
@@ -208,6 +216,9 @@ export interface Sale {
   balancePaymentDate?: string;  // Date when pending balance was paid (for cash flow tracking)
   balancePaymentMethod?: 'Efectivo' | 'Tarjeta' | 'Transferencia'; // How the balance was paid
   balancePaid?: number;  // Exact amount paid when completing the order
+  eventOccasion?: string; // e.g. 'Cumpleaños', 'Aniversario', 'Día de las Madres'
+  eventDate?: string;     // ISO date of the event
+  dedication?: string;    // AI-generated or manual dedication for cards
   fulfillmentHistory?: StatusHistoryEntry[]; // History of status changes
   updatedAt?: string; // Timestamp for sync tracking
   createdAt?: string; // Precise creation timestamp
@@ -284,6 +295,7 @@ export interface CompanySettings {
   deviceId?: string;
   boxfulApiKey?: string;
   boxfulSandbox?: boolean;
+  geminiApiKey?: string;
   updatedAt?: string;
 }
 

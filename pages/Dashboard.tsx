@@ -12,7 +12,8 @@ interface DashboardProps {
     sales: Sale[];
     credits: CreditAccount[];
     customers: Customer[];
-    consumables: Consumable[]; // Prop nueva
+    consumables: Consumable[];
+    expenses: any[]; // Feature 5
     onNavigate?: (page: string, params?: any) => void;
 }
 
@@ -51,7 +52,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
     return null;
 };
 
-export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, customers, consumables, onNavigate }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, customers, consumables, expenses, onNavigate }) => {
     // Helper for Local Date (Fix UTC Bug)
     const getLocalDate = (d: Date = new Date()) => {
         const offset = d.getTimezoneOffset() * 60000;
@@ -123,8 +124,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, 
         // Credits Logic
         const totalReceivable = (credits || []).filter(c => c.status !== 'cancelled' && c.status !== 'paid').reduce((acc, c) => acc + ((c.totalAmount || 0) - (c.paidAmount || 0)), 0);
 
+        // Feature 5: Real Profit Today
+        const expensesToday = (expenses || [])
+            .filter(e => getLocalDate(new Date(e.date)) === today)
+            .reduce((acc, e) => acc + (e.amount || 0), 0);
+
+        // Bruta profit today (Sale Revenue - Item Cost)
+        const profitBrutaToday = (sales || [])
+            .filter(s => getLocalDate(new Date(s.date)) === today && s.status === 'active')
+            .reduce((acc, s) => acc + ((s.total || 0) - (s.cost || 0)), 0);
+
         return {
             totalSalesToday,
+            netProfitToday: profitBrutaToday - expensesToday,
+            expensesToday,
             lowStock,
             inventoryValue,
             totalReceivable,
@@ -136,7 +149,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, 
             productionOrders,
             readyOrders
         };
-    }, [products, sales, credits, consumables, today]);
+    }, [products, sales, credits, consumables, expenses, today]);
 
     // Chart Data: Last 7 Days Sales Trend
     const salesData = useMemo(() => {
@@ -197,33 +210,58 @@ export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, 
                 // Find the original sale associated with this credit
                 const originalSale = sales.find(s => s.id === credit.saleId);
                 if (!originalSale) return acc;
-
                 const totalOrderCost = (originalSale.items || []).reduce((sum, item) => sum + ((item.cost || 0) * item.quantity), 0);
-                const paymentRatio = originalSale.total > 0 ? dayAmount / originalSale.total : 0;
+                const paymentRatio = credit.totalAmount > 0 ? dayAmount / credit.totalAmount : 0;
                 return acc + (totalOrderCost * paymentRatio);
             }, 0);
 
-            const totalProportionalCost = proportionalCostNewSales + proportionalCostBalances + creditPaymentsCost;
-
-            // Simple tax estimate for chart (optional, usually we care about cash profit)
-            const estimatedTax = salesCreatedToday.reduce((acc, s) => {
-                const paymentRatio = s.total > 0 ? (s.deposit || 0) / s.total : 1;
-                return acc + (s.taxAmount * paymentRatio);
-            }, 0);
-
-            const netRevenue = totalRevenue - estimatedTax;
-            const profit = netRevenue - totalProportionalCost;
-
-            const dayName = new Date(dateStr + 'T00:00:00').toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric' });
+            const totalCost = proportionalCostNewSales + proportionalCostBalances + creditPaymentsCost;
+            const dayExpenses = (expenses || [])
+                .filter(e => getLocalDate(new Date(e.date)) === dateStr)
+                .reduce((acc, e) => acc + (e.amount || 0), 0);
 
             return {
-                name: dayName,
+                name: dateStr.split('-').slice(1).reverse().join('/'),
                 total: totalRevenue,
-                netRevenue,
-                profit
+                netRevenue: totalRevenue * 0.85,
+                profit: totalRevenue - totalCost - dayExpenses,
+                cost: totalCost,
+                expenses: dayExpenses
             };
         });
-    }, [sales, credits]);
+    }, [sales, credits, expenses, today]);
+
+    // CRM Intelligence: Find upcoming special occasions based on anniversaries/birthdays from any year
+    const crmInsights = useMemo(() => {
+        const todayObj = new Date();
+        const currentMonth = todayObj.getMonth();
+        const currentDay = todayObj.getDate();
+
+        return (sales || [])
+            .filter(s => s.eventDate && s.eventOccasion && s.status === 'active')
+            .map(s => {
+                const eventDate = new Date(s.eventDate);
+                // Compare only month and day to find recurrences
+                const isSameMonth = eventDate.getMonth() === currentMonth;
+                const isUpcoming = isSameMonth && eventDate.getDate() >= currentDay && eventDate.getDate() <= currentDay + 15;
+
+                if (isUpcoming || (isSameMonth && eventDate.getDate() === currentDay)) {
+                    return {
+                        sale: s,
+                        customerName: s.customerName || 'Cliente',
+                        occasion: s.eventOccasion,
+                        date: s.eventDate,
+                        day: eventDate.getDate(),
+                        daysLeft: eventDate.getDate() - currentDay,
+                        isToday: eventDate.getDate() === currentDay
+                    };
+                }
+                return null;
+            })
+            .filter((item): item is NonNullable<typeof item> => item !== null)
+            .sort((a, b) => a.day - b.day)
+            .slice(0, 10); // Top 10 upcoming
+    }, [sales]);
 
     // Top Products Data (Grouped by ID for consistency)
     const topProducts = useMemo(() => {
@@ -461,45 +499,68 @@ export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, 
                 </div>
             )}
 
-            {/* PANEL DE SUGERENCIAS DE REORDEN */}
+            {/* PANEL DE SUGERENCIAS DE REORDEN - PROVERBIO PROXIMO AGOTAMIENTO */}
             {reorderSuggestions.length > 0 && (
-                <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm">
-                    <div className="flex items-center justify-between mb-3">
-                        <h3 className="font-bold text-gray-800 flex items-center gap-2">
-                            <i className="fas fa-truck text-orange-500"></i>
-                            Sugerencias de Reorden
-                            <Badge variant="warning">{reorderSuggestions.length}</Badge>
-                        </h3>
+                <div className="bg-white border-2 border-primary/10 rounded-2xl p-4 shadow-md animate-fade-in">
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="flex flex-col">
+                            <h3 className="font-black text-gray-800 flex items-center gap-2 text-lg">
+                                <i className="fas fa-brain text-primary animate-pulse"></i>
+                                Proyección de Inventario AI
+                                <Badge variant="primary">{reorderSuggestions.length}</Badge>
+                            </h3>
+                            <p className="text-[10px] text-gray-400 font-medium">Predicciones basadas en ventas de los últimos 30 días</p>
+                        </div>
                         <Button size="sm" variant="ghost" onClick={() => onNavigate && onNavigate('products', { filter: 'lowStock' })}>
-                            Ver Todos
+                            Ver Inventario Completo <i className="fas fa-arrow-right ml-1"></i>
                         </Button>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-xs">
-                            <thead className="bg-gray-50 text-gray-500 uppercase">
+                            <thead className="bg-gray-50 text-gray-500 font-bold uppercase tracking-widest text-[9px] border-b">
                                 <tr>
                                     <th className="px-3 py-2 text-left">Producto</th>
-                                    <th className="px-3 py-2 text-center">Stock</th>
-                                    <th className="px-3 py-2 text-center">Sugerido</th>
-                                    <th className="px-3 py-2 text-center">Días Stock</th>
+                                    <th className="px-3 py-2 text-center">Venta Diaria</th>
+                                    <th className="px-3 py-2 text-center">Stock Actual</th>
+                                    <th className="px-3 py-2 text-center">Días Restantes</th>
+                                    <th className="px-3 py-2 text-center">Pedido Sugerido</th>
                                     <th className="px-3 py-2 text-center">Urgencia</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y">
                                 {reorderSuggestions.slice(0, 5).map(item => (
-                                    <tr key={item.productId} className="hover:bg-gray-50">
-                                        <td className="px-3 py-2">
-                                            <p className="font-bold text-gray-800">{item.productName}</p>
-                                            <p className="text-gray-400 text-[10px]">{item.code}</p>
+                                    <tr key={item.productId} className="hover:bg-primary/5 transition-colors">
+                                        <td className="px-3 py-3">
+                                            <p className="font-black text-gray-800">{item.productName}</p>
+                                            <p className="text-gray-400 text-[9px] font-mono">{item.code}</p>
                                         </td>
-                                        <td className="px-3 py-2 text-center font-bold text-red-500">{item.currentStock}</td>
-                                        <td className="px-3 py-2 text-center font-bold text-green-600">+{item.suggestedQty}</td>
-                                        <td className="px-3 py-2 text-center">
-                                            {item.daysOfStock === 999 ? '∞' : `${item.daysOfStock}d`}
+                                        <td className="px-3 py-3 text-center text-gray-500 font-bold">
+                                            {item.avgDailySales} <span className="text-[9px] font-medium">u/día</span>
                                         </td>
-                                        <td className="px-3 py-2 text-center">
+                                        <td className={`px-3 py-3 text-center font-black ${item.currentStock <= item.minStock ? 'text-red-500' : 'text-gray-700'}`}>
+                                            {item.currentStock}
+                                        </td>
+                                        <td className="px-3 py-3 text-center">
+                                            <div className="flex flex-col items-center">
+                                                <span className={`font-black ${item.daysOfStock <= 3 ? 'text-red-600' : item.daysOfStock <= 7 ? 'text-orange-500' : 'text-green-600'}`}>
+                                                    {item.daysOfStock === 999 ? '∞' : `aprox. ${item.daysOfStock}d`}
+                                                </span>
+                                                <div className="w-12 h-1 bg-gray-100 rounded-full mt-1 overflow-hidden">
+                                                    <div
+                                                        className={`h-full rounded-full ${item.daysOfStock <= 3 ? 'bg-red-500' : item.daysOfStock <= 7 ? 'bg-orange-400' : 'bg-green-500'}`}
+                                                        style={{ width: `${Math.min(100, (item.daysOfStock / 15) * 100)}%` }}
+                                                    ></div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="px-3 py-3 text-center">
+                                            <div className="inline-flex items-center gap-1 bg-green-50 text-green-700 px-2 py-1 rounded-lg border border-green-100 font-black">
+                                                <i className="fas fa-plus-circle text-[10px]"></i> {item.suggestedQty}
+                                            </div>
+                                        </td>
+                                        <td className="px-3 py-3 text-right">
                                             <Badge variant={item.urgency === 'critical' ? 'danger' : item.urgency === 'low' ? 'warning' : 'info'}>
-                                                {item.urgency === 'critical' ? '🔴 Urgente' : item.urgency === 'low' ? '🟡 Bajo' : '🟢 Normal'}
+                                                {item.urgency === 'critical' ? '🔴 AGOTADO' : item.urgency === 'low' ? '🟡 CRÍTICO' : '🔵 PREVENTIVO'}
                                             </Badge>
                                         </td>
                                     </tr>
@@ -507,20 +568,37 @@ export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, 
                             </tbody>
                         </table>
                     </div>
+                    {reorderSuggestions.length > 5 && (
+                        <div className="mt-4 p-2 bg-gray-50 rounded-xl border border-dashed border-gray-200 text-center text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                            Hay {reorderSuggestions.length - 5} predicciones adicionales disponibles
+                        </div>
+                    )}
                 </div>
             )}
 
             {/* BENTO GRID LAYOUT */}
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
 
-                {/* 1. Ventas Hoy (Big Card) */}
-                <div className="md:col-span-2 bg-gradient-to-br from-indigo-600 to-blue-600 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden group">
+                {/* 1. Ventas Hoy (Medium Card) */}
+                <div className="bg-gradient-to-br from-indigo-600 to-blue-600 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden group">
                     <div className="absolute right-0 top-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-10 -mt-10 group-hover:bg-white/20 transition-all"></div>
                     <div className="relative z-10">
                         <p className="text-blue-100 font-medium mb-1">Ventas Totales (Hoy)</p>
-                        <h2 className="text-4xl font-black mb-2">L {stats.totalSalesToday.toLocaleString('en-US', { minimumFractionDigits: 2 })}</h2>
-                        <div className="flex gap-2 text-xs font-bold bg-white/10 w-fit px-3 py-1 rounded-full">
-                            <i className="fas fa-chart-line"></i> Ingresos Diarios
+                        <h2 className="text-3xl font-black mb-2">L {stats.totalSalesToday.toLocaleString('en-US', { minimumFractionDigits: 2 })}</h2>
+                        <div className="flex gap-2 text-[10px] font-bold bg-white/10 w-fit px-3 py-1 rounded-full">
+                            <i className="fas fa-chart-line"></i> Ingresos del Turno
+                        </div>
+                    </div>
+                </div>
+
+                {/* 1.1 Utilidad Hoy (Medium Card) */}
+                <div className="bg-gradient-to-br from-green-600 to-emerald-600 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden group">
+                    <div className="absolute right-0 top-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-10 -mt-10 group-hover:bg-white/20 transition-all"></div>
+                    <div className="relative z-10">
+                        <p className="text-emerald-100 font-medium mb-1 text-xs">Utilidad Neta Real (Hoy)</p>
+                        <h2 className="text-3xl font-black mb-2">L {stats.netProfitToday.toLocaleString('en-US', { minimumFractionDigits: 2 })}</h2>
+                        <div className="flex gap-2 text-[10px] font-bold bg-white/10 w-fit px-3 py-1 rounded-full uppercase tracking-tighter">
+                            <i className="fas fa-money-bill-trend-up"></i> Rentabilidad Neta
                         </div>
                     </div>
                 </div>
@@ -629,6 +707,53 @@ export const Dashboard: React.FC<DashboardProps> = ({ products, sales, credits, 
                         </div>
                     </div>
                 </div>
+
+                {/* --- CRM INTEL SECTION --- */}
+                {crmInsights.length > 0 && (
+                    <div className="md:col-span-3 lg:col-span-4 bg-indigo-50 border border-indigo-100 rounded-3xl p-6 shadow-sm">
+                        <div className="flex items-center justify-between mb-6">
+                            <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 bg-indigo-600 text-white rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-200">
+                                    <i className="fas fa-magic text-xl"></i>
+                                </div>
+                                <div>
+                                    <h3 className="font-black text-indigo-900 text-xl">Inteligencia CRM: Próximas Ocasiones</h3>
+                                    <p className="text-indigo-400 text-xs font-bold uppercase tracking-widest">Oportunidades de Venta Proactiva</p>
+                                </div>
+                            </div>
+                            <Badge variant="info" className="bg-indigo-600 border-none px-4 py-1.5 h-fit">CRM Sugerencias</Badge>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                            {crmInsights.map((insight, idx) => (
+                                <div key={idx} className={`bg-white rounded-2xl p-4 border transition-all hover:shadow-md hover:scale-[1.02] cursor-default ${insight.isToday ? 'border-indigo-500 ring-2 ring-indigo-500/10' : 'border-gray-50'}`}>
+                                    <div className="flex justify-between items-start mb-3">
+                                        <div className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-tighter ${insight.isToday ? 'bg-indigo-600 text-white' : 'bg-indigo-100 text-indigo-700'}`}>
+                                            {insight.isToday ? '¡Hoy!' : `En ${insight.daysLeft} días`}
+                                        </div>
+                                        <span className="text-xs font-bold text-gray-400">{new Date(insight.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}</span>
+                                    </div>
+                                    <h4 className="font-black text-gray-800 text-sm mb-1 line-clamp-1">{insight.customerName}</h4>
+                                    <div className="flex items-center gap-1.5 text-indigo-500 font-bold text-[11px] mb-3">
+                                        <i className="fas fa-gift text-[9px]"></i>
+                                        {insight.occasion}
+                                    </div>
+                                    <Button
+                                        variant="secondary"
+                                        size="sm"
+                                        className="w-full text-[10px] h-8 bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white border-none font-black"
+                                        onClick={() => {
+                                            const message = `Hola ${insight.customerName}! 👋 En Creativos Gift recordamos que se acerca un(a) *${insight.occasion}* especial. ¿Te gustaría ver nuestro catálogo actualizado para este evento? ✨`;
+                                            window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
+                                        }}
+                                    >
+                                        Ofrecer Promo
+                                    </Button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 {/* SECCIÓN: PRÓXIMAS ENTREGAS & WHATSAPP */}
                 <div className="md:col-span-3 lg:col-span-4 grid grid-cols-1 lg:grid-cols-3 gap-6">

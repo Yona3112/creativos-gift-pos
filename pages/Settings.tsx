@@ -1,6 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { db } from '../services/storageService';
+import { GeminiService } from '../services/geminiService';
 import { CompanySettings, LoyaltyLevel, Product, Sale, User, UserRole, SEASONS } from '../types';
 import { Button, Input, Card, Alert, Modal, Badge, ConfirmDialog, showToast } from '../components/UIComponents';
 import { createClient } from '@supabase/supabase-js';
@@ -60,6 +61,8 @@ const SettingsContent: React.FC<SettingsProps> = ({ onUpdate }) => {
 
   const [syncStatus, setSyncStatus] = useState<{ type: 'success' | 'danger' | 'info', message: string, results?: any } | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState<string | null>(null);
 
   // User Management State
   const [users, setUsers] = useState<User[]>([]);
@@ -144,6 +147,24 @@ const SettingsContent: React.FC<SettingsProps> = ({ onUpdate }) => {
     showToast("Configuración guardada exitosamente.", "success"); // Push notification
     setTimeout(() => setSaved(false), 3000);
     if (onUpdate) onUpdate();
+  };
+
+  const handleAnalyze = async () => {
+    if (!settings.geminiApiKey) {
+      showToast("Configure su API Key de Gemini primero.", "warning");
+      return;
+    }
+    setIsAnalyzing(true);
+    try {
+      const sales = await db.getSales();
+      const result = await GeminiService.analyzeBusiness(sales, settings);
+      setAnalysisResult(result);
+      showToast("¡Análisis completado!", "success");
+    } catch (e) {
+      showToast("Error en el análisis IA.", "error");
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   const handleBackup = async () => {
@@ -569,12 +590,52 @@ const SettingsContent: React.FC<SettingsProps> = ({ onUpdate }) => {
                 </div>
               </div>
 
+              {/* GOOGLE GEMINI AI SECTION */}
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+                  <i className="fas fa-brain mr-2"></i>Inteligencia Artificial (Gemini Pro)
+                </h3>
+                <Input
+                  label="Google Gemini API Key"
+                  type="password"
+                  name="geminiApiKey"
+                  placeholder="Ingresa tu API Key de Google AI Studio"
+                />
+                <p className="text-[10px] text-gray-400 mt-1 italic">
+                  Utilizada para el Redactor Automático de Dedicatorias y Análisis de Negocios.
+                </p>
+
+                {/* FEATURE: Strategic Business Analysis UI */}
+                <div className="mt-6 p-4 bg-gradient-to-br from-indigo-50 to-blue-50 rounded-2xl border border-indigo-100 shadow-sm">
+                  <h4 className="text-xs font-black text-indigo-900 uppercase tracking-widest mb-3 flex items-center gap-2">
+                    <i className="fas fa-chart-line"></i> Análisis Estratégico de Negocios
+                  </h4>
+                  <p className="text-[10px] text-indigo-700/80 mb-4 font-medium">
+                    Deja que la IA analice tus ventas recientes y te brinde recomendaciones para crecer.
+                  </p>
+
+                  {analysisResult ? (
+                    <div className="bg-white/80 backdrop-blur-sm p-4 rounded-xl border border-indigo-100 text-xs text-gray-700 mb-4 whitespace-pre-line leading-relaxed shadow-inner">
+                      <div className="flex items-center gap-2 text-indigo-600 font-bold mb-2 pb-1 border-b border-indigo-50">
+                        <i className="fas fa-robot"></i> REPORTE ESTRATÉGICO:
+                      </div>
+                      {analysisResult}
+                    </div>
+                  ) : null}
+
+                  <Button
+                    onClick={handleAnalyze}
+                    disabled={isAnalyzing}
+                    className="w-full !bg-indigo-600 hover:!bg-indigo-700 shadow-lg shadow-indigo-100"
+                    icon={isAnalyzing ? "circle-notch" : "wand-magic-sparkles"}
+                  >
+                    {isAnalyzing ? "Analizando Datos..." : "Obtener Recomendaciones de IA"}
+                  </Button>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
                 <Button size="sm" variant="secondary" onClick={handleBackup} icon="download" className="w-full">Respaldo Local (JSON)</Button>
-                {/* 
-                  Botones de sincronización manual ocultos por solicitud del usuario (Feb 2026).
-                  El sistema ahora usa Realtime y sincronización automática en segundo plano.
-                */}
               </div>
 
               {/* INVENTORY REPAIR SECTION */}
@@ -661,11 +722,11 @@ const SettingsContent: React.FC<SettingsProps> = ({ onUpdate }) => {
               </button>
             </div>
           </section>
-        </div>
-      </div>
+        </div >
+      </div >
 
       {/* Modals & Dialogs (Keep existing structure but simplify styles if needed) */}
-      <Modal isOpen={isUserModalOpen} onClose={() => setIsUserModalOpen(false)} title={userFormData.id ? "Editar Usuario" : "Nuevo Usuario"}>
+      < Modal isOpen={isUserModalOpen} onClose={() => setIsUserModalOpen(false)} title={userFormData.id ? "Editar Usuario" : "Nuevo Usuario"} >
         <div className="space-y-4">
           <Input label="Nombre Completo" value={userFormData.name || ''} onChange={e => setUserFormData({ ...userFormData, name: e.target.value })} />
           <Input label="Correo / Usuario" type="email" value={userFormData.email || ''} onChange={e => setUserFormData({ ...userFormData, email: e.target.value })} />
@@ -686,12 +747,12 @@ const SettingsContent: React.FC<SettingsProps> = ({ onUpdate }) => {
             <Button onClick={handleSaveUser}>Guardar Usuario</Button>
           </div>
         </div>
-      </Modal>
+      </Modal >
 
       <ConfirmDialog isOpen={restoreConfirm.open} title="Restaurar Datos" message="¿Restaurar datos? Se reemplazarán todos los datos actuales con el respaldo." confirmText="Restaurar" cancelText="Cancelar" variant="warning" onConfirm={async () => { await db.restoreData(restoreConfirm.data); setRestoreConfirm({ open: false, data: null }); window.location.reload(); }} onCancel={() => setRestoreConfirm({ open: false, data: null })} />
       <ConfirmDialog isOpen={deleteUserConfirm.open} title="Desactivar Usuario" message="¿Desactivar este usuario? Ya no podrá iniciar sesión." confirmText="Desactivar" cancelText="Cancelar" variant="danger" onConfirm={async () => { await db.deleteUser(deleteUserConfirm.id); setUsers((await db.getUsers()).filter(u => u.active !== false)); setDeleteUserConfirm({ open: false, id: '' }); }} onCancel={() => setDeleteUserConfirm({ open: false, id: '' })} />
       <ConfirmDialog isOpen={showPurgeConfirm} title="Confirmar Purga de Datos" message={`¿Está seguro? Se eliminarán permanentemente datos antiguos.`} confirmText="Purgar Ahora" cancelText="Cancelar" variant="danger" onConfirm={async () => { const results = await db.purgeOldData(purgeYears); showToast(`Purga completada.`, "success"); setShowPurgeConfirm(false); if (onUpdate) onUpdate(); }} onCancel={() => setShowPurgeConfirm(false)} />
-    </div>
+    </div >
   );
 };
 

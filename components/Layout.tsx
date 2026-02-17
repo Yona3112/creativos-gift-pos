@@ -24,6 +24,7 @@ const MENU_ITEMS = [
   { id: 'dashboard', label: 'Inicio', icon: 'home' },
   { id: 'pos', label: 'Nueva Venta', icon: 'cash-register' },
   { id: 'orders', label: 'Pedidos', icon: 'clipboard-list' },
+  { id: 'calendar', label: 'Agenda de Producción', icon: 'calendar-alt' },
   { id: 'cashCut', label: 'Cierre de Caja', icon: 'calculator' },
   { id: 'expenses', label: 'Gastos', icon: 'receipt' },
   { id: 'products', label: 'Mis Productos', icon: 'boxes' },
