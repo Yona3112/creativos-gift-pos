@@ -72,6 +72,7 @@ export interface Expense {
   categoryId: 'Alquiler' | 'Servicios' | 'Sueldos' | 'Publicidad' | 'Insumos' | 'Transporte' | 'Otros';
   paymentMethod: 'Efectivo' | 'Tarjeta' | 'Transferencia';
   userId: string;
+  active?: boolean;
   updatedAt?: string;
   _synced?: boolean;
 }

@@ -32,7 +32,7 @@ export const Expenses: React.FC<ExpensesProps> = ({ user, onUpdate, settings }) 
 
     const load = async () => {
         const expData = await db.getExpenses();
-        setExpenses(expData.sort((a, b) => b.date.localeCompare(a.date)));
+        setExpenses(expData.filter(e => e.active !== false).sort((a, b) => b.date.localeCompare(a.date)));
     };
 
     const handleSubmit = async (e: React.FormEvent) => {

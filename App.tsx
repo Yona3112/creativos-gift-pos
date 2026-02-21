@@ -281,16 +281,16 @@ function App() {
             logger.log("⬇️ Descargando cambios desde la nube (pullDelta)...");
             const changed = await SupabaseService.pullDelta();
 
-            // 2. [SYNC ON STARTUP] Verify integrity
-            logger.log("🔍 [StartupSync] Verificando integridad local vs remota...");
+            // 2. [SYNC ON STARTUP] Verify integrity (Optimized)
+            logger.log("🔍 [StartupSync] Verificando integridad local vs remota de manera optimizada...");
             const remoteCounts = await SupabaseService.getRemoteCounts();
-            const localData = await db.getAllData();
+            const { db_engine } = await import('./services/storageService');
 
             const tablesToVerify = [
-              { name: 'sales', remote: remoteCounts.sales || 0, local: localData.sales.length },
-              { name: 'products', remote: remoteCounts.products || 0, local: localData.products.length },
-              { name: 'customers', remote: remoteCounts.customers || 0, local: localData.customers.length },
-              { name: 'cash_cuts', remote: remoteCounts.cash_cuts || 0, local: localData.cash_cuts.length }
+              { name: 'sales', remote: remoteCounts.sales || 0, local: await db_engine.sales.count() },
+              { name: 'products', remote: remoteCounts.products || 0, local: await db_engine.products.count() },
+              { name: 'customers', remote: remoteCounts.customers || 0, local: await db_engine.customers.count() },
+              { name: 'cash_cuts', remote: remoteCounts.cash_cuts || 0, local: await db_engine.cashCuts.count() }
             ];
 
             let needsPush = false;

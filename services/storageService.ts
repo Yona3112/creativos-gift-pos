@@ -1105,7 +1105,10 @@ export class StorageService {
   }
 
   // --- EXPENSES ---
-  async getExpenses(): Promise<Expense[]> { return await db_engine.expenses.toArray(); }
+  async getExpenses(): Promise<Expense[]> {
+    const exp = await db_engine.expenses.toArray();
+    return exp.filter(e => e.active !== false);
+  }
 
   async saveExpense(e: Expense) {
     if (!e.id) {
@@ -1121,12 +1124,13 @@ export class StorageService {
   }
 
   async deleteExpense(id: string) {
-    await db_engine.expenses.delete(id);
-    const settings = await this.getSettings();
-    if (settings.autoSync) {
-      import('./supabaseService').then(({ SupabaseService }) => {
-        SupabaseService.deleteFromTable('expenses', id);
-      });
+    const e = await db_engine.expenses.get(id);
+    if (e) {
+      e.active = false;
+      e.updatedAt = this.getLocalNowISO();
+      e._synced = false;
+      await db_engine.expenses.put(e);
+      this.pushToCloud('expenses', e);
     }
   }
 
@@ -1825,7 +1829,7 @@ export class StorageService {
     });
 
     // 3. Uncut Expenses
-    const allExpenses = await db_engine.expenses.toArray();
+    const allExpenses = await this.getExpenses();
     const uncutExpensesList = allExpenses.filter(e => {
       // Use updatedAt if available, fallback to date
       const expTime = new Date(e.date + 'T12:00:00').getTime();
