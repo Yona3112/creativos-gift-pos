@@ -6,8 +6,45 @@ export const PrinterService = {
      * @param htmlContent The full HTML string to print
      * @param title Optional title for the preview window
      */
-    printHTML: (htmlContent: string, title: string = 'Ticket') => {
-        // Create a popup window for preview
+    printHTML: (htmlContent: string, title: string = 'Ticket', silentMode: boolean = false) => {
+        // If silent mode is requested, force using the hidden iframe approach
+        if (silentMode) {
+            const iframe = document.createElement('iframe');
+            iframe.style.position = 'fixed';
+            iframe.style.right = '0';
+            iframe.style.bottom = '0';
+            iframe.style.width = '0';
+            iframe.style.height = '0';
+            iframe.style.border = '0';
+
+            document.body.appendChild(iframe);
+
+            const doc = iframe.contentWindow?.document;
+            if (doc) {
+                doc.open();
+                doc.write(htmlContent);
+                doc.close();
+
+                // Small delay to ensure styles apply
+                setTimeout(() => {
+                    try {
+                        iframe.contentWindow?.focus();
+                        iframe.contentWindow?.print();
+                    } catch (e) {
+                        console.error("Silent printing failed:", e);
+                    } finally {
+                        setTimeout(() => {
+                            if (document.body.contains(iframe)) {
+                                document.body.removeChild(iframe);
+                            }
+                        }, 5000);
+                    }
+                }, 500);
+            }
+            return;
+        }
+
+        // Standard Preview Mode
         const win = window.open('', '_blank', 'width=450,height=700,scrollbars=yes');
 
         if (win) {

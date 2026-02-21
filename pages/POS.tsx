@@ -1422,17 +1422,17 @@ export const POS: React.FC<POSProps> = ({
                                 const clienteHtml = htmlOriginal.replace('</style>', `
                                     .copy-type { text-align: center; font-weight: bold; font-size: 10px; margin-bottom: 5px; padding: 3px; background: #f0f0f0; }
                                     </style>`).replace('<body>', '<body><div class="copy-type">ORIGINAL: CLIENTE</div>');
-                                PrinterService.printHTML(clienteHtml);
+                                PrinterService.printHTML(clienteHtml, 'Ticket Cliente', settings?.autoPrint || true); // Use actual silentMode logic, assume true for POS fast lane unless specified
 
                                 // Print SAR Copy (COPIA FISCAL) after a short delay
                                 setTimeout(() => {
                                     const sarHtml = htmlOriginal.replace('</style>', `
                                         .copy-type { text-align: center; font-weight: bold; font-size: 10px; margin-bottom: 5px; padding: 3px; background: #e0e0e0; border: 1px dashed #666; }
                                         </style>`).replace('<body>', '<body><div class="copy-type">COPIA: EMISOR</div>');
-                                    PrinterService.printHTML(sarHtml);
+                                    PrinterService.printHTML(sarHtml, 'Ticket Emisor', settings?.autoPrint || true);
                                 }, 1000);
                             }
-                        }}>Imprimir (2 Copias)</Button>
+                        }}>Imprimir Tickets (Silencioso)</Button>
 
                         {lastSale?.paymentMethod === 'Crédito' && (
                             <div className="pt-2 border-t mt-2 space-y-2">
