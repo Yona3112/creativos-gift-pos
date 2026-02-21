@@ -520,7 +520,7 @@ function App() {
   // Low Stock Alerts
   const lowStockProducts = products.filter(p => p.enableLowStockAlert !== false && p.stock <= p.minStock);
   if (lowStockProducts.length > 0) {
-    alerts.push({ type: 'stock', message: `${lowStockProducts.length} producto(s) con stock bajo`, link: 'products' });
+    alerts.push({ type: 'stock', message: `⚠️ ${lowStockProducts.length} producto(s) con stock bajo`, link: 'products' });
   }
 
   // Overdue Credit Alerts
@@ -530,13 +530,14 @@ function App() {
     return new Date(c.dueDate) < today;
   });
   if (overdueCredits.length > 0) {
-    alerts.push({ type: 'credit', message: `${overdueCredits.length} crédito(s) vencido(s)`, link: 'credits' });
+    alerts.push({ type: 'credit', message: `🔴 ${overdueCredits.length} crédito(s) vencido(s)`, link: 'credits' });
   }
 
   // Pending Orders (Replacing Badge)
   const pendingOrders = sales.filter(s => (s.fulfillmentStatus === 'pending' || s.fulfillmentStatus === 'production') && s.status === 'active');
   if (pendingOrders.length > 0) {
-    alerts.push({ type: 'order', message: `${pendingOrders.length} pedido(s) en proceso`, link: 'orders' });
+    // We already have tomorrow orders, just general pending count
+    alerts.push({ type: 'order', message: `📦 ${pendingOrders.length} pedido(s) en proceso`, link: 'orders' });
   }
 
   // Pending Orders Due Tomorrow
@@ -546,7 +547,43 @@ function App() {
   const tomorrowStr = tomorrow.toISOString().split('T')[0];
   const ordersDueTomorrow = sales.filter(s => s.isOrder && s.status === 'active' && s.fulfillmentStatus !== 'delivered' && s.shippingDetails?.shippingDate?.startsWith(tomorrowStr));
   if (ordersDueTomorrow.length > 0) {
-    alerts.push({ type: 'order', message: `${ordersDueTomorrow.length} pedido(s) para entregar MAÑANA`, link: 'orders' });
+    alerts.push({ type: 'order', message: `⏱️ ${ordersDueTomorrow.length} pedido(s) para entregar MAÑANA`, link: 'orders' });
+  }
+
+  // SMART ALERT 1: Orders stuck in Design for more than 24 hours
+  const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  // Since we don't track status changes precisely without a history log, we can check if it's 'design' and was created > 24h ago, 
+  // OR look at the status history array if it exists. Fall back to createdAt for simplicity if status array doesn't exist.
+  const stuckOrders = sales.filter(s => {
+    if (s.isOrder && s.status === 'active' && s.fulfillmentStatus === 'design') {
+      const historyDesign = s.statusHistory?.find(h => h.status === 'design');
+      const timeInDesign = historyDesign ? historyDesign.timestamp : s.createdAt;
+      return timeInDesign < twentyFourHoursAgo;
+    }
+    return false;
+  });
+  if (stuckOrders.length > 0) {
+    alerts.push({ type: 'warning', message: `⏳ ${stuckOrders.length} pedido(s) estancado(s) en Diseño (>24h)`, link: 'orders' });
+  }
+
+  // SMART ALERT 2: Birthdays and Upcoming Customer Events
+  // Look for customers whose birthday is in the next 7 days
+  const upcomingBirthdays = customers.filter(c => {
+    if (!c.birthday) return false;
+    const bday = new Date(c.birthday);
+    const today = new Date();
+    // Normalize year to compare just month/day
+    bday.setFullYear(today.getFullYear());
+    // If birthday passed this year, check next year
+    if (bday < today) bday.setFullYear(today.getFullYear() + 1);
+
+    const diffTime = Math.abs(bday.getTime() - today.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays <= 7;
+  });
+
+  if (upcomingBirthdays.length > 0) {
+    alerts.push({ type: 'customer', message: `🎁 Oportunidad: ${upcomingBirthdays.length} cliente(s) cumplen años pronto`, link: 'customers' });
   }
 
   if (loading) {

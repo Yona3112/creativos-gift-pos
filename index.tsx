@@ -3,6 +3,21 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
 
+// Register PWA Service Worker
+if ('serviceWorker' in navigator) {
+  import('virtual:pwa-register').then(({ registerSW }) => {
+    registerSW({
+      immediate: true,
+      onRegisteredSW(swUrl, r) {
+        console.log('SW Registered:', swUrl);
+      },
+      onRegisterError(error) {
+        console.error('SW Registration error:', error);
+      }
+    });
+  }).catch(() => { });
+}
+
 interface ErrorBoundaryProps {
   children?: ReactNode;
 }

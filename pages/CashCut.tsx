@@ -25,6 +25,7 @@ export const CashCut: React.FC = () => {
   const [denominations, setDenominations] = useState({
     bill500: 0, bill200: 0, bill100: 0, bill50: 0, bill20: 0, bill10: 0, bill5: 0, bill2: 0, bill1: 0, coins: 0
   });
+  const [openingCash, setOpeningCash] = useState<number>(0);
   const [cashCutConfirm, setCashCutConfirm] = useState(false);
 
   // Reversal State
@@ -118,11 +119,41 @@ export const CashCut: React.FC = () => {
   };
 
   const countedTotal = calculateCounted();
-  const netCashExpected = totals.cash - totals.cashExpenses - totals.cashRefunds;
+  const netCashExpected = (totals.cash + openingCash) - totals.cashExpenses - totals.cashRefunds;
   const difference = countedTotal - netCashExpected;
 
   const handleSave = async () => {
     setCashCutConfirm(true);
+  };
+
+  const sendWhatsAppNotification = (cut: ICashCut, s: CompanySettings) => {
+    // Si no hay un teléfono configurado, no enviamos o podríamos usar un input, pero por simpleza usamos el del sistema o avisamos
+    if (!s.phone) return;
+
+    // Convert HN phone number format
+    let destPhone = s.phone.replace(/\D/g, '');
+    if (destPhone.length === 8) destPhone = '504' + destPhone; // Auto prepend HN code
+
+    const dateFormatted = new Date(cut.date).toLocaleDateString('es-HN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const difStr = cut.difference === 0 ? 'Exacto ✅' : cut.difference > 0 ? `Sobrante (+L ${cut.difference.toFixed(2)}) 🔵` : `Faltante (L ${cut.difference.toFixed(2)}) 🔴`;
+
+    const message = `
+*Corte de Caja Creado* 🔒
+${dateFormatted}
+-----------------------------
+*Ventas Totales:* L ${cut.totalSales.toFixed(2)}
+*Fondo de Caja:* L ${(cut.openingCash || 0).toFixed(2)}
+*Gastos / Reembolsos:* L ${(cut.cashExpenses! + cut.cashRefunds!).toFixed(2)}
+
+*Efectivo Sistema:* L ${cut.cashExpected.toFixed(2)}
+*Efectivo Contado:* L ${cut.cashCounted.toFixed(2)}
+*Diferencia:* ${difStr}
+-----------------------------
+_Cierre automático de sistema POS_
+`.trim();
+
+    const link = `https://wa.me/${destPhone}?text=${encodeURIComponent(message)}`;
+    window.open(link, '_blank');
   };
 
   const confirmCashCut = async () => {
@@ -138,6 +169,7 @@ export const CashCut: React.FC = () => {
       cashCounted: countedTotal,
       difference,
       details: denominations,
+      openingCash,
       // Payment method breakdown
       cardTotal: totals.card,
       transferTotal: totals.transfer,
@@ -148,8 +180,15 @@ export const CashCut: React.FC = () => {
       cashRefunds: totals.cashRefunds
     };
     await db.saveCashCut(cut);
-    showToast('Corte de caja guardado exitosamente', 'success');
+    if (settings && settings.phone) {
+      if (window.confirm('Corte guardado. ¿Deseas enviar el resumen por WhatsApp al administrador?')) {
+        sendWhatsAppNotification(cut, settings);
+      }
+    } else {
+      showToast('Corte de caja guardado exitosamente', 'success');
+    }
     setDenominations({ bill500: 0, bill200: 0, bill100: 0, bill50: 0, bill20: 0, bill10: 0, bill5: 0, bill2: 0, bill1: 0, coins: 0 });
+    setOpeningCash(0);
     setCashCutConfirm(false);
     setForceNewCut(false);
     setIsSaving(false);
@@ -408,6 +447,12 @@ export const CashCut: React.FC = () => {
                 <div className="flex justify-between items-center mb-1">
                   <span className="text-gray-500 text-xs uppercase font-bold">Resumen de Caja</span>
                 </div>
+                {openingCash > 0 && (
+                  <div className="flex justify-between items-center mb-1 text-xs">
+                    <span className="text-teal-600 font-bold uppercase"><i className="fas fa-box-open mr-1"></i> Fondo de Caja</span>
+                    <span className="font-bold text-teal-700">L {openingCash.toFixed(2)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between items-center mb-1">
                   <span className="text-gray-500 text-xs">Abonos a Créditos</span>
                   <span className="font-bold text-gray-700 text-xs">L {totals.creditPayments.toFixed(2)}</span>
@@ -422,7 +467,7 @@ export const CashCut: React.FC = () => {
                   </div>
                 )}
                 <div className="flex justify-between items-center mt-2 pt-2 border-t">
-                  <span className="text-green-900 font-black text-base uppercase tracking-wider">Efectivo en Caja</span>
+                  <span className="text-green-900 font-black text-base uppercase tracking-wider">Efectivo NETO Esperado</span>
                   <span className="text-2xl font-black text-green-700 tracking-tight">L {netCashExpected.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between items-center mt-1">
@@ -484,6 +529,15 @@ export const CashCut: React.FC = () => {
                   <button onClick={() => setForceNewCut(false)} className="text-blue-500 hover:text-blue-700 text-xs font-bold underline">Cancelar</button>
                 </div>
               )}
+              <div className="bg-teal-50 border border-teal-100 p-3 rounded-xl mb-4 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-teal-200 text-teal-700 flex items-center justify-center flex-shrink-0 text-xl">
+                  <i className="fas fa-piggy-bank"></i>
+                </div>
+                <div className="flex-1">
+                  <label className="block text-xs font-bold text-teal-800 uppercase mb-1">Fondo Inicial de Caja (Monto base)</label>
+                  <Input type="number" min="0" value={openingCash || ''} onChange={e => setOpeningCash(parseFloat(e.target.value) || 0)} className="!py-2 !text-lg font-bold" placeholder="0.00" />
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-x-3 gap-y-2 mb-4">
                 <Input label="L 500" type="number" min="0" value={denominations.bill500 || ''} onChange={e => setDenominations({ ...denominations, bill500: parseInt(e.target.value) || 0 })} className="!py-1 text-xs" />
                 <Input label="L 200" type="number" min="0" value={denominations.bill200 || ''} onChange={e => setDenominations({ ...denominations, bill200: parseInt(e.target.value) || 0 })} className="!py-1 text-xs" />

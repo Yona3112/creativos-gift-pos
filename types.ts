@@ -340,6 +340,7 @@ export interface CashCut {
     bill1: number; coins: number;
   };
   // Payment method breakdown
+  openingCash?: number;
   cardTotal?: number;
   transferTotal?: number;
   creditTotal?: number;
