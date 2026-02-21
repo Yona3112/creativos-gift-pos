@@ -13,7 +13,7 @@ export const ProductionCalendar: React.FC<ProductionCalendarProps> = ({ sales, o
 
     // Filter sales that are active and have a delivery date (orders)
     const activeOrders = useMemo(() => {
-        return sales.filter(s => s.status === 'active' && s.fulfillmentStatus !== 'delivered' && s.deliveryDate);
+        return sales.filter(s => s.status === 'active' && s.fulfillmentStatus !== 'delivered' && (s.deliveryDate || s.shippingDetails?.shippingDate));
     }, [sales]);
 
     // Calendar logic
@@ -38,7 +38,10 @@ export const ProductionCalendar: React.FC<ProductionCalendarProps> = ({ sales, o
 
     const getOrdersForDay = (day: number) => {
         const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        return activeOrders.filter(s => s.deliveryDate === dateStr);
+        return activeOrders.filter(s => {
+            const targetDate = s.deliveryDate || s.shippingDetails?.shippingDate;
+            return targetDate && targetDate.startsWith(dateStr);
+        });
     };
 
     const getStatusColor = (status: FulfillmentStatus) => {

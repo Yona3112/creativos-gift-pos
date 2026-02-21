@@ -414,6 +414,12 @@ export const POS: React.FC<POSProps> = ({
             return;
         }
 
+        // Validación crítica: Pedidos requieren fecha de entrega
+        if (!isImmediateDelivery && !deliveryDate) {
+            showToast('Debe seleccionar una fecha de entrega para este pedido.', 'warning');
+            return;
+        }
+
         setIsProcessing(true);
         try {
             const isOrder = !isImmediateDelivery;
