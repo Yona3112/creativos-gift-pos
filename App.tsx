@@ -71,13 +71,13 @@ function App() {
   }, [user]);
 
 
-  const refreshData = async (shouldPushToCloud = false, isManual = false, forceFull = false, skipNetwork = false) => {
+  const refreshData = async (shouldPushToCloud = false, isManual = false, forceFull = false) => {
     try {
       const sett = await db.getSettings();
       const hasCloudConfig = sett.supabaseUrl && sett.supabaseKey;
 
       // ALWAYS try to pull from cloud if configured (not just when pushing)
-      if (!skipNetwork && hasCloudConfig && (sett.autoSync || isManual || !shouldPushToCloud)) {
+      if (hasCloudConfig && (sett.autoSync || isManual || !shouldPushToCloud)) {
         try {
           const { SupabaseService } = await import('./services/supabaseService');
 
@@ -115,7 +115,7 @@ function App() {
     ]);
 
     // Check Sync Health
-    if (!skipNetwork && sett.supabaseUrl && sett.supabaseKey) {
+    if (sett.supabaseUrl && sett.supabaseKey) {
       try {
         const { SupabaseService } = await import('./services/supabaseService');
         const health = await SupabaseService.checkSyncHealth();
@@ -128,7 +128,7 @@ function App() {
     }
 
     // Pull settings from cloud to ensure multi-device consistency
-    const cloudSettings = !skipNetwork ? await db.pullSettingsFromCloud() : null;
+    const cloudSettings = await db.pullSettingsFromCloud();
     const finalSettings = cloudSettings || sett;
     setProducts(p);
     setCategories(c);
@@ -188,7 +188,7 @@ function App() {
         logger.log("🛠️ App: Iniciando base de datos...");
         await db.init();
         logger.log("🛠️ App: Cargando datos locales...");
-        await refreshData(false, false, false, true); // skipNetwork=true for instant startup
+        await refreshData(false);
 
         const storedUser = localStorage.getItem('creativos_gift_currentUser');
         if (storedUser) {
