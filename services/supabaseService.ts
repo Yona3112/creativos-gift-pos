@@ -107,7 +107,7 @@ export class SupabaseService {
             ],
             expenses: [
                 'id', 'date', 'description', 'amount', 'categoryId', 'paymentMethod',
-                'userId', 'branchId', 'updatedAt'
+                'userId', 'branchId', 'active', 'updatedAt'
             ],
             inventory_history: [
                 'id', 'productId', 'date', 'type', 'quantity', 'previousStock',
@@ -907,10 +907,15 @@ export class SupabaseService {
         // 1. Delete Phantom Cash Cut (Feb 9, -490)
         await this.deleteFromTable('cash_cuts', 'cut-1770611368038-1qig9');
 
-        // 2. Delete Phantom Expense (8000 Lps, Alquiler)
-        await this.deleteFromTable('expenses', 'exp-1768971598829-x6ksqt5');
-
-        // 3. Delete Duplicate Credit Notes for Sale T-000031
+        // 2. Delete Phantom Expenses (8000 Lps, Alquiler)
+        const ghostIds = ['exp-1768971598829-x6ksqt5', 'exp-1769143580722-28x5tmk'];
+        for (const ghost of ghostIds) {
+            await this.deleteFromTable('expenses', ghost);
+            try {
+                // DELETE LOCALLY AS WELL TO PREVENT RE-PUSH!
+                await db_engine.expenses.delete(ghost);
+            } catch (e) { }
+        }
         // These are the "Anulación de Venta" duplicates that cause the refund loop
         await this.deleteFromTable('credit_notes', '1770021645219');
         await this.deleteFromTable('credit_notes', '1770018288358');

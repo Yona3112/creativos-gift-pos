@@ -1126,11 +1126,9 @@ export class StorageService {
   async deleteExpense(id: string) {
     const e = await db_engine.expenses.get(id);
     if (e) {
-      e.active = false;
-      e.updatedAt = this.getLocalNowISO();
-      e._synced = false;
-      await db_engine.expenses.put(e);
-      this.pushToCloud('expenses', e);
+      // Hard delete to perfectly prevent phantom reappearance sync loops
+      await db_engine.expenses.delete(id);
+      this.pushToCloud('expenses', { id }, 'DELETE');
     }
   }
 
